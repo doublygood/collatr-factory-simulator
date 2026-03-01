@@ -34,4 +34,4 @@
 
 ---
 
-> **Note:** The original monolithic PRD is preserved as [`collatr-factory-simulator-prd.md`](collatr-factory-simulator-prd.md).
+> **Note:** Each section file is the canonical source. The original monolithic file has been removed.
