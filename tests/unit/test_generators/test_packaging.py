@@ -886,8 +886,8 @@ class TestVibrationBehaviour:
         x_arr = np.array(x_vals)
         y_arr = np.array(y_vals)
         corr = float(np.corrcoef(x_arr, y_arr)[0, 1])
-        # Should show positive correlation (configured at 0.6)
-        assert corr > 0.2, f"Axes should be correlated, got r={corr:.3f}"
+        # PRD 4.3.1: X-Y correlation is 0.2 (asymmetric matrix)
+        assert corr > 0.05, f"Axes should be positively correlated, got r={corr:.3f}"
 
     def test_all_signals_within_bounds(
         self, vibration: VibrationGenerator, store: SignalStore,

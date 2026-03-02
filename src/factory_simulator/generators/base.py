@@ -192,6 +192,8 @@ class EquipmentGenerator(ABC):
             rng=self._spawn_rng(),
             noise_df=sig_cfg.noise_df,
             noise_phi=sig_cfg.noise_phi,
+            sigma_base=sig_cfg.sigma_base,
+            sigma_scale=sig_cfg.sigma_scale,
         )
 
     def _signal_id(self, name: str) -> str:

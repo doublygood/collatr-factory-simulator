@@ -87,6 +87,9 @@ equipment:
         parent: "press.line_speed"
         transform: "linear"
         noise_sigma: 5.0
+        sigma_base: 2.0                 # PRD 4.2.11: speed-dependent sigma
+        sigma_scale: 0.02               # N per m/min
+        sigma_parent: "press.line_speed"
         sample_rate_ms: 500
         min_clamp: 0.0
         max_clamp: 500.0
@@ -102,6 +105,9 @@ equipment:
       registration_error_x:
         model: "random_walk"
         noise_sigma: 0.02
+        sigma_base: 0.005               # PRD 4.2.11: speed-dependent sigma
+        sigma_scale: 0.00005            # mm per m/min
+        sigma_parent: "press.line_speed"
         sample_rate_ms: 500
         min_clamp: -0.5
         max_clamp: 0.5
@@ -116,6 +122,9 @@ equipment:
       registration_error_y:
         model: "random_walk"
         noise_sigma: 0.02
+        sigma_base: 0.005               # PRD 4.2.11: speed-dependent sigma
+        sigma_scale: 0.00005            # mm per m/min
+        sigma_parent: "press.line_speed"
         sample_rate_ms: 500
         min_clamp: -0.5
         max_clamp: 0.5
@@ -323,6 +332,11 @@ equipment:
         parent: "press.line_speed"
         transform: "linear"
         noise_sigma: 2.0
+        noise_type: "student_t"         # PRD 4.2.11: heavy-tail outliers
+        noise_df: 8
+        sigma_base: 0.3                 # PRD 4.2.11: speed-dependent sigma
+        sigma_scale: 0.002              # A per m/min
+        sigma_parent: "press.line_speed"
         sample_rate_ms: 1000
         min_clamp: 0.0
         max_clamp: 200.0
@@ -407,6 +421,8 @@ equipment:
       nip_temp:
         model: "first_order_lag"
         noise_sigma: 0.5
+        noise_type: "ar1"               # PRD 4.2.11: PID-controlled temp
+        noise_phi: 0.7
         sample_rate_ms: 5000
         min_clamp: 20.0
         max_clamp: 100.0
@@ -437,6 +453,8 @@ equipment:
       tunnel_temp:
         model: "first_order_lag"
         noise_sigma: 0.8
+        noise_type: "ar1"               # PRD 4.2.11: PID-controlled temp
+        noise_phi: 0.7
         sample_rate_ms: 5000
         min_clamp: 20.0
         max_clamp: 120.0
@@ -576,6 +594,8 @@ equipment:
       printhead_temp:
         model: "steady_state"
         noise_sigma: 2.0
+        noise_type: "ar1"               # PRD 4.2.11: PID-controlled temp
+        noise_phi: 0.7
         sample_rate_ms: 30000
         min_clamp: 25.0
         max_clamp: 50.0
@@ -601,6 +621,8 @@ equipment:
       ink_pressure:
         model: "steady_state"
         noise_sigma: 10.0
+        noise_type: "student_t"         # PRD 4.2.11: heavy-tail outliers
+        noise_df: 6
         sample_rate_ms: 5000
         min_clamp: 0.0
         max_clamp: 900.0
@@ -732,7 +754,7 @@ equipment:
         opcua_node: "PackagingLine.Energy.CumulativeKwh"
         opcua_type: "Double"
         params:
-          rate: 0.001
+          rate: 0.000278              # 1/3600: kWh = kW × hours, dt is in seconds
           rollover: 999999
 
   # --- Vibration Monitoring: 3 signals (PRD 2.9) ---
@@ -743,6 +765,11 @@ equipment:
       main_drive_x:
         model: "steady_state"
         noise_sigma: 0.5
+        noise_type: "student_t"         # PRD 4.2.11: heavy-tail outliers
+        noise_df: 5
+        sigma_base: 0.2                 # PRD 4.2.11: speed-dependent sigma
+        sigma_scale: 0.015              # mm/s per m/min
+        sigma_parent: "press.line_speed"
         sample_rate_ms: 1000
         min_clamp: 0.0
         max_clamp: 50.0
@@ -754,6 +781,11 @@ equipment:
       main_drive_y:
         model: "steady_state"
         noise_sigma: 0.5
+        noise_type: "student_t"         # PRD 4.2.11
+        noise_df: 5
+        sigma_base: 0.2                 # PRD 4.2.11: speed-dependent sigma
+        sigma_scale: 0.015
+        sigma_parent: "press.line_speed"
         sample_rate_ms: 1000
         min_clamp: 0.0
         max_clamp: 50.0
@@ -765,6 +797,11 @@ equipment:
       main_drive_z:
         model: "steady_state"
         noise_sigma: 0.8
+        noise_type: "student_t"         # PRD 4.2.11
+        noise_df: 5
+        sigma_base: 0.2                 # PRD 4.2.11: speed-dependent sigma
+        sigma_scale: 0.015
+        sigma_parent: "press.line_speed"
         sample_rate_ms: 1000
         min_clamp: 0.0
         max_clamp: 50.0

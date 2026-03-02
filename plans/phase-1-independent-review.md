@@ -412,3 +412,15 @@ Per PRD Appendix F, Phase 1 exit criteria:
 - Y6-Y10 — minor issues
 
 The implementation quality is high. The fixes are straightforward. Phase 2 can proceed once R1-R3 are addressed.
+
+## Fixes Applied
+
+- [x] R1: Replaced uniform r=0.6 correlation matrix with PRD 4.3.1 asymmetric matrix in vibration.py
+- [x] R2: Added noise_type/noise_df/noise_phi to vibration (Student-t df=5), main_drive_current (Student-t df=8), ink_pressure (Student-t df=6), laminator nip_temp (AR(1) phi=0.7), laminator tunnel_temp (AR(1) phi=0.7), coder printhead_temp (AR(1) phi=0.7) in factory.yaml
+- [x] R3: Added sigma_base/sigma_scale/sigma_parent to vibration, web_tension, registration_error_x/y, main_drive_current in factory.yaml. Added sigma_base, sigma_scale, sigma_parent fields to SignalConfig. Updated _make_noise to pass through to NoiseGenerator.
+- [x] Y2: Changed cumulative_kwh rate from 0.001 to 0.000278 (1/3600) for correct kWh = kW × hours conversion
+- [x] Y3: Updated vibration generator to use noise_gen.effective_sigma(press_speed) instead of noise_gen.sigma
+- [x] Y4: Removed double-noising -- SteadyStateModel for vibration signals receives no noise; all noise applied via Cholesky pipeline per PRD 4.3.1
+- [x] Y5: Changed coil 5 (slitter.running) to derive from slitter.speed > 0 instead of press.machine_state == 2
+- [x] Y9: Extracted idle vibration magic numbers to named constants _IDLE_VIBRATION_MEAN and _IDLE_VIBRATION_STD
+- [x] Also: Updated CorrelatedFollowerModel.generate() to pass parent_value to noise.sample() so speed-dependent sigma works for web_tension and main_drive_current

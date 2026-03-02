@@ -24,6 +24,31 @@
 - [x] 1.19: Basic Scenarios
 - [x] 1.20: Modbus TCP Server + Integration Tests
 
+## Independent Review Fixes
+
+An external independent review (`plans/phase-1-independent-review.md`) identified 3 RED and 10 YELLOW findings. The following fixes were applied:
+
+**RED (Must Fix):**
+- R1: Vibration correlation matrix replaced with PRD 4.3.1 asymmetric matrix `[[1.0, 0.2, 0.15], [0.2, 1.0, 0.2], [0.15, 0.2, 1.0]]`
+- R2: Added noise distribution assignments to factory.yaml per PRD 4.2.11 (Student-t for vibration/motor current/ink pressure; AR(1) for laminator temps, printhead temp)
+- R3: Added speed-dependent sigma config (sigma_base, sigma_scale, sigma_parent) to factory.yaml and SignalConfig model per PRD 4.2.11
+
+**YELLOW (Should Fix):**
+- Y2: Fixed energy cumulative_kwh rate from 0.001 to 0.000278 (= 1/3600) for correct dimensional conversion
+- Y3: Vibration generator now uses effective_sigma(press_speed) for speed-dependent noise scaling
+- Y4: Removed double-noising in vibration generator -- SteadyStateModel receives no noise; all noise via Cholesky pipeline
+- Y5: Coil 5 (slitter.running) now derives from slitter.speed > 0 instead of press.machine_state
+- Y9: Extracted idle vibration magic numbers to named constants
+
+**Additional:**
+- CorrelatedFollowerModel.generate() now passes parent_value to noise.sample() for speed-dependent sigma
+- SignalConfig gained sigma_base, sigma_scale, sigma_parent typed fields
+- EquipmentGenerator._make_noise() passes sigma_base/sigma_scale through to NoiseGenerator
+
+**Deferred to Phase 2:** Y1 (environment composite model), Y6 (scenario conflict resolution), Y7 (job changeover dryer setpoints), Y8 (Modbus sync interval config), Y10 (press signal count docstring)
+
+**Test results after fixes:** 1082 passed, ruff clean, mypy clean.
+
 ## Notes
 
 ### Task 1.1: Configuration Models (completed)

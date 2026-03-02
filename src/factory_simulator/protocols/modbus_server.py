@@ -142,6 +142,7 @@ class CoilDefinition:
     address: int
     signal_id: str | None  # None = always False
     derive_value: int = 0  # Coil is True when int(signal_value) == derive_value
+    mode: str = "eq"  # "eq" = value == derive_value, "gt_zero" = value > 0
 
 
 @dataclass(slots=True)
@@ -267,7 +268,7 @@ def build_register_map(config: FactoryConfig) -> RegisterMap:
         CoilDefinition(2, None),                                    # press.emergency_stop
         CoilDefinition(3, None),                                    # press.web_break
         CoilDefinition(4, "press.machine_state", derive_value=2),   # laminator.running
-        CoilDefinition(5, "press.machine_state", derive_value=2),   # slitter.running
+        CoilDefinition(5, "slitter.speed", mode="gt_zero"),           # slitter.running
     ]
 
     # -- Packaging profile discrete inputs (PRD Appendix A) --
@@ -431,7 +432,10 @@ class ModbusServer:
             if isinstance(value, str):
                 self._coil_block.setValues(addr, [False])
                 continue
-            is_active = int(value) == coil_def.derive_value
+            if coil_def.mode == "gt_zero":
+                is_active = float(value) > 0.0
+            else:
+                is_active = int(value) == coil_def.derive_value
             self._coil_block.setValues(addr, [is_active])
 
     def _sync_discrete_inputs(self) -> None:

@@ -226,6 +226,12 @@ class SignalConfig(BaseModel):
     noise_df: float | None = None  # Student-t degrees of freedom
     noise_phi: float | None = None  # AR(1) autocorrelation coefficient
 
+    # Speed-dependent sigma (PRD 4.2.11):
+    # effective_sigma = sigma_base + sigma_scale * |parent_value|
+    sigma_base: float | None = None
+    sigma_scale: float = 0.0
+    sigma_parent: str | None = None  # Parent signal ID for speed-dependent sigma
+
     # Timing
     sample_rate_ms: int | None = None
 

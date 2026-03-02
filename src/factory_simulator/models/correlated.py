@@ -246,9 +246,9 @@ class CorrelatedFollowerModel(SignalModel):
         # Step 3: Linear transform
         result = self._base + gain_eff * parent
 
-        # Step 4: Add noise
+        # Step 4: Add noise (pass parent for speed-dependent sigma)
         if self._noise is not None:
-            result += self._noise.sample()
+            result += self._noise.sample(parent_value=parent)
 
         self._last_output = result
         return result

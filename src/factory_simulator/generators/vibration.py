@@ -4,7 +4,7 @@ Vibration sensors monitor the press main drive motor across 3 axes.
 Normal vibration for a healthy motor at operating speed is 2-8 mm/s
 RMS.  The three axes are correlated (same mechanical source).
 
-PRD Reference: Section 2.9 (Vibration Monitoring)
+PRD Reference: Section 2.9 (Vibration Monitoring), Section 4.3.1 (Cholesky)
 CLAUDE.md Rule 6: All models use sim_time, never wall clock.
 CLAUDE.md Rule 12: No global state.
 CLAUDE.md Rule 13: numpy.random.Generator with SeedSequence.
@@ -21,6 +21,10 @@ from factory_simulator.models.noise import NoiseGenerator
 from factory_simulator.models.steady_state import SteadyStateModel
 from factory_simulator.store import SignalStore, SignalValue
 
+# Residual floor vibration when motor is stopped (PRD 2.9)
+_IDLE_VIBRATION_MEAN = 0.2   # mm/s
+_IDLE_VIBRATION_STD = 0.05   # mm/s
+
 
 class VibrationGenerator(EquipmentGenerator):
     """Vibration monitoring generator -- 3 signals, correlated axes.
@@ -31,17 +35,25 @@ class VibrationGenerator(EquipmentGenerator):
     - main_drive_z: Z-axis vibration RMS (mm/s)
 
     When the press is running (speed > 0), vibration is at its
-    baseline level with noise.  When the press is stopped, vibration
-    drops to near-zero.
+    baseline level with Cholesky-correlated noise across axes.
+    When the press is stopped, vibration drops to near-zero.
 
-    The three axes share a common noise component (Cholesky correlation)
-    to model the fact that they're measuring the same mechanical source.
-    The correlation is implemented by generating one shared noise draw
-    and mixing it across the three axes.
+    The noise pipeline follows PRD 4.3.1:
+    1. Generate 3 independent N(0,1) draws.
+    2. Apply Cholesky factor L to introduce correlation.
+    3. Scale by per-signal effective sigma.
+
+    Noise is applied entirely via the Cholesky pipeline, NOT via
+    the SteadyStateModel's internal noise, to avoid double-noising.
     """
 
-    # Default inter-axis correlation coefficient
-    _DEFAULT_CORRELATION = 0.6
+    # PRD 4.3.1: asymmetric vibration axes correlation matrix
+    # X-Y: 0.2, X-Z: 0.15, Y-Z: 0.2 (reflects mechanical coupling)
+    _PRD_CORRELATION_MATRIX = np.array([
+        [1.0,  0.2,  0.15],
+        [0.2,  1.0,  0.2],
+        [0.15, 0.2,  1.0],
+    ])
 
     def __init__(
         self,
@@ -52,18 +64,15 @@ class VibrationGenerator(EquipmentGenerator):
         super().__init__(equipment_id, config, rng)
 
         extras = config.model_extra or {}
-        self._correlation: float = float(
-            extras.get("axis_correlation", self._DEFAULT_CORRELATION)
-        )
 
-        # Pre-compute Cholesky factor for 3x3 correlation matrix
-        # [[1, r, r], [r, 1, r], [r, r, 1]]
-        r = self._correlation
-        corr_matrix = np.array([
-            [1.0, r, r],
-            [r, 1.0, r],
-            [r, r, 1.0],
-        ])
+        # Use PRD-specified asymmetric correlation matrix by default.
+        # Allow config override via axis_correlation_matrix for non-default profiles.
+        custom_matrix = extras.get("axis_correlation_matrix")
+        if custom_matrix is not None:
+            corr_matrix = np.array(custom_matrix, dtype=np.float64)
+        else:
+            corr_matrix = self._PRD_CORRELATION_MATRIX.copy()
+
         self._cholesky_l = np.linalg.cholesky(corr_matrix)
 
         self._build_models()
@@ -82,6 +91,8 @@ class VibrationGenerator(EquipmentGenerator):
             if sig_cfg is not None:
                 params.update(sig_cfg.params)
                 noise = self._make_noise(sig_cfg)
+            # Do NOT pass noise to the model -- all noise is applied via
+            # the Cholesky pipeline externally (PRD 4.3.1, avoids double-noising).
             self._models[name] = SteadyStateModel(params, self._spawn_rng())
             self._noises[name] = noise
             self._axis_names.append(name)
@@ -105,6 +116,7 @@ class VibrationGenerator(EquipmentGenerator):
 
         if is_running:
             # Generate correlated noise for the three axes
+            # PRD 4.3.1 pipeline:
             # Step 1: Generate 3 independent N(0,1) draws
             z = self._rng.standard_normal(3)
 
@@ -112,22 +124,23 @@ class VibrationGenerator(EquipmentGenerator):
             correlated_z = self._cholesky_l @ z
 
             for i, name in enumerate(self._axis_names):
-                # Base value from steady state model (target)
+                # Base target value from steady state model (no internal noise)
                 raw = self._models[name].generate(sim_time, dt)
 
-                # Replace independent noise with correlated noise
+                # Step 3: Scale correlated draw by effective sigma
                 noise_gen = self._noises[name]
                 if noise_gen is not None:
-                    # Scale correlated draw by the noise sigma
-                    raw += noise_gen.sigma * float(correlated_z[i])
+                    sigma = noise_gen.effective_sigma(press_speed)
+                    raw += sigma * float(correlated_z[i])
 
                 value = self._post_process(name, raw)
                 results.append(self._make_sv(name, value, sim_time))
         else:
-            # Motor stopped: vibration near zero
+            # Motor stopped: vibration near zero (ambient floor vibration)
             for name in self._axis_names:
-                # Small residual vibration (ambient floor vibration)
-                residual = float(self._rng.normal(0.2, 0.05))
+                residual = float(
+                    self._rng.normal(_IDLE_VIBRATION_MEAN, _IDLE_VIBRATION_STD)
+                )
                 value = self._post_process(name, max(residual, 0.0))
                 results.append(self._make_sv(name, value, sim_time))
 
