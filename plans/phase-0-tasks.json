@@ -1,0 +1,41 @@
+{
+  "phase": 0,
+  "name": "Validation Spikes",
+  "tasks": [
+    {
+      "id": "0.1",
+      "name": "Project scaffolding",
+      "description": "Create pyproject.toml, requirements.txt (dev + prod), pytest.ini or pyproject.toml pytest config, ruff config, mypy config, .gitignore, src/ directory structure (src/factory_simulator/__init__.py), tests/ directory structure (tests/unit/, tests/integration/, tests/spikes/), and a minimal conftest.py. Verify: ruff check passes, mypy src passes (on empty package), pytest discovers test directories.",
+      "prd_refs": ["prd/appendix-e-project-structure.md", "prd/07-technology-stack.md"],
+      "passes": false
+    },
+    {
+      "id": "0.2",
+      "name": "Spike: Multi-server pymodbus",
+      "description": "Build and test 7 concurrent async Modbus TCP servers in one event loop. Each server has its own register map on a unique port. Include multi-slave test (3 UIDs on one port), FC06 rejection for float32 registers, and max 125 register limit. See plans/phase-0-validation-spikes.md Spike 1 for full spec.",
+      "prd_refs": ["prd/03-protocol-endpoints.md", "prd/appendix-a-modbus-register-map.md"],
+      "passes": false
+    },
+    {
+      "id": "0.3",
+      "name": "Spike: Mosquitto sidecar + paho-mqtt",
+      "description": "Build Docker Compose with Mosquitto sidecar and Python paho-mqtt 2.0 publisher. Test 50 msg/s publish with mixed QoS 0/1, retained messages, LWT, and client-side buffering during broker restart. See plans/phase-0-validation-spikes.md Spike 2 for full spec.",
+      "prd_refs": ["prd/06-configuration.md", "prd/03-protocol-endpoints.md"],
+      "passes": false
+    },
+    {
+      "id": "0.4",
+      "name": "Spike: asyncua multiple instances",
+      "description": "Build and test 3 concurrent asyncua OPC-UA servers in one event loop. Each server has its own node tree on a unique port. Test subscriptions, data change notifications at 500ms, string NodeIDs, variable attributes, StatusCode propagation, and memory baseline. See plans/phase-0-validation-spikes.md Spike 3 for full spec.",
+      "prd_refs": ["prd/03-protocol-endpoints.md", "prd/appendix-b-opcua-node-tree.md"],
+      "passes": false
+    },
+    {
+      "id": "0.5",
+      "name": "Document spike results",
+      "description": "Write docs/validation-spikes.md with pass/fail per spike, performance numbers, library quirks, reference code samples, and library versions. Clean up spike code into tests/spikes/ directory. Verify all spike tests pass from pytest.",
+      "prd_refs": ["prd/appendix-f-implementation-phases.md"],
+      "passes": false
+    }
+  ]
+}
