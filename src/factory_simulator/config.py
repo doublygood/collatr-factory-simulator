@@ -170,6 +170,7 @@ class MqttProtocolConfig(BaseModel):
     buffer_overflow: str = "drop_oldest"
     lwt_topic: str = "collatr/factory/status"
     lwt_payload: str = '{"status": "offline"}'
+    vibration_per_axis_enabled: bool = True
 
     @field_validator("broker_port")
     @classmethod

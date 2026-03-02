@@ -19,11 +19,15 @@ import pytest
 
 from factory_simulator.config import load_config
 from factory_simulator.protocols.mqtt_publisher import (
+    BatchVibrationEntry,
     MqttPublisher,
     _is_event_driven,
     _qos_for_topic,
     _retain_for_topic,
+    _worst_quality,
+    build_batch_vibration_entry,
     build_topic_map,
+    make_batch_vibration_payload,
     make_payload,
 )
 from factory_simulator.store import SignalStore
@@ -535,3 +539,247 @@ async def test_start_and_stop(config, store, mock_client):
     mock_client.loop_stop.assert_called_once()
     mock_client.disconnect.assert_called_once()
     assert pub._publish_task is None
+
+
+# ---------------------------------------------------------------------------
+# Batch Vibration Topic (PRD 3.3.6)
+# ---------------------------------------------------------------------------
+
+
+class TestWorstQuality:
+    """_worst_quality selects the worst quality across a list."""
+
+    def test_all_good(self):
+        assert _worst_quality(["good", "good", "good"]) == "good"
+
+    def test_one_uncertain(self):
+        assert _worst_quality(["good", "uncertain", "good"]) == "uncertain"
+
+    def test_one_bad(self):
+        assert _worst_quality(["good", "uncertain", "bad"]) == "bad"
+
+    def test_all_bad(self):
+        assert _worst_quality(["bad", "bad", "bad"]) == "bad"
+
+
+class TestMakeBatchVibrationPayload:
+    """make_batch_vibration_payload produces PRD 3.3.6 compliant payloads."""
+
+    def test_payload_is_valid_json(self):
+        data = json.loads(make_batch_vibration_payload(4.2, 3.8, 5.1, "good", "mm/s"))
+        assert isinstance(data, dict)
+
+    def test_payload_has_required_fields(self):
+        data = json.loads(make_batch_vibration_payload(4.2, 3.8, 5.1, "good", "mm/s"))
+        assert set(data.keys()) == {"timestamp", "x", "y", "z", "unit", "quality"}
+
+    def test_no_value_field(self):
+        """Batch payload uses x/y/z, not the single 'value' field."""
+        data = json.loads(make_batch_vibration_payload(4.2, 3.8, 5.1, "good", "mm/s"))
+        assert "value" not in data
+
+    def test_x_y_z_values(self):
+        data = json.loads(make_batch_vibration_payload(4.2, 3.8, 5.1, "good", "mm/s"))
+        assert data["x"] == pytest.approx(4.2)
+        assert data["y"] == pytest.approx(3.8)
+        assert data["z"] == pytest.approx(5.1)
+
+    def test_unit_field(self):
+        data = json.loads(make_batch_vibration_payload(1.0, 2.0, 3.0, "good", "mm/s"))
+        assert data["unit"] == "mm/s"
+
+    def test_quality_field(self):
+        for quality in ("good", "uncertain", "bad"):
+            data = json.loads(make_batch_vibration_payload(1.0, 2.0, 3.0, quality, "mm/s"))
+            assert data["quality"] == quality
+
+    def test_timestamp_iso8601_utc(self):
+        from datetime import datetime
+        data = json.loads(make_batch_vibration_payload(1.0, 2.0, 3.0, "good", "mm/s"))
+        ts = data["timestamp"]
+        assert ts.endswith("Z")
+        assert "T" in ts
+        parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        assert parsed.tzinfo is not None
+
+    def test_timestamp_has_milliseconds(self):
+        data = json.loads(make_batch_vibration_payload(1.0, 2.0, 3.0, "good", "mm/s"))
+        ts = data["timestamp"]
+        parts = ts.split(".")
+        assert len(parts) == 2
+        ms_part = parts[1].rstrip("Z")
+        assert len(ms_part) == 3
+
+
+class TestBuildBatchVibrationEntry:
+    """build_batch_vibration_entry creates correct BatchVibrationEntry from config."""
+
+    def test_returns_entry_for_packaging_profile(self, config):
+        entry = build_batch_vibration_entry(config)
+        assert entry is not None
+        assert isinstance(entry, BatchVibrationEntry)
+
+    def test_batch_topic_path(self, config):
+        entry = build_batch_vibration_entry(config)
+        assert entry is not None
+        assert entry.topic == "collatr/factory/demo/packaging1/vibration/main_drive"
+
+    def test_batch_topic_no_retain(self, config):
+        entry = build_batch_vibration_entry(config)
+        assert entry is not None
+        assert entry.retain is False
+
+    def test_batch_topic_qos0(self, config):
+        entry = build_batch_vibration_entry(config)
+        assert entry is not None
+        assert entry.qos == 0
+
+    def test_batch_topic_interval_1s(self, config):
+        entry = build_batch_vibration_entry(config)
+        assert entry is not None
+        assert entry.interval_s == pytest.approx(1.0)
+
+    def test_batch_signal_ids(self, config):
+        entry = build_batch_vibration_entry(config)
+        assert entry is not None
+        assert entry.x_signal_id == "vibration.main_drive_x"
+        assert entry.y_signal_id == "vibration.main_drive_y"
+        assert entry.z_signal_id == "vibration.main_drive_z"
+
+    def test_batch_unit_mm_per_s(self, config):
+        entry = build_batch_vibration_entry(config)
+        assert entry is not None
+        assert entry.unit == "mm/s"
+
+
+class TestMqttPublisherBatchVibration:
+    """MqttPublisher batch vibration integration: entry property and publish."""
+
+    def _make_store_with_vib(self) -> SignalStore:
+        store = SignalStore()
+        store.set("vibration.main_drive_x", 4.2, timestamp=0.0, quality="good")
+        store.set("vibration.main_drive_y", 3.8, timestamp=0.0, quality="good")
+        store.set("vibration.main_drive_z", 5.1, timestamp=0.0, quality="good")
+        return store
+
+    def test_batch_vibration_entry_exposed(self, publisher):
+        """publisher.batch_vibration_entry is not None for packaging profile."""
+        assert publisher.batch_vibration_entry is not None
+
+    def test_batch_publishes_when_all_axes_present(self, config, mock_client):
+        store = self._make_store_with_vib()
+        pub = MqttPublisher(config, store, client=mock_client)
+        # Force batch entry to be due
+        pub.batch_vibration_entry.last_published = 0.0  # type: ignore[union-attr]
+        pub._publish_batch_vib(now=9999.0)  # well past interval
+        mock_client.publish.assert_called_once()
+        call_args = mock_client.publish.call_args
+        topic = call_args[0][0] if call_args[0] else call_args[1].get("topic")
+        assert topic == pub.batch_vibration_entry.topic  # type: ignore[union-attr]
+
+    def test_batch_payload_has_xyz_fields(self, config, mock_client):
+        store = self._make_store_with_vib()
+        pub = MqttPublisher(config, store, client=mock_client)
+        pub.batch_vibration_entry.last_published = 0.0  # type: ignore[union-attr]
+        pub._publish_batch_vib(now=9999.0)
+        call_args = mock_client.publish.call_args
+        kwargs = call_args.kwargs if call_args.kwargs else {}
+        payload_bytes = kwargs.get("payload")
+        assert payload_bytes is not None
+        data = json.loads(payload_bytes)
+        assert "x" in data and "y" in data and "z" in data
+        assert data["x"] == pytest.approx(4.2)
+        assert data["y"] == pytest.approx(3.8)
+        assert data["z"] == pytest.approx(5.1)
+
+    def test_batch_not_published_before_interval(self, config, mock_client):
+        store = self._make_store_with_vib()
+        pub = MqttPublisher(config, store, client=mock_client)
+        import time
+        now = time.monotonic()
+        pub.batch_vibration_entry.last_published = now  # type: ignore[union-attr]
+        pub._publish_batch_vib(now + 0.5)  # 0.5s later, interval is 1.0s
+        mock_client.publish.assert_not_called()
+
+    def test_batch_not_published_when_axes_missing(self, config, mock_client):
+        store = SignalStore()  # Empty -- no vibration signals
+        pub = MqttPublisher(config, store, client=mock_client)
+        pub.batch_vibration_entry.last_published = 0.0  # type: ignore[union-attr]
+        pub._publish_batch_vib(now=9999.0)
+        mock_client.publish.assert_not_called()
+
+    def test_batch_no_retain(self, config, mock_client):
+        store = self._make_store_with_vib()
+        pub = MqttPublisher(config, store, client=mock_client)
+        pub.batch_vibration_entry.last_published = 0.0  # type: ignore[union-attr]
+        pub._publish_batch_vib(now=9999.0)
+        call_args = mock_client.publish.call_args
+        kwargs = call_args.kwargs if call_args.kwargs else {}
+        assert kwargs.get("retain") is False
+
+    def test_batch_qos0(self, config, mock_client):
+        store = self._make_store_with_vib()
+        pub = MqttPublisher(config, store, client=mock_client)
+        pub.batch_vibration_entry.last_published = 0.0  # type: ignore[union-attr]
+        pub._publish_batch_vib(now=9999.0)
+        call_args = mock_client.publish.call_args
+        kwargs = call_args.kwargs if call_args.kwargs else {}
+        assert kwargs.get("qos") == 0
+
+    def test_batch_worst_quality_used(self, config, mock_client):
+        """Batch payload quality is worst across x/y/z axes."""
+        store = SignalStore()
+        store.set("vibration.main_drive_x", 4.2, timestamp=0.0, quality="good")
+        store.set("vibration.main_drive_y", 3.8, timestamp=0.0, quality="bad")
+        store.set("vibration.main_drive_z", 5.1, timestamp=0.0, quality="uncertain")
+        pub = MqttPublisher(config, store, client=mock_client)
+        pub.batch_vibration_entry.last_published = 0.0  # type: ignore[union-attr]
+        pub._publish_batch_vib(now=9999.0)
+        call_args = mock_client.publish.call_args
+        kwargs = call_args.kwargs if call_args.kwargs else {}
+        data = json.loads(kwargs.get("payload"))
+        assert data["quality"] == "bad"
+
+    def test_publish_due_triggers_batch(self, config, mock_client):
+        """_publish_due also triggers batch publish when due."""
+        store = self._make_store_with_vib()
+        pub = MqttPublisher(config, store, client=mock_client)
+        pub.batch_vibration_entry.last_published = 0.0  # type: ignore[union-attr]
+        # Force all per-axis timed entries to not fire
+        for entry in pub.topic_entries:
+            entry.last_published = 9999.0
+        pub._publish_due(now=9999.0)  # only batch should fire
+        # batch publish must have fired
+        assert mock_client.publish.call_count >= 1
+        topics = [
+            (c[0][0] if c[0] else c[1].get("topic"))
+            for c in mock_client.publish.call_args_list
+        ]
+        batch_topic = pub.batch_vibration_entry.topic  # type: ignore[union-attr]
+        assert batch_topic in topics
+
+
+class TestPerAxisDisabled:
+    """vibration_per_axis_enabled=False removes per-axis from topic map."""
+
+    def test_per_axis_disabled_excludes_vibration_topics(self, config, store):
+        # Patch vibration_per_axis_enabled = False
+        import copy
+        cfg = copy.deepcopy(config)
+        cfg.protocols.mqtt.vibration_per_axis_enabled = False
+        entries = build_topic_map(cfg)
+        topics = [e.topic for e in entries]
+        assert not any("vibration/" in t for t in topics)
+
+    def test_per_axis_disabled_reduces_count(self, config, store):
+        import copy
+        cfg = copy.deepcopy(config)
+        cfg.protocols.mqtt.vibration_per_axis_enabled = False
+        entries = build_topic_map(cfg)
+        # 16 - 3 per-axis = 13 topics
+        assert len(entries) == 13
+
+    def test_per_axis_enabled_default_16_topics(self, config, store):
+        # Default: per-axis enabled → 16 per-axis topics (batch is separate)
+        entries = build_topic_map(config)
+        assert len(entries) == 16

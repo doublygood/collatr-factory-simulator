@@ -1,13 +1,13 @@
 # Phase 2: OPC-UA, MQTT, and Packaging Scenarios - Progress
 
-## Status: In Progress (4/16 tasks complete)
+## Status: In Progress (5/16 tasks complete)
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
 - [x] 2.2: OPC-UA Server Adapter — Value Sync + Subscriptions
 - [x] 2.3: OPC-UA Integration Tests
 - [x] 2.4: MQTT Publisher Adapter
-- [ ] 2.5: MQTT Batch Vibration Topic
+- [x] 2.5: MQTT Batch Vibration Topic
 - [ ] 2.6: MQTT Integration Tests
 - [ ] 2.7: Web Break Scenario
 - [ ] 2.8: Dryer Temperature Drift Scenario
@@ -131,3 +131,30 @@ Test classes:
 - Client injection pattern (`client=None` default) enables unit tests without a real broker
 
 **Test results:** 74/74 unit tests pass. No regressions (1181 total tests pass).
+
+### Task 2.5 (Complete)
+
+**Files modified:**
+- `src/factory_simulator/protocols/mqtt_publisher.py` — Added `BatchVibrationEntry`, `make_batch_vibration_payload`, `build_batch_vibration_entry`, `_worst_quality`, `_publish_batch_vib`; updated `build_topic_map` and `MqttPublisher`
+- `src/factory_simulator/config.py` — Added `vibration_per_axis_enabled: bool = True` to `MqttProtocolConfig`
+- `tests/unit/test_protocols/test_mqtt.py` — Added 31 new tests (TestWorstQuality, TestMakeBatchVibrationPayload, TestBuildBatchVibrationEntry, TestMqttPublisherBatchVibration, TestPerAxisDisabled)
+
+**What was built:**
+- `BatchVibrationEntry` dataclass: tracks batch vibration topic config (topic, qos=0, retain=False, interval_s, unit, x/y/z signal IDs, last_published)
+- `make_batch_vibration_payload(x, y, z, quality, unit)`: builds `{timestamp, x, y, z, unit, quality}` JSON payload (PRD 3.3.6)
+- `build_batch_vibration_entry(config)`: scans equipment signal configs for `vibration/*_x/y/z` groups; builds batch entry from first complete group; returns None for F&B profile (no vibration)
+- `_worst_quality(qualities)`: selects bad > uncertain > good for combined quality across x/y/z axes
+- `MqttPublisher._batch_vib_entry`: built at construction time alongside per-axis `_topic_entries`
+- `MqttPublisher.batch_vibration_entry`: property for testing/introspection
+- `MqttPublisher._publish_batch_vib(now)`: publishes batch when interval elapsed and all three axes present
+- `_publish_due`: now calls `_publish_batch_vib` before per-axis publish loop
+- `vibration_per_axis_enabled: bool = True` in `MqttProtocolConfig`: when False, `build_topic_map` skips all `vibration/*` topics (reduces topic_entries from 16 to 13)
+
+**Decisions:**
+- Batch entry kept separate from `_topic_entries` list: different payload structure (x/y/z not value), avoids polluting `TopicEntry` with optional axis fields
+- `_topic_entries` count remains 16 (per-axis enabled by default); batch entry is 17th topic but tracked separately
+- Quality selection: worst quality (bad > uncertain > good) across all three axes — consistent with how sensor fusion typically reports combined quality
+- Batch interval comes from x-axis `sample_rate_ms` (all three are 1000ms)
+- `vibration_per_axis_enabled` is a plain Python field on `MqttProtocolConfig` — no YAML key needed for default use
+
+**Test results:** 105/105 unit tests pass. No regressions (1244 total tests pass).

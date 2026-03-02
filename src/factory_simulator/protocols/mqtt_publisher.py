@@ -17,6 +17,7 @@ Features:
 - LWT on the configured status topic
 - Client-side buffer: buffer_limit messages, drop oldest (PRD 3.3)
 - JSON payload: {timestamp, value, unit, quality} (PRD 3.3.4)
+- Batch vibration topic: combined x/y/z payload (PRD 3.3.6)
 
 PRD Reference: Section 3.3, Appendix C (MQTT Topic Map)
 CLAUDE.md Rule 9: No locks (single writer, asyncio single-threaded).
@@ -88,9 +89,38 @@ class TopicEntry:
     last_value: float | str | None = field(default=None, compare=False)
 
 
+@dataclass
+class BatchVibrationEntry:
+    """Batch vibration topic config: publishes x/y/z axes in one message.
+
+    PRD Section 3.3.6: combined payload ``{timestamp, x, y, z, unit, quality}``.
+    """
+
+    topic: str             # Full MQTT topic path (.../vibration/main_drive)
+    qos: int               # Always 0 (vibration is loss-tolerant)
+    retain: bool           # Always False (vibration/* not retained)
+    interval_s: float      # Same as per-axis interval (typically 1.0 s)
+    unit: str              # Engineering unit (typically "mm/s")
+    x_signal_id: str       # SignalStore key for x-axis
+    y_signal_id: str       # SignalStore key for y-axis
+    z_signal_id: str       # SignalStore key for z-axis
+
+    # Mutable scheduling state (excluded from equality comparison)
+    last_published: float = field(default=0.0, compare=False)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+# Quality ranking: higher rank = worse quality
+_QUALITY_RANK: dict[str, int] = {"good": 0, "uncertain": 1, "bad": 2}
+
+
+def _worst_quality(qualities: list[str]) -> str:
+    """Return the worst quality string from a list."""
+    return max(qualities, key=lambda q: _QUALITY_RANK.get(q, 0))
 
 
 def _qos_for_topic(relative: str) -> int:
@@ -137,6 +167,105 @@ def make_payload(value: float | str, quality: str, unit: str) -> bytes:
     return json.dumps(payload_dict).encode()
 
 
+def make_batch_vibration_payload(
+    x: float, y: float, z: float, quality: str, unit: str
+) -> bytes:
+    """Build a batch vibration JSON payload per PRD Section 3.3.6.
+
+    Parameters
+    ----------
+    x, y, z:
+        Vibration values for each axis in engineering units.
+    quality:
+        Combined quality flag: ``'good'``, ``'uncertain'``, or ``'bad'``.
+    unit:
+        Engineering unit string (e.g. ``'mm/s'``).
+
+    Returns
+    -------
+    bytes
+        UTF-8 encoded JSON with fields: ``timestamp``, ``x``, ``y``, ``z``,
+        ``unit``, ``quality``.
+    """
+    now = datetime.now(UTC)
+    ts = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+    payload_dict = {
+        "timestamp": ts,
+        "x": x,
+        "y": y,
+        "z": z,
+        "unit": unit,
+        "quality": quality,
+    }
+    return json.dumps(payload_dict).encode()
+
+
+def build_batch_vibration_entry(config: FactoryConfig) -> BatchVibrationEntry | None:
+    """Build a batch vibration entry for the packaging profile, if applicable.
+
+    Scans all equipment signal configs for ``vibration/*_x``, ``vibration/*_y``,
+    and ``vibration/*_z`` mqtt_topic groups.  Returns a :class:`BatchVibrationEntry`
+    for the first complete group found, or ``None`` if no vibration signals exist.
+
+    Parameters
+    ----------
+    config:
+        Validated :class:`~factory_simulator.config.FactoryConfig`.
+
+    Returns
+    -------
+    BatchVibrationEntry | None
+        Batch entry ready for publishing, or ``None`` for profiles without
+        vibration signals.
+    """
+    mqtt_cfg = config.protocols.mqtt
+    site_id = config.factory.site_id
+    line_id = mqtt_cfg.line_id
+    prefix = f"{mqtt_cfg.topic_prefix}/{site_id}/{line_id}"
+
+    # Collect vibration per-axis signals grouped by base topic
+    # groups[base] = {axis: (signal_id, interval_s, unit)}
+    groups: dict[str, dict[str, tuple[str, float, str]]] = {}
+
+    for eq_id, eq_cfg in config.equipment.items():
+        if not eq_cfg.enabled:
+            continue
+        for sig_name, sig_cfg in eq_cfg.signals.items():
+            if sig_cfg.mqtt_topic is None:
+                continue
+            relative = sig_cfg.mqtt_topic
+            if not relative.startswith("vibration/"):
+                continue
+            for axis in ("_x", "_y", "_z"):
+                if relative.endswith(axis):
+                    base = relative[: -len(axis)]  # e.g. "vibration/main_drive"
+                    if base not in groups:
+                        groups[base] = {}
+                    sig_id = f"{eq_id}.{sig_name}"
+                    interval_s = (sig_cfg.sample_rate_ms or 1000) / 1000.0
+                    unit = sig_cfg.units or "mm/s"
+                    groups[base][axis[1:]] = (sig_id, interval_s, unit)
+                    break
+
+    for base, axes in groups.items():
+        if "x" in axes and "y" in axes and "z" in axes:
+            x_sig_id, interval_s, unit = axes["x"]
+            y_sig_id, _, _ = axes["y"]
+            z_sig_id, _, _ = axes["z"]
+            return BatchVibrationEntry(
+                topic=f"{prefix}/{base}",
+                qos=0,
+                retain=False,
+                interval_s=interval_s,
+                unit=unit,
+                x_signal_id=x_sig_id,
+                y_signal_id=y_sig_id,
+                z_signal_id=z_sig_id,
+            )
+
+    return None
+
+
 def build_topic_map(config: FactoryConfig) -> list[TopicEntry]:
     """Build the list of TopicEntry objects from signal configs.
 
@@ -158,6 +287,7 @@ def build_topic_map(config: FactoryConfig) -> list[TopicEntry]:
     site_id = config.factory.site_id
     line_id = mqtt_cfg.line_id
     prefix = f"{mqtt_cfg.topic_prefix}/{site_id}/{line_id}"
+    per_axis_enabled = mqtt_cfg.vibration_per_axis_enabled
 
     entries: list[TopicEntry] = []
     for eq_id, eq_cfg in config.equipment.items():
@@ -169,6 +299,11 @@ def build_topic_map(config: FactoryConfig) -> list[TopicEntry]:
 
             signal_id = f"{eq_id}.{sig_name}"
             relative = sig_cfg.mqtt_topic
+
+            # Skip per-axis vibration topics when disabled via config (PRD 3.3.6)
+            if not per_axis_enabled and relative.startswith("vibration/"):
+                continue
+
             topic = f"{prefix}/{relative}"
 
             qos = _qos_for_topic(relative)
@@ -241,6 +376,9 @@ class MqttPublisher:
         # Build topic map from signal configs
         self._topic_entries = build_topic_map(config)
 
+        # Batch vibration entry (None for F&B profile, which has no vibration)
+        self._batch_vib_entry: BatchVibrationEntry | None = build_batch_vibration_entry(config)
+
         # paho client (injected for unit testing, else created fresh)
         self._client: mqtt.Client = client or self._create_client()
 
@@ -253,6 +391,11 @@ class MqttPublisher:
     def topic_entries(self) -> list[TopicEntry]:
         """The topic map (for testing and introspection)."""
         return self._topic_entries
+
+    @property
+    def batch_vibration_entry(self) -> BatchVibrationEntry | None:
+        """The batch vibration entry, or None if the profile has no vibration."""
+        return self._batch_vib_entry
 
     # -- Client setup ---------------------------------------------------------
 
@@ -292,6 +435,39 @@ class MqttPublisher:
             retain=entry.retain,
         )
 
+    def _publish_batch_vib(self, now: float) -> None:
+        """Publish the batch vibration topic when due (PRD 3.3.6).
+
+        Reads x, y, z signal values from the store.  Skips if any axis
+        is missing.  Uses the worst quality across all three axes.
+
+        Parameters
+        ----------
+        now:
+            Current wall-clock time from ``time.monotonic()``.
+        """
+        entry = self._batch_vib_entry
+        if entry is None:
+            return
+        if now - entry.last_published < entry.interval_s:
+            return
+
+        sv_x = self._store.get(entry.x_signal_id)
+        sv_y = self._store.get(entry.y_signal_id)
+        sv_z = self._store.get(entry.z_signal_id)
+        if sv_x is None or sv_y is None or sv_z is None:
+            return
+
+        quality = _worst_quality([sv_x.quality, sv_y.quality, sv_z.quality])
+        payload = make_batch_vibration_payload(
+            float(sv_x.value), float(sv_y.value), float(sv_z.value),
+            quality, entry.unit,
+        )
+        self._client.publish(
+            entry.topic, payload=payload, qos=entry.qos, retain=entry.retain
+        )
+        entry.last_published = now
+
     def _publish_due(self, now: float) -> None:
         """Check all entries and publish those that are due.
 
@@ -300,6 +476,8 @@ class MqttPublisher:
         now:
             Current wall-clock time from ``time.monotonic()``.
         """
+        self._publish_batch_vib(now)
+
         for entry in self._topic_entries:
             sv = self._store.get(entry.signal_id)
             if sv is None:
