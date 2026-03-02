@@ -13,7 +13,7 @@
 - [x] 1.8: Ramp Model
 - [x] 1.9: Random Walk Model
 - [x] 1.10: Counter Model
-- [ ] 1.11: Depletion Model
+- [x] 1.11: Depletion Model
 - [ ] 1.12: Correlated Follower Model
 - [ ] 1.13: State Machine Model
 - [ ] 1.14: Thermal Diffusion Model
@@ -416,3 +416,42 @@
 - PRD examples: impression_count (rate=1.0), good_count (rate=0.97), waste_count (rate=0.03), good+waste=impression, ink_consumption_ml (rate=0.01), cumulative_kwh (rate=0.001)
 - Property-based (Hypothesis): output always finite, never negative from zero, monotonically increasing, rollover keeps value below threshold, determinism any seed
 - Package imports: CounterModel importable from models package, in __all__
+
+### Task 1.11: Depletion Model (completed)
+
+**Files created:**
+- `src/factory_simulator/models/depletion.py` -- DepletionModel class
+- `tests/unit/test_models/test_depletion.py` -- 60 tests (property-based with Hypothesis)
+
+**Files modified:**
+- `src/factory_simulator/models/__init__.py` -- exports DepletionModel
+
+**DepletionModel implementation (PRD 4.2.7):**
+- Core formula: `value -= consumption_rate * speed * dt`
+- `set_speed(speed)` for runtime usage driver input (called by equipment generator before generate())
+- Auto-refill: when value drops to or below `refill_threshold`, jumps to `refill_value`. Both must be configured for refill to activate.
+- Manual refill: `refill(level)` for scenario-driven refill (e.g. reel changeover)
+- Optional `NoiseGenerator` for observation noise (measurement noise on top of level)
+- `reset()` restores initial value, zeros speed, clears noise state
+
+**Key design decisions:**
+- Same `_float_param()` helper pattern as other signal models for safe param extraction.
+- Follows the same `set_speed()` pattern as CounterModel -- the equipment generator provides the usage driver (line speed for unwind diameter, print rate for ink level).
+- Refill is disabled by default (both `refill_threshold` and `refill_value` must be set). This allows the same model to serve ink_level (with refill), unwind_diameter (no refill, reel changeover is a scenario), and nozzle_health (no refill, degrades over time).
+- Validation: `refill_threshold < refill_value` prevents nonsensical config, `refill_threshold >= 0` and `refill_value > 0` enforce physical constraints.
+- Noise is observation noise -- it does not affect the internal level state, only the returned value. This preserves deterministic depletion tracking while adding realistic measurement variation.
+- Without refill or external clamping, the value can go negative (the engine's `clamp()` post-processing handles physical bounds).
+
+**Test coverage (60 tests):**
+- Construction: defaults, explicit params, validation errors (negative consumption_rate, negative refill_threshold, zero/negative refill_value, threshold >= value), partial refill config (threshold-only, value-only)
+- Basic depletion: zero speed no depletion, linear depletion, rate scaling, speed scaling, dt scaling, zero consumption rate, can go negative
+- Speed changes: set_speed, mid-run change, speed-to-zero pauses depletion
+- Auto-refill: triggers at threshold, below threshold, multiple cycles, disabled when both None, disabled when only one set, different refill_value from initial, zero threshold
+- Manual refill: to specified level, to refill_value, defaults to initial_value, continues depletion after refill
+- Noise: adds variation, mean near level, zero sigma clean, noise does not affect internal level, AR(1) noise resets
+- Reset: restores initial value, zeros speed, defaults to configured initial, clears noise state
+- Determinism (Rule 13): same seed identical, no noise deterministic regardless of seed, noise same seed identical, noise different seeds differ
+- Time compression (Rule 6): same depletion at different tick rates, compressed run
+- PRD examples: ink_level (refill cycle), ink_level multiple refills, unwind_diameter (no refill), nozzle_health (slow degradation)
+- Property-based (Hypothesis): output finite, monotonically decreasing without refill, determinism any seed, depletion formula exact, refill keeps value above threshold
+- Package imports: DepletionModel importable from models package, in __all__
