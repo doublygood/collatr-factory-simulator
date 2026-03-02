@@ -12,7 +12,7 @@
 - [x] 1.7: First-Order Lag Model
 - [x] 1.8: Ramp Model
 - [x] 1.9: Random Walk Model
-- [ ] 1.10: Counter Model
+- [x] 1.10: Counter Model
 - [ ] 1.11: Depletion Model
 - [ ] 1.12: Correlated Follower Model
 - [ ] 1.13: State Machine Model
@@ -375,3 +375,44 @@
 - Determinism (Rule 13): same seed identical, different seeds differ, no drift deterministic across seeds, noise+walk same seed identical
 - Property-based (Hypothesis): output always finite, determinism any seed, clamped output within bounds
 - PRD examples: ink viscosity (center 25 cP, bounded 15-35), registration error (center 0, bounded -0.5 to 0.5), coder ink viscosity (sigma 0.3 cP)
+
+### Task 1.10: Counter Model (completed)
+
+**Files created:**
+- `src/factory_simulator/models/counter.py` -- CounterModel class
+- `tests/unit/test_models/test_counter.py` -- 56 tests (property-based with Hypothesis)
+
+**Files modified:**
+- `src/factory_simulator/models/__init__.py` -- exports CounterModel
+
+**CounterModel implementation (PRD 4.2.6):**
+- Core formula: `value += rate * speed * dt`
+- `rate` in units of "increments per speed-unit per second" (validated >= 0)
+- `set_speed(speed)` for runtime speed input (called by equipment generator before generate())
+- Rollover: `value = value % rollover_value` when counter reaches configured rollover. Supports modulo for multiple wraps in a single tick. Accepts both `rollover_value` and `rollover` as config keys (config uses `rollover`).
+- Reset on job change: `reset_counter()` zeros counter value. `reset_on_job_change` flag is informational for the scenario engine to know which counters to reset.
+- Max before reset: auto-resets to zero when counter reaches `max_before_reset` threshold. Applied after rollover.
+- `reset()` restores initial value and zeros speed.
+
+**Key design decisions:**
+- Same `_float_param()` helper pattern as other signal models for safe param extraction from `dict[str, object]`.
+- Counter has no stochastic component -- output is purely deterministic regardless of RNG seed. The counter model receives an RNG via the SignalModel interface but does not use it.
+- `set_speed()` follows the same pattern as `FirstOrderLagModel.set_setpoint()` and `RandomWalkModel.set_center()` -- equipment generators set external dependencies before calling generate().
+- Rollover uses modulo (`%`) which correctly handles cases where a large increment would exceed rollover multiple times in a single tick.
+- `reset_counter()` is separate from `reset()`: reset_counter zeros the value (job changeover), while reset restores the initial construction state (full model reset).
+- `initial_value` validated >= 0 since counters don't have negative values.
+
+**Test coverage (56 tests):**
+- Construction: defaults, explicit params, rollover alias, rollover_value precedence, invalid rate/rollover/max_before_reset/initial_value, zero rate allowed
+- Basic increment: zero speed no increment, constant speed linear increment, rate scaling, speed scaling, dt scaling, accumulation across ticks, zero rate, initial value offset
+- Speed changes: set_speed, mid-run speed change, speed-to-zero pauses
+- Rollover: no rollover by default, wraps to zero, preserves remainder (modulo), multiple wraps, PRD 999 wrapping, large uint32 rollover
+- Max before reset: auto-resets, continues after reset, disabled by default
+- Rollover + max_before_reset interaction
+- Reset on job change: zeros value, continues counting, works regardless of flag
+- Reset: restores initial value, zeros speed, defaults to zero
+- Determinism (Rule 13): same seed same output, deterministic regardless of seed
+- Time compression (Rule 6): same total at different tick rates, compressed run high count
+- PRD examples: impression_count (rate=1.0), good_count (rate=0.97), waste_count (rate=0.03), good+waste=impression, ink_consumption_ml (rate=0.01), cumulative_kwh (rate=0.001)
+- Property-based (Hypothesis): output always finite, never negative from zero, monotonically increasing, rollover keeps value below threshold, determinism any seed
+- Package imports: CounterModel importable from models package, in __all__
