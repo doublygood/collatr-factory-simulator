@@ -75,6 +75,14 @@ params:
   drift_rate: 0.0       # Slow walk magnitude (default 0 = disabled)
   reversion_rate: 0.0001  # Pull back toward zero (time constant of hours)
   max_drift: 2.55       # Clamp on drift_offset (default 3% of target)
+  # Optional long-term calibration drift (Section 4.2.1)
+  calibration_drift_rate: 0.0  # Units per simulated hour (default 0 = disabled)
+                               # Typical thermocouple: 0.001-0.01 C/hour
+                               # Produces 0.5-5 C drift over a simulated month
+  # Optional quantisation (Section 4.2.13)
+  quantisation_resolution: null  # Snap to multiples of this value (default null = disabled)
+                                 # Example: 0.1 for Eurotherm int16 x10
+                                 # Example: 0.024 for 12-bit ADC on 0-100 C range
 ```
 
 ### sinusoidal
@@ -260,6 +268,79 @@ params:
   sigma: 0.1                 # Noise on process variable
   initial_state: "OFF"       # Starting state: "ON" or "OFF"
 ```
+
+### string_generator
+
+```yaml
+model: "string_generator"
+params:
+  template: "{date:%y%m%d}-{line}-{seq:03d}"  # Format string
+  line_id: "L1"                                 # Line identifier
+  reset_at: "00:00"                             # Time of day to reset sequence number
+  # Example output: "260302-L1-007"
+  # Sequence increments on each new batch (mixer state machine transition)
+  # Resets to 001 at the configured reset time
+```
+
+### peer_correlation
+
+Peer correlation mixing matrices are configured per signal group. See Section 4.3.1 for the mixing formula and default matrices.
+
+```yaml
+peer_groups:
+  vibration_axes:
+    signals: ["vibration.main_drive_x", "vibration.main_drive_y", "vibration.main_drive_z"]
+    mixing_matrix:
+      - [1.0,  0.2,  0.15]
+      - [0.2,  1.0,  0.2 ]
+      - [0.15, 0.2,  1.0 ]
+  dryer_zones:
+    signals: ["press.dryer_temp_zone_1", "press.dryer_temp_zone_2", "press.dryer_temp_zone_3"]
+    mixing_matrix:
+      - [1.0,  0.1,  0.02]
+      - [0.1,  1.0,  0.1 ]
+      - [0.02, 0.1,  1.0 ]
+  oven_zones:
+    signals: ["oven.zone_1_temp", "oven.zone_2_temp", "oven.zone_3_temp"]
+    mixing_matrix:
+      - [1.0,  0.15, 0.05]
+      - [0.15, 1.0,  0.15]
+      - [0.05, 0.15, 1.0 ]
+```
+
+## Network Topology Parameters
+
+### Clock Drift
+
+Per-controller clock drift offsets. See Section 3a.5 for the formula and typical values.
+
+```yaml
+network:
+  clock_drift:
+    press_plc:
+      initial_offset_ms: 200        # Starting offset in milliseconds
+      drift_rate_s_per_day: 0.3     # Seconds of drift per simulated day
+    laminator_plc:
+      initial_offset_ms: 1500
+      drift_rate_s_per_day: 1.0
+    oven_zone_1:
+      initial_offset_ms: 5000       # Eurotherm, notorious drifter
+      drift_rate_s_per_day: 5.0
+    oven_zone_2:
+      initial_offset_ms: 6000
+      drift_rate_s_per_day: 4.5
+    oven_zone_3:
+      initial_offset_ms: 7000
+      drift_rate_s_per_day: 6.0
+    chiller:
+      initial_offset_ms: 3000
+      drift_rate_s_per_day: 2.5
+    energy_meter:
+      initial_offset_ms: 100
+      drift_rate_s_per_day: 0.2
+```
+
+Set `drift_rate_s_per_day` to 0 for a controller with perfect time sync. The initial offset is applied at simulation start. The drift accumulates linearly from there.
 
 ## Protocol Mapping Reference
 

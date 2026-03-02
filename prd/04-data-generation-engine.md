@@ -46,6 +46,19 @@ Drift parameters: `drift_rate` (magnitude of slow walk, default 0.001), `reversi
 
 Used for: `press.nip_pressure`, `press.web_tension` (baseline), `press.ink_temperature`, `press.main_drive_current`. NOT used for: `press.line_speed` (operator-controlled), counters, setpoints, or state signals. Enable per signal by setting `drift_rate` > 0.
 
+**Optional long-term calibration drift.** Real sensors drift over months. A thermocouple in a dryer zone might drift 1-2 C per year. This is a slow persistent bias that accumulates over simulated days and weeks. Unlike within-regime drift (which mean-reverts over hours), calibration drift does not revert. It represents physical sensor degradation.
+
+```
+calibration_bias += calibration_drift_rate * dt
+value = value + calibration_bias
+```
+
+The `calibration_drift_rate` parameter specifies the drift in signal units per simulated hour. Default: 0 (disabled). Typical values for thermocouples: 0.001 to 0.01 C/hour, producing 0.5 to 5 C of drift over a simulated month. The drift is linear over the simulated time horizon. For runs shorter than a simulated week, the effect is negligible. For multi-week runs at 100x compression, the drift becomes visible.
+
+The ground truth event log does not record calibration drift as an event. It is a continuous process, not a discrete event. The configuration documents the drift rate per signal.
+
+Calibration drift parameters: `calibration_drift_rate` (float, units per simulated hour, default 0).
+
 ### 4.2.2 Sinusoidal with Noise
 
 The signal follows a sine wave with noise. Models signals with periodic behaviour.
@@ -341,6 +354,51 @@ Parameters: `setpoint` (target temperature), `dead_band_high` (offset above setp
 
 Typical chiller configuration: setpoint 2 C, dead band +/- 1 C. Temperature oscillates between 1 C and 3 C with a cycle time of about 8-12 minutes. The Danfoss controller turns the compressor on when room temperature exceeds setpoint + dead_band_high, and off when it drops below setpoint - dead_band_low.
 
+### 4.2.13 Sensor Quantisation
+
+Real ADCs produce quantised values. A 12-bit ADC on a 0-100 C range gives 0.024 C resolution. A 16-bit Eurotherm input register with x10 scaling gives 0.1 C resolution. The simulator produces continuous floating-point values by default. At low signal levels, real data shows visible quantisation steps.
+
+After noise generation, an optional quantisation step rounds the output to the nearest multiple of the sensor's resolution:
+
+```
+quantised_value = round(value / resolution) * resolution
+```
+
+The `quantisation_resolution` parameter (float, optional, default: disabled) sets the step size. When set, the output snaps to multiples of this value.
+
+Typical resolutions:
+
+| Sensor Type | Resolution | Source |
+|---|---|---|
+| Eurotherm int16 x10 | 0.1 C | 16-bit register, x10 scaling |
+| 12-bit ADC, 0-100 C | 0.024 C | 4096 steps over 100 C range |
+| 16-bit ADC, 0-50 mm/s | 0.00076 mm/s | 65536 steps over 50 range |
+| Schneider PM5560 power | 0.01 kW | Meter display resolution |
+
+Quantisation is most visible on slow-changing signals at low levels: idle vibration, ambient temperature at night. At high signal levels or fast-changing signals, noise masks the quantisation. Enable selectively for signals where it adds realism.
+
+Parameters: `quantisation_resolution` (float, optional, default: disabled).
+
+### 4.2.14 String Generator
+
+The string generator produces formatted identifier strings. It does not generate numeric values. It assembles strings from a template with dynamic components.
+
+```
+batch_id = format_template.format(
+    date=sim_date,
+    line=line_id,
+    seq=batch_sequence_number
+)
+```
+
+Default template: `"{date:%y%m%d}-{line}-{seq:03d}"`. Example output: `"260302-L1-007"` (2 March 2026, Line 1, batch 7 of the day).
+
+The sequence number increments each time a new batch starts. The mixer state machine drives this: each transition to a new batch increments the counter. The sequence resets to 001 at each simulated midnight.
+
+Parameters: `template` (format string), `line_id` (string, default from profile config), `reset_at` (time of day for sequence reset, default `"00:00"`).
+
+Used for: `mixer.batch_id` in the F&B profile.
+
 ## 4.3 Correlation Model
 
 The correlation model defines how signals interact. The machine state is the root driver. All other signals respond to state transitions.
@@ -408,6 +466,50 @@ env.ambient_temp increases (afternoon warming)
   -> press.registration_error increases slightly (lower viscosity affects print transfer)
 ```
 
+### 4.3.1 Peer Correlation Mixing Matrices
+
+Some signal groups exhibit peer correlations. These are signals that influence each other without a clear parent-child hierarchy. The three vibration axes share mechanical coupling. The three dryer zones share thermal mass. After removing state machine and parent-child effects, these residual correlations remain.
+
+The engine supports peer correlation through a mixing matrix applied after independent noise generation. For a group of N peer signals, each signal generates its noise independently. A mixing matrix then combines the noise vectors:
+
+```
+noise_mixed = M @ noise_independent
+```
+
+M is an NxN matrix. Diagonal entries are close to 1.0, preserving most of the independent noise. Off-diagonal entries (0.1 to 0.3) introduce correlation between peers.
+
+**Vibration axes (3x3):**
+
+```
+M = [[1.0,  0.2,  0.15],
+     [0.2,  1.0,  0.2 ],
+     [0.15, 0.2,  1.0 ]]
+```
+
+Mechanical coupling between X, Y, Z axes. A bearing defect affects all three axes but with different magnitudes.
+
+**Dryer zones (3x3):**
+
+```
+M = [[1.0,  0.1,  0.02],
+     [0.1,  1.0,  0.1 ],
+     [0.02, 0.1,  1.0 ]]
+```
+
+Thermal coupling between adjacent zones. Zone 2 correlates with both zone 1 and zone 3. Zones 1 and 3 have minimal direct coupling.
+
+**Oven zones (3x3):**
+
+```
+M = [[1.0,  0.15, 0.05],
+     [0.15, 1.0,  0.15],
+     [0.05, 0.15, 1.0 ]]
+```
+
+Same structure as dryer zones but with higher coupling coefficients. The oven is a more enclosed thermal mass.
+
+The mixing matrix is configurable per group. Set all off-diagonal entries to 0 to disable peer correlation. See Appendix D for configuration examples.
+
 ## 4.4 Time Compression
 
 The simulation clock advances at a configurable multiple of real time:
@@ -447,6 +549,24 @@ The `cip.conductivity` signal follows a specific profile through each CIP cycle:
 3. Caustic hold: conductivity holds steady at target for 10-20 minutes.
 4. Rinse: conductivity follows a first-order lag with setpoint = 0 mS/cm and tau = 30-60 seconds. This produces the exponential decay from caustic concentration toward zero that real CIP rinse cycles exhibit. Water dilutes chemical residue in a first-order process, not a linear ramp.
 5. Final rinse: conductivity below 5 mS/cm for 2+ minutes confirms the system is clean.
+
+**Atomic recipe changes.** When a food line changes recipes, multiple setpoints change together. All three oven zone setpoints, belt speed, filler target weight, and sealer parameters update as a batch. On a real Eurotherm, a recipe change writes all parameters in a single Modbus transaction (milliseconds apart). The scenario engine groups related setpoints into a recipe:
+
+```yaml
+recipe:
+  name: "Chicken Tikka 400g"
+  setpoints:
+    oven.zone_1_setpoint: 185.0
+    oven.zone_2_setpoint: 190.0
+    oven.zone_3_setpoint: 180.0
+    oven.belt_speed: 2.5
+    filler.fill_target: 400.0
+    sealer.seal_temp: 175.0
+    sealer.gas_co2_pct: 30.0
+    sealer.gas_n2_pct: 70.0
+```
+
+All setpoints in a recipe update at the same simulation tick. The process variables then respond at their individual time constants. Zone 1 might reach its new setpoint in 90 seconds while the heavier zone 3 takes 180 seconds. The setpoint change is instant. The response is gradual. The key requirement is that setpoint writes happen simultaneously, not sequentially.
 
 **F&B correlation model.** The correlation engine extends for F&B equipment:
 - `mixer.torque` correlates with `mixer.speed` and `mixer.batch_temp` (viscosity changes with temperature).

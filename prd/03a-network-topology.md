@@ -250,6 +250,27 @@ Each simulated controller has independent connection behaviour:
 
 **OPC-UA session management.** OPC-UA connections have sessions with timeouts. If CollatrEdge does not send a keep-alive within the session timeout, the server closes the session. Subscriptions are lost. CollatrEdge must reconnect and re-subscribe. The simulator enforces standard OPC-UA session management with configurable timeouts.
 
+**Per-controller clock drift.** Each simulated controller has an independent clock offset. In a real factory, each PLC has its own clock. Clock drift between PLCs of 1-5 seconds is common. Between a Siemens PLC and a Eurotherm controller, drift of 10+ seconds is normal. The offset starts at zero and drifts at a configurable rate. The drift is linear (no NTP correction simulated).
+
+```
+controller_timestamp = sim_time + initial_offset + drift_rate * elapsed_hours
+```
+
+| Controller Type | Initial Offset | Drift Rate | Notes |
+|---|---|---|---|
+| Siemens S7-1500 | 0-500 ms | 0.1-0.5 s/day | Typically NTP-synced, small drift |
+| Siemens S7-1200 | 0-2 s | 0.5-2.0 s/day | Often no NTP, moderate drift |
+| Allen-Bradley CompactLogix | 0-1 s | 0.2-1.0 s/day | CIP Sync capable but often not configured |
+| Eurotherm 3504 | 0-10 s | 2-10 s/day | Poor internal clock, notorious drifter |
+| Danfoss AK-CC 550 | 0-5 s | 1-5 s/day | Refrigeration controller, no time sync |
+| Schneider PM5560 | 0-1 s | 0.1-0.5 s/day | Power meter, usually well-synced |
+
+The clock offset affects timestamps in OPC-UA SourceTimestamp and MQTT JSON timestamp fields. Modbus has no timestamps. CollatrEdge timestamps Modbus data on receipt. This tests CollatrEdge's time alignment logic when correlating data from multiple controllers.
+
+The protocol adapters apply the controller's clock offset when generating timestamps. The ground truth event log uses the true simulation time, not the drifted time. This allows post-hoc evaluation of CollatrEdge's time correction.
+
+See Appendix D for clock drift configuration parameters.
+
 ## 3a.6 Load Profile Summary
 
 Total concurrent connections CollatrEdge must maintain:

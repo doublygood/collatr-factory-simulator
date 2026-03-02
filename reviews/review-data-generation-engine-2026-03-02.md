@@ -263,23 +263,23 @@ Section 3a describes a realistic multi-controller architecture. The data generat
 
 ## Consolidated Blocker List
 
-| # | Issue | Reviewer | Effort | Priority |
+| # | Issue | Reviewer | Status | Commit |
 |---|---|---|---|---|
-| 1 | Ink pressure target wrong (1500 vs 835 mbar) | Automation | Minutes | Fix now |
-| 2 | Specify simulated time, not wall-clock time, for all models | Automation | Minutes | Fix now |
-| 3 | Product core temperature needs thermal diffusion model (S-curve) | Automation | Hours | Fix now |
-| 4 | Step-wise ramps, not smooth linear (3-5 steps with overshoots) | Data Sci | Hours | Fix now |
-| 5 | Micro-stops (5-30s pauses, 10-50 per shift, Poisson process) | Data Sci | Hours | Fix now |
-| 6 | Ground truth event log (JSONL with anomaly annotations) | Data Sci | Day | Fix now |
-| 7 | Within-regime drift for long production runs | Data Sci | Hours | Fix now |
-| 8 | Sentinel values for sensor disconnects (6553.5 pattern) | Data Sci | Hours | Fix now |
+| 1 | Ink pressure target wrong (1500 vs 835 mbar) | Automation | **RESOLVED** | `036ea3f` |
+| 2 | Specify simulated time, not wall-clock time, for all models | Automation | **RESOLVED** | `036ea3f` |
+| 3 | Product core temperature needs thermal diffusion model (S-curve) | Automation | **RESOLVED** | `036ea3f` |
+| 4 | Step-wise ramps, not smooth linear (3-5 steps with overshoots) | Data Sci | **RESOLVED** | `036ea3f` |
+| 5 | Micro-stops (5-30s pauses, 10-50 per shift, Poisson process) | Data Sci | **RESOLVED** | `036ea3f` |
+| 6 | Ground truth event log (JSONL with anomaly annotations) | Data Sci | **RESOLVED** | `036ea3f` |
+| 7 | Within-regime drift for long production runs | Data Sci | **RESOLVED** | `036ea3f` |
+| 8 | Sentinel values for sensor disconnects (6553.5 pattern) | Data Sci | **RESOLVED** | `036ea3f` |
 
 ### Conditional Blockers (depending on use case)
 
-| # | Issue | Condition | Effort |
-|---|---|---|---|
-| 9 | Configurable noise distributions (Student-t, AR(1)) | Blocker if evaluating anomaly detection | Day |
-| 10 | Contextual anomalies and intermittent faults | Blocker if benchmarking | Day |
+| # | Issue | Condition | Status | Commit |
+|---|---|---|---|---|
+| 9 | Configurable noise distributions (Student-t, AR(1)) | Blocker if evaluating anomaly detection | **RESOLVED** | `f0d3240` |
+| 10 | Contextual anomalies and intermittent faults | Blocker if benchmarking | **RESOLVED** | `f0d3240` |
 
 ---
 
@@ -287,18 +287,18 @@ Section 3a describes a realistic multi-controller architecture. The data generat
 
 ### Phase 1 (High Value)
 
-| # | Issue | Reviewer |
-|---|---|---|
-| 11 | Second-order response (overshoot + oscillation) for temperature controllers | Automation |
-| 12 | Stuck sensor / frozen value fault injection | Automation |
-| 13 | CIP conductivity decay as first-order lag toward zero (explicit) | Automation |
-| 14 | Dead band / hysteresis model for compressor cycling | Automation |
-| 15 | Counter reset behaviour under time compression | Automation |
-| 16 | Speed-dependent noise sigma | Data Sci |
-| 17 | HVAC cycling and random perturbations on environmental signals | Data Sci |
-| 18 | Exponential/logistic vibration degradation curve (not linear) | Data Sci |
-| 19 | Lagged cross-correlations as function of line speed | Data Sci |
-| 20 | Explicit controller-down signal behaviour | Automation |
+| # | Issue | Reviewer | Status | Commit |
+|---|---|---|---|---|
+| 11 | Second-order response (overshoot + oscillation) for temperature controllers | Automation | **RESOLVED** | `1c20824` |
+| 12 | Stuck sensor / frozen value fault injection | Automation | **RESOLVED** | `1c20824` |
+| 13 | CIP conductivity decay as first-order lag toward zero (explicit) | Automation | **RESOLVED** | `1c20824` |
+| 14 | Dead band / hysteresis model for compressor cycling | Automation | **RESOLVED** | `1c20824` |
+| 15 | Counter reset behaviour under time compression | Automation | **RESOLVED** | `1c20824` |
+| 16 | Speed-dependent noise sigma | Data Sci | **RESOLVED** | `1c20824` |
+| 17 | HVAC cycling and random perturbations on environmental signals | Data Sci | **RESOLVED** | `1c20824` |
+| 18 | Exponential/logistic vibration degradation curve (not linear) | Data Sci | **RESOLVED** | `1c20824` |
+| 19 | Lagged cross-correlations as function of line speed | Data Sci | **RESOLVED** | `1c20824` |
+| 20 | Explicit controller-down signal behaviour | Automation | **RESOLVED** | `1c20824` |
 
 ### Phase 2 (Lower Priority)
 
