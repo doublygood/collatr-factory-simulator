@@ -64,7 +64,7 @@
       "test_files": ["tests/unit/test_models/test_sinusoidal.py"],
       "prd_refs": ["prd/04-data-generation-engine.md (4.2.2)"],
       "depends_on": ["1.4"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "1.7",

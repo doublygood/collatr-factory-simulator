@@ -8,7 +8,7 @@
 - [x] 1.3: Signal Value Store
 - [x] 1.4: Signal Model Base + Noise Pipeline
 - [x] 1.5: Steady State Model
-- [ ] 1.6: Sinusoidal Model
+- [x] 1.6: Sinusoidal Model
 - [ ] 1.7: First-Order Lag Model
 - [ ] 1.8: Ramp Model
 - [ ] 1.9: Random Walk Model
@@ -219,3 +219,39 @@
 - Property-based: output finite for arbitrary target/sigma, clamped output within bounds, determinism for any seed
 - Full pipeline: generate → quantise → clamp, PRD ink pressure example (835 mbar, sigma 60, range 0-900), supply voltage (24V, sigma 0.1V)
 - Package imports: SteadyStateModel, quantise, clamp all importable from models package
+
+### Task 1.6: Sinusoidal Model (completed)
+
+**Files created:**
+- `src/factory_simulator/models/sinusoidal.py` -- SinusoidalModel class
+- `tests/unit/test_models/test_sinusoidal.py` -- 35 tests (property-based with Hypothesis)
+
+**Files modified:**
+- `src/factory_simulator/models/__init__.py` -- exports SinusoidalModel
+
+**SinusoidalModel implementation (PRD 4.2.2):**
+- Core formula: `value = center + amplitude * sin(2 * pi * t / period + phase) + noise`
+- Parameters: `center` (default 0.0), `amplitude` (default 1.0), `period` (default 86400.0 = 24h), `phase` (default 0.0 radians)
+- Validates period > 0 at construction
+- Accepts optional `NoiseGenerator` for noise injection (keeps distribution selection at config level per task 1.4 design)
+- `reset()` clears noise state (AR(1) memory)
+- No internal state beyond noise -- sinusoidal is a pure function of sim_time
+
+**Key design decisions:**
+- Same `_float_param()` helper pattern as SteadyStateModel for safe param extraction
+- The sinusoidal model is stateless (no drift, no accumulation) -- output depends only on sim_time and noise
+- Without noise, two models with different RNG seeds produce identical output (pure function of time)
+- Phase offset in radians for maximum flexibility. PRD's humidity inversion uses phase=pi
+- Period in seconds (not hours/minutes) to be consistent with sim_time units
+
+**Test coverage (35 tests):**
+- Construction: defaults, explicit params, invalid period (zero, negative)
+- Basic generation: t=0, quarter/half/three-quarter/full period, negative/zero amplitude, negative center
+- Phase offset: pi/2 shifts peak to t=0, pi inverts wave, humidity inverted phase example
+- Periodicity: values repeat at t and t+period, short period (1s), long period (24h)
+- Output range: without noise stays within [center-amplitude, center+amplitude], extremes reached
+- Noise: mean near center over 100 periods, noise adds variation, zero sigma clean signal
+- Reset: clears AR(1) state, no-op without noise
+- Determinism (Rule 13): same seed → identical, different seeds differ, no noise always deterministic
+- Property-based (Hypothesis): output finite, within bounds without noise, determinism any seed, periodic
+- PRD examples: ambient humidity daily cycle (inverted phase), ambient temp daily base layer
