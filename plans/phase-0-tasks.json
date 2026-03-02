@@ -14,7 +14,7 @@
       "name": "Spike: Multi-server pymodbus",
       "description": "Build and test 7 concurrent async Modbus TCP servers in one event loop. Each server has its own register map on a unique port. Include multi-slave test (3 UIDs on one port), FC06 rejection for float32 registers, and max 125 register limit. See plans/phase-0-validation-spikes.md Spike 1 for full spec.",
       "prd_refs": ["prd/03-protocol-endpoints.md", "prd/appendix-a-modbus-register-map.md"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "0.3",
