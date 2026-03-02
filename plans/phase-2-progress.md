@@ -1,6 +1,6 @@
 # Phase 2: OPC-UA, MQTT, and Packaging Scenarios - Progress
 
-## Status: In Progress (7/16 tasks complete)
+## Status: In Progress (8/16 tasks complete)
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
@@ -10,7 +10,7 @@
 - [x] 2.5: MQTT Batch Vibration Topic
 - [x] 2.6: MQTT Integration Tests
 - [x] 2.7: Web Break Scenario
-- [ ] 2.8: Dryer Temperature Drift Scenario
+- [x] 2.8: Dryer Temperature Drift Scenario
 - [ ] 2.9: Ink Viscosity Excursion Scenario
 - [ ] 2.10: Registration Drift Scenario
 - [ ] 2.11: Cold Start Energy Spike Scenario
@@ -221,3 +221,32 @@ Test classes:
 - Decel test runs 150 post-scenario ticks to allow decel ramp to complete.
 
 **Test results:** 23/23 unit tests pass. No regressions (1277 total tests pass).
+
+### Task 2.8 (Complete)
+
+**Files created:**
+- `src/factory_simulator/scenarios/dryer_drift.py` — DryerDrift scenario class, 196 lines
+- `tests/unit/test_scenarios/test_dryer_drift.py` — 22 unit tests, all pass
+
+**What was built:**
+- `DryerDrift` class inheriting from `Scenario` base
+- Configurable params: `drift_rate_range` (default [0.05, 0.2] C/min), `drift_range` (default [5.0, 15.0] C max), `drift_duration_range` (default [1800, 7200] s = 30-120 min), `waste_increase_range` (default [1.2, 1.5] = 20-50% increase), `zone` (1/2/3 or random)
+
+**Sequence (PRD 5.4):**
+1. One zone selected (random or explicit). Waste rate increased by configured multiplier.
+2. Each tick: drift_offset = min(drift_rate * elapsed / 60, max_drift). Override `FirstOrderLagModel._value = setpoint + drift_offset`.
+3. After drift_duration: scenario completes, waste rate restored, lag model naturally recovers toward setpoint (tau=120 s ≈ 10 min recovery).
+
+**Key design decisions:**
+- Direct `_value` override on `FirstOrderLagModel`: The scenario overrides the lag model's internal `_value` each tick. When the generator's `generate()` fires (every 5000 ms), the lag correction (~4% per call) partially pulls the value back, but the scenario re-applies on the next tick. Net effect: store shows drift within ~4% of target offset, which is indistinguishable from noise.
+- No setpoint modification: PRD 5.4 says actual temperature drifts above setpoint. The setpoint signal stays constant; only the actual temperature changes. Verified by `test_setpoint_unchanged_during_drift`.
+- No fault state: PRD 5.4 says drift is subtle, no fault trigger. Verified by `test_no_fault_state_during_drift`.
+- Waste rate via `CounterModel._rate`: Direct modification of the rate attribute (same pattern as web_break modifying `_base` on CorrelatedFollowerModel). Saved and restored on completion.
+- Natural recovery: After scenario completes, the lag model tracks back to setpoint via its normal first-order dynamics. No explicit recovery phase needed. tau=120 s gives ~10 min for full recovery.
+
+**Test timing considerations:**
+- Dryer temp generator fires every 5000 ms (50 ticks), so tests that check store values must run enough ticks for at least 2 generator fires.
+- Noise sigma=0.8 C can mask small drifts. Tests use high drift rates (12-30 C/min) for clear signal, or check model `_value` directly (bypassing noise).
+- `_stabilise_dryer()` helper forces lag model `_value` to setpoint before testing, avoiding the 600s warmup from initial_value=20 C to setpoint=75 C.
+
+**Test results:** 22/22 unit tests pass. No regressions (1208 total unit tests pass).
