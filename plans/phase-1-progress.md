@@ -7,7 +7,7 @@
 - [x] 1.2: Simulation Clock
 - [x] 1.3: Signal Value Store
 - [x] 1.4: Signal Model Base + Noise Pipeline
-- [ ] 1.5: Steady State Model
+- [x] 1.5: Steady State Model
 - [ ] 1.6: Sinusoidal Model
 - [ ] 1.7: First-Order Lag Model
 - [ ] 1.8: Ramp Model
@@ -176,3 +176,46 @@
 - generate_correlated: with/without sigmas, sigma scaling preserves correlation but changes variance, deterministic
 - SignalModel ABC: cannot instantiate, concrete subclass works, reset is no-op
 - Package imports: all exports available
+
+### Task 1.5: Steady State Model (completed)
+
+**Files created:**
+- `src/factory_simulator/models/steady_state.py` -- SteadyStateModel class
+- `tests/unit/test_models/__init__.py` -- test package init
+- `tests/unit/test_models/test_steady_state.py` -- 55 tests (property-based with Hypothesis)
+
+**Files modified:**
+- `src/factory_simulator/models/base.py` -- added `quantise()` and `clamp()` post-processing utilities
+- `src/factory_simulator/models/__init__.py` -- exports SteadyStateModel, quantise, clamp
+
+**SteadyStateModel implementation (PRD 4.2.1):**
+- Core: `value = target + noise(0, sigma)`
+- Within-regime drift: Ornstein-Uhlenbeck-like random walk with mean reversion. `drift_offset += drift_rate * N(0,1) * sqrt(dt) - reversion_rate * drift_offset * dt`. Clamped to `max_drift` (default 3% of |target|).
+- Calibration drift: persistent linear bias. `calibration_bias += calibration_drift_rate * dt`. Does not revert.
+- Accepts optional `NoiseGenerator` for noise injection (keeps distribution selection at config level per task 1.4 design)
+- `reset()` clears drift_offset, calibration_bias, and noise state
+
+**Post-processing utilities (PRD 4.2.13):**
+- `quantise(value, resolution)` -- rounds to nearest multiple of resolution. Disabled when resolution is None or <= 0.
+- `clamp(value, min_clamp, max_clamp)` -- enforces physical bounds. None means no bound.
+- Both implemented once in `base.py`, not in every model. Applied by the engine after generate() + noise.
+
+**Key design decisions:**
+- `_float_param()` helper extracts float params from `dict[str, object]` with type-safe fallback, keeping mypy happy with strict mode.
+- max_drift defaults to 3% of |target| with a 0.03 minimum floor for zero-target signals.
+- calibration_drift_rate is in units per second (consistent with dt). Config loader should convert from per-hour if needed.
+- Noise is injected via constructor, not created internally -- matches the task 1.4 design where distribution selection is at config level.
+
+**Test coverage (55 tests):**
+- Construction: default target, explicit target, drift defaults, max_drift calculation (3% default, zero target floor, explicit)
+- Basic generation: target without noise across multiple ticks, negative target, zero target
+- Noise: mean near target over 10k samples, stddev matches sigma, variation added, zero sigma produces clean signal
+- Within-regime drift: disabled by default, accumulates over time, clamped to max_drift, affects output, reversion pulls back, slow over short time
+- Calibration drift: disabled by default, accumulates linearly, affects output, does not revert, negative rate
+- Reset: clears drift_offset, calibration_bias, and AR(1) noise state
+- Determinism (Rule 13): same seed → identical sequences with and without drift, different seeds differ
+- Quantisation: disabled (None/zero/negative), 0.1 resolution, 0.024 resolution, exact multiples, negative values, zero value, Hypothesis property (result is multiple of resolution)
+- Clamp: no bounds, min only, max only, both bounds, at boundary, Hypothesis property (result within bounds)
+- Property-based: output finite for arbitrary target/sigma, clamped output within bounds, determinism for any seed
+- Full pipeline: generate → quantise → clamp, PRD ink pressure example (835 mbar, sigma 60, range 0-900), supply voltage (24V, sigma 0.1V)
+- Package imports: SteadyStateModel, quantise, clamp all importable from models package
