@@ -168,7 +168,7 @@ Sequence:
    - `press.main_drive_current` spikes to 150-300% of running current (motor inrush).
 2. After the spike, power settles to normal running level.
 
-The Steel Industry Energy dataset (from the datasets research) showed clear cold start spikes. The customer profiles research identified energy-per-impression monitoring as a key use case.
+The physics behind this are well understood. AC induction motors draw 5-8x rated current for 0.5-2 seconds during inrush (DOL starting). Dryer elements and oven zones draw full rated power until they reach setpoint. On a packaging press, the main drive motor (15-30 kW) and three dryer zones (5-10 kW each) all energise together. On the F&B line, the oven zones (50-100 kW total) produce an even larger cold start spike. The customer profiles research identified energy-per-impression monitoring as a key use case.
 
 ## 5.11 Vision Inspection Fail Rate Patterns
 

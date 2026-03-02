@@ -181,7 +181,7 @@ Energy monitoring tracks power consumption for the entire line. It produces 2 si
 | 43 | `energy.line_power` | Instantaneous line power | 0-200 | kW | 1s | Modbus HR |
 | 44 | `energy.cumulative_kwh` | Cumulative energy consumption | 0-999,999 | kWh | 60s | Modbus HR |
 
-Energy consumption correlates with press operating state. Base load when idle is 5-15 kW (electronics, lighting, HVAC). Running load is 60-150 kW depending on speed. Cold start produces a 50% inrush spike lasting 2-5 seconds as motors energize. The Steel Industry Energy dataset from the public datasets research showed daily and weekly load patterns with clear shift changes. The simulator replicates these patterns.
+Energy consumption correlates with press operating state. Base load when idle is 5-15 kW (electronics, lighting, HVAC). Running load is 60-150 kW depending on speed. Cold start produces a 150-200% inrush spike lasting 2-5 seconds as motors energise and dryer elements draw full rated power. The simulator replicates daily and weekly load patterns with clear shift changes.
 
 ## 2.9 Equipment: Vibration Monitoring
 
