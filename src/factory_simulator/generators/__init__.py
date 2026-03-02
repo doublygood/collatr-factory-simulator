@@ -13,13 +13,25 @@ from factory_simulator.generators.base import (
     OpcuaMapping,
     ProtocolMapping,
 )
+from factory_simulator.generators.coder import CoderGenerator
+from factory_simulator.generators.energy import EnergyGenerator
+from factory_simulator.generators.environment import EnvironmentGenerator
+from factory_simulator.generators.laminator import LaminatorGenerator
 from factory_simulator.generators.press import PressGenerator
+from factory_simulator.generators.slitter import SlitterGenerator
+from factory_simulator.generators.vibration import VibrationGenerator
 
 __all__ = [
+    "CoderGenerator",
+    "EnergyGenerator",
+    "EnvironmentGenerator",
     "EquipmentGenerator",
+    "LaminatorGenerator",
     "ModbusMapping",
     "MqttMapping",
     "OpcuaMapping",
     "PressGenerator",
     "ProtocolMapping",
+    "SlitterGenerator",
+    "VibrationGenerator",
 ]

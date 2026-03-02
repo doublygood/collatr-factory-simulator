@@ -19,7 +19,7 @@
 - [x] 1.14: Thermal Diffusion Model
 - [x] 1.15: Bang-Bang Hysteresis + String Generator
 - [x] 1.16: Equipment Generator Base + Press Generator
-- [ ] 1.17: Remaining Packaging Generators
+- [x] 1.17: Remaining Packaging Generators
 - [ ] 1.18: Data Engine
 - [ ] 1.19: Basic Scenarios
 - [ ] 1.20: Modbus TCP Server + Integration Tests
@@ -692,3 +692,23 @@
 - ProtocolMappings: 21 mappings, line_speed modbus [100,101] float32, machine_state modbus [210] uint16
 - Clamping: all signals within configured bounds after 200 ticks
 - NipPressure: zero when off, active when running
+
+### Task 1.17: Remaining Packaging Generators (completed)
+
+**Files created:**
+- `src/factory_simulator/generators/laminator.py` -- LaminatorGenerator (5 signals: nip_temp, nip_pressure, tunnel_temp, web_speed, adhesive_weight). Uses FirstOrderLagModel for thermal signals, CorrelatedFollowerModel for web_speed, SteadyStateModel for pressure/adhesive. Thermal signals track setpoints when active, cool to ambient when stopped.
+- `src/factory_simulator/generators/slitter.py` -- SlitterGenerator (3 signals: speed, web_tension, reel_count). Scheduled operation using modular arithmetic on sim_time for 8h shift windows. RampModel for speed with ramp-up/down on schedule transitions. CorrelatedFollowerModel for web_tension, CounterModel for reel_count.
+- `src/factory_simulator/generators/coder.py` -- CoderGenerator (11 signals: state, prints_total, ink_level, printhead_temp, ink_pump_speed, ink_pressure, ink_viscosity_actual, supply_voltage, ink_consumption_ml, nozzle_health, gutter_fault). StateMachineModel for coder state driven by press state conditions. Two counters, two depletion models, four steady-state models, one correlated follower, one binary state machine for gutter fault.
+- `src/factory_simulator/generators/environment.py` -- EnvironmentGenerator (2 signals: ambient_temp, ambient_humidity). SinusoidalModel with 24h period. Independent of press state.
+- `src/factory_simulator/generators/energy.py` -- EnergyGenerator (2 signals: line_power, cumulative_kwh). CorrelatedFollowerModel for line_power (base idle load + speed-proportional), CounterModel for cumulative_kwh driven by power level.
+- `src/factory_simulator/generators/vibration.py` -- VibrationGenerator (3 signals: main_drive_x, main_drive_y, main_drive_z). Pre-computes 3x3 Cholesky factor for inter-axis correlation (default r=0.6). When running: 3 N(0,1) draws -> Cholesky L -> scale by sigma. When stopped: near-zero residual vibration.
+- `src/factory_simulator/generators/__init__.py` -- Updated with exports for all 6 new generators.
+- `tests/unit/test_generators/test_packaging.py` -- 52 tests: signal ID completeness, behavioural (laminator follows press, slitter schedule, coder state cascade, environment bounds, energy correlation, vibration active/stopped), Cholesky axis correlation (Pearson r > 0.2), determinism for all 6 generators, bounds checking.
+
+**Design decisions:**
+- Coder state machine transitions are condition-based, driven by `_update_conditions_from_press()` which maps press state to coder conditions. When press is Idle, coder correctly transitions to Standby per PRD 2.5.
+- Slitter scheduling uses `sim_time % (8 * 3600)` to determine position within an 8-hour shift, comparing against configurable offset and duration.
+- All generators follow the PressGenerator pattern: `_build_models()` for construction, `_post_process()` for quantise+clamp, `_make_sv()` for SignalValue creation.
+- VibrationGenerator implements Cholesky correlation per PRD Section 4.3.1: generate independent N(0,1), apply Cholesky L, scale by effective sigma.
+
+**Test results:** 934 tests pass (ruff clean, mypy clean, pytest all green).
