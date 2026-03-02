@@ -4,7 +4,7 @@
 
 **Not a replay of actual customer data.** The simulator generates original synthetic data. No rows from the reference database are included. No data from Site A, Site B, or any CIJ vendor customer site is embedded in the simulator or its configuration. The reference data informed the models. The models produce new data.
 
-**Not a digital twin.** A digital twin models a specific physical asset with bidirectional data flow. The simulator models a generic packaging line. It does not represent any specific factory. It does not receive commands from a real control system. Data flows one direction: out.
+**Not a digital twin (yet).** A digital twin models a specific physical asset with bidirectional data flow. The simulator models a generic packaging line. It does not represent any specific factory. It does not receive commands from a real control system. Data flows one direction: out. However, the simulation clock architecture and physics-based signal models lay groundwork for evolution toward digital twin and predictive modelling capabilities. See Section 9.4 for the longer-term vision.
 
 **Not intended for production monitoring.** The simulator is a development and testing tool. It does not connect to real equipment. It does not process real production data. It does not generate alerts or reports for factory operators.
 
@@ -24,11 +24,33 @@ The following items are explicitly deferred:
 
 **Multi-line simulation.** Run two or more packaging lines simultaneously with shared environmental conditions but independent production schedules.
 
-**EtherNet/IP support.** Add Allen-Bradley native protocol. This is relevant for food and beverage sites using Rockwell PLCs. The customer profiles research showed Allen-Bradley CompactLogix using CDAB byte order.
+**EtherNet/IP support.** Add Allen-Bradley native CIP protocol. The F&B profile already simulates a Rockwell CompactLogix PLC for the mixer, but accesses it via Modbus TCP. This is how most third-party integrators work in practice. EtherNet/IP (CIP) is the native protocol and would exercise CollatrEdge's native Rockwell driver when that is built.
 
 **MTConnect support.** Add MTConnect agent for CNC machine data. This is relevant for the CNC machine cell phase.
 
 **Web dashboard.** Add a browser-based UI showing real-time signal values, machine state, and scenario status. The health check endpoint provides raw data. A dashboard adds visualization.
+
+## 9.4 Future Direction: Digital Twin and Predictive Modelling
+
+The simulator's architecture has properties that extend beyond test data generation.
+
+The simulation clock decouples simulated time from wall-clock time. Run a factory at 100x to project 6 months of bearing degradation in 45 minutes. Run it at 1000x to model a year of shift patterns overnight. This is the core capability of a discrete-event simulation engine.
+
+The signal models encode real physics: thermal diffusion, exponential degradation, Ornstein-Uhlenbeck processes, correlated cascades, bang-bang control loops. These are not curve-fitting approximations. They are parametric models that respond to input changes. Change a dryer setpoint and the temperature model produces a physically plausible transient. Change the production schedule and the energy model responds.
+
+The scenario system already models operational decisions: recipe changes, maintenance windows, shift patterns, CIP scheduling. These are the inputs to a "what if" tool.
+
+A post-MVP evolution path:
+
+1. **Predictive maintenance modelling.** Feed the bearing degradation model (Section 5.5) with real vibration baselines from a customer site. Fast-forward to predict when the bearing reaches warning threshold. Compare against actual maintenance schedules to quantify the cost of run-to-failure vs condition-based maintenance.
+
+2. **Schedule optimisation.** Model the impact of changeover frequency on OEE. Run 100 simulated weeks with 4 changeovers per shift vs 6. Quantify the throughput and waste difference.
+
+3. **Site-specific digital twin.** Replace generic signal parameters with values calibrated from a real factory's CollatrEdge data. The simulator becomes a model of that specific site. Run scenarios that have not happened yet: "What if the oven fails during a production run?" "What if we add a second filler?"
+
+4. **Training data generation.** Generate labelled training data for machine learning models. The ground truth log provides exact labels. Generate 10,000 hours of simulated data with known fault patterns. Train anomaly detection models. Validate against real data.
+
+This evolution is not in MVP scope. The MVP is a test tool for CollatrEdge integration. But the architecture does not need to change to support these use cases. The simulation clock, signal models, scenario engine, and ground truth logging all carry forward. The investment in physics-based models pays compound returns.
 
 ## 9.3 Items Promoted to Phase 1
 
