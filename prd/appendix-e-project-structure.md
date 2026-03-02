@@ -4,6 +4,7 @@
 collatr-factory-simulator/
   config/
     factory.yaml              # Main configuration
+    mosquitto.conf            # Mosquitto broker configuration
     scenarios/
       packaging-line.yaml     # Default packaging line scenarios
       food-bev-line.yaml      # Default F&B line scenarios
@@ -57,7 +58,7 @@ collatr-factory-simulator/
       __init__.py
       modbus_server.py        # Modbus TCP server adapter
       opcua_server.py         # OPC-UA server adapter
-      mqtt_adapter.py         # MQTT broker/publisher adapter
+      mqtt_publisher.py       # MQTT publish client (to external Mosquitto)
     
     scenarios/
       __init__.py

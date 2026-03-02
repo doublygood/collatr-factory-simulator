@@ -49,15 +49,17 @@ protocols:
 
   mqtt:
     enabled: true
-    mode: "embedded"        # embedded or external
-    bind_address: "0.0.0.0"
-    port: 1883
-    external_broker: null   # "broker.example.com:1883" if mode=external
+    broker_host: "mqtt-broker"  # Mosquitto sidecar hostname in Docker network
+    broker_port: 1883
     topic_prefix: "collatr/factory"
     sparkplug_b: false      # Phase 2
     retain: true
+    client_id: "factory-simulator"
     username: null
     password: null
+    qos_default: 1
+    buffer_limit: 1000      # Max buffered messages during connection loss
+    buffer_overflow: "drop_oldest"  # drop_oldest or drop_newest
 
 equipment:
   press:
@@ -199,6 +201,20 @@ File: `docker-compose.yaml`
 version: "3.8"
 
 services:
+  mqtt-broker:
+    image: eclipse-mosquitto:2
+    container_name: mqtt-broker
+    ports:
+      - "1883:1883"     # MQTT
+    volumes:
+      - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-W", "3"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   factory-simulator:
     build:
       context: .
@@ -208,7 +224,6 @@ services:
     ports:
       - "502:502"       # Modbus TCP
       - "4840:4840"     # OPC-UA
-      - "1883:1883"     # MQTT
       - "8080:8080"     # Web dashboard / health check
     volumes:
       - ./config:/app/config:ro
@@ -221,7 +236,11 @@ services:
       - OPCUA_ENABLED=true
       - OPCUA_PORT=4840
       - MQTT_ENABLED=true
-      - MQTT_PORT=1883
+      - MQTT_BROKER_HOST=mqtt-broker
+      - MQTT_BROKER_PORT=1883
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -245,9 +264,9 @@ Environment variables override configuration file values. All environment variab
 | `MODBUS_BYTE_ORDER` | `ABCD` | Register byte order |
 | `OPCUA_ENABLED` | `true` | Enable OPC-UA server |
 | `OPCUA_PORT` | `4840` | OPC-UA port |
-| `MQTT_ENABLED` | `true` | Enable MQTT broker |
-| `MQTT_PORT` | `1883` | MQTT port |
-| `MQTT_EXTERNAL_BROKER` | (empty) | External broker address |
+| `MQTT_ENABLED` | `true` | Enable MQTT publishing |
+| `MQTT_BROKER_HOST` | `mqtt-broker` | MQTT broker hostname |
+| `MQTT_BROKER_PORT` | `1883` | MQTT broker port |
 | `MQTT_TOPIC_PREFIX` | `collatr/factory` | MQTT topic prefix |
 
 ## 6.5 Quick Start

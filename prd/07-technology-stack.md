@@ -36,7 +36,19 @@ The OPC-UA server is `asyncua` (formerly `opcua-asyncio`). Three options were ev
 
 The MVP uses `asyncua`. Post-MVP, the OPC-UA server layer should support swapping to `open62541` via configuration. This gives two levels of protocol compliance testing: `asyncua` for development speed, `open62541` for stricter conformance testing before releases.
 
-## 7.2 Dependencies
+## 7.2 MQTT Broker Decision
+
+The simulator requires an MQTT broker. Three options were evaluated:
+
+1. **Mosquitto sidecar** (chosen). The Eclipse Mosquitto broker runs as a separate Docker container alongside the simulator. The simulator publishes via `paho-mqtt` as a client. Mosquitto is the industry standard: 17 years old, Eclipse Foundation, 100+ contributors, actively maintained, MQTT 3.1.1 and 5.0 support, ~12MB Alpine Docker image. At our volumes (50 msg/s peak), Mosquitto uses negligible resources. Every IIoT tutorial, Sparkplug B example, and SCADA integration guide uses Mosquitto. Testing against the same broker that customers run in production is a feature.
+
+2. **NanoMQ sidecar** (rejected). Multi-threaded C broker from EMQ Technologies, MIT licensed. Handles 1M+ msg/s QoS 0, multi-core scaling. Impressive engineering, but designed for edge gateways aggregating thousands of devices. Our 50 msg/s load does not justify the smaller community, fewer tutorials, and less universal tooling. Mosquitto handles 120k msg/s on a single core.
+
+3. **amqtt embedded** (rejected). Pure-Python MQTT broker running inside the simulator process. The only option that avoids a sidecar container. Rejected because: beta release (0.11.0b1), last PyPI update 2023, 89 open issues, no MQTT 5.0, not actively maintained. Two independent implementation reviewers flagged it as the weakest dependency in the entire stack. The single-container convenience does not justify the risk.
+
+The simulator always connects to Mosquitto as a client using `paho-mqtt`. The Docker Compose file includes the Mosquitto sidecar by default. For environments where an external MQTT broker already exists (e.g., a factory EMQX instance), the simulator can point to that broker instead.
+
+## 7.3 Dependencies
 
 **Core:**
 
@@ -44,11 +56,16 @@ The MVP uses `asyncua`. Post-MVP, the OPC-UA server layer should support swappin
 |---------|---------|---------|
 | `pymodbus` | >=3.6 | Modbus TCP server |
 | `asyncua` (opcua-asyncio) | >=1.1 | OPC-UA server |
-| `paho-mqtt` | >=2.0 | MQTT client (for external broker mode) |
-| `amqtt` | >=0.11 | Embedded MQTT broker |
+| `paho-mqtt` | >=2.0 | MQTT client (publishes to external broker) |
 | `numpy` | >=1.26 | Signal generation, noise, correlation |
 | `pyyaml` | >=6.0 | Configuration file parsing |
 | `uvloop` | >=0.19 | Fast asyncio event loop (Linux) |
+
+**External services (Docker sidecar):**
+
+| Service | Image | Purpose |
+|---------|-------|---------|
+| Mosquitto | `eclipse-mosquitto:2` | MQTT broker |
 
 **Optional:**
 
@@ -59,11 +76,11 @@ The MVP uses `asyncua`. Post-MVP, the OPC-UA server layer should support swappin
 | `prometheus-client` | Metrics export for monitoring simulator health |
 | `fastapi` + `uvicorn` | Health check and web dashboard endpoint |
 
-## 7.3 Python Version
+## 7.4 Python Version
 
 Python 3.12 or later. The `asyncio` improvements in 3.12 (TaskGroup, ExceptionGroup) simplify the concurrent protocol server management.
 
-## 7.4 Docker Base Image
+## 7.5 Docker Base Image
 
 ```dockerfile
 FROM python:3.12-slim
@@ -81,7 +98,7 @@ EXPOSE 502 4840 1883 8080
 CMD ["python", "-m", "src.main"]
 ```
 
-## 7.5 Development Environment
+## 7.6 Development Environment
 
 ```bash
 # Create virtual environment

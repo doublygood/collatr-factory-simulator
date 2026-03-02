@@ -24,6 +24,7 @@
 10. [Data Quality Realism](10-data-quality-realism.md)
 11. [Success Criteria](11-success-criteria.md)
 12. [Evaluation Protocol](12-evaluation-protocol.md)
+13. [Test Strategy](13-test-strategy.md)
 
 ### Appendices
 

@@ -104,7 +104,7 @@
 7. **Protocol adapters read the store.** Each adapter runs independently.
    - **Modbus adapter:** On each client read request, the adapter reads the latest value from the store, encodes it according to the register map (float32, uint32, uint16, etc.), and returns it in the Modbus response.
    - **OPC-UA adapter:** At each tick, the adapter updates OPC-UA node values from the store. Subscribed clients receive data change notifications.
-   - **MQTT adapter:** At each signal's publish interval, the adapter reads the store, formats a JSON payload, and publishes to the topic.
+   - **MQTT adapter:** At each signal's publish interval, the adapter reads the store, formats a JSON payload, and publishes to the external Mosquitto broker via `paho-mqtt`.
 
 ## 8.3 Concurrency Model
 
@@ -119,10 +119,12 @@ async def main():
     
     engine = DataEngine(config, store, clock)
     
+    mqtt_client = MqttPublisher(config.protocols.mqtt, store)
+    
     tasks = [
         engine.run(),                           # Signal generation loop
         HealthServer(config).run(),             # HTTP health check
-        MqttBroker(config.protocols.mqtt, store).run(),
+        mqtt_client.run(),                      # MQTT publish loop (to external Mosquitto)
     ]
     
     # In realistic mode, spawn one Modbus server per controller
