@@ -6,7 +6,7 @@
 - [x] 0.1: Project scaffolding
 - [x] 0.2: Spike: Multi-server pymodbus
 - [x] 0.3: Spike: Mosquitto sidecar + paho-mqtt
-- [ ] 0.4: Spike: asyncua multiple instances
+- [x] 0.4: Spike: asyncua multiple instances
 - [ ] 0.5: Document spike results
 
 ## Task 0.1: Project Scaffolding
@@ -100,6 +100,45 @@
 - Throughput pacing: `time.sleep(interval - elapsed)` loop for target msg/s rate
 
 **Note on client-side buffer test:** The PRD spike plan mentions a broker restart buffering test. This was not implemented because it requires `docker compose stop/start` mid-test which adds flaky Docker orchestration to the test suite. The paho-mqtt 2.0 `max_queued_messages_set()` API exists for this. Buffer behaviour will be validated in integration tests during Phase 1 when the full simulator stack is running.
+
+## Task 0.4: Spike: asyncua multiple instances
+
+**Completed:** 2026-03-02
+**Result:** PASS -- all 6 validation criteria met
+
+**Library versions:**
+- asyncua 1.1.8
+- Python 3.13.2
+
+**Test file:** `tests/spikes/test_spike_opcua.py` (12 tests, all passing)
+
+**Validated:**
+1. **3 concurrent servers** -- 3 asyncua `Server` instances on OS-assigned ports (port 0), all serving concurrently in one asyncio event loop. Each with independent node trees.
+2. **Subscriptions at 500ms** -- `create_subscription(500, handler)` delivers data change notifications. Initial value notification fires immediately on subscribe, subsequent updates arrive at ~500ms intervals. Subscriptions work concurrently on all 3 servers.
+3. **String NodeIDs** -- `ua.NodeId('PackagingLine.Press1.LineSpeed', 2)` creates `ns=2;s=PackagingLine.Press1.LineSpeed`. Browsable and readable by path from client.
+4. **Variable attributes** -- `EURange` property set via `add_property()` with `ua.Range(Low, High)`. `AccessLevel` defaults to 1 (read-only); `set_writable()` sets to 3 (read-write). Both browsable from client.
+5. **StatusCode propagation** -- `ua.DataValue(ua.Variant(...), ua.StatusCode(ua.StatusCodes.BadSensorFailure))` propagates to client via `read_data_value(raise_on_bad_status=False)` and via subscription notifications.
+6. **Memory baseline** -- Peak RSS ~400MB for entire test process (3 servers + pytest + crypto libs + client connections). Reasonable for Phase 1 planning.
+
+**asyncua 1.1.8 API quirks discovered:**
+- `Server()` + `await server.init()` required before configuration. `server.start()` required before stopping.
+- Port 0 (OS-assigned): set via `server.set_endpoint('opc.tcp://127.0.0.1:0/...')`, extract actual port from `server.bserver._server.sockets[0].getsockname()[1]`.
+- `set_security_policy([ua.SecurityPolicyType.NoSecurity])` suppresses security warnings but `No signing policy` warning still appears in logs.
+- Subscription handler receives `DataChangeNotif` object (not `DataValue`). Actual `DataValue` is at `data.monitored_item.Value`.
+- `read_data_value()` raises `BadSensorFailure` exception by default. Must pass `raise_on_bad_status=False` to read bad status values.
+- When StatusCode is bad, the `Value` field is `Variant(Null)` (not the last good value).
+- `ru_maxrss` on macOS reports peak RSS in bytes (not KB like Linux). Includes all process memory, not just server allocations.
+- Server startup is slow (~2-5s per server). Tests take ~70s total.
+- `add_property(ua.NodeId(0, 0), 'EURange', ua.Range(...))` auto-assigns NodeId.
+
+**Reference patterns for Phase 1:**
+- Server lifecycle: `Server()` → `init()` → `set_endpoint()` → `register_namespace()` → add nodes → `start()` → ... → `stop()`
+- String NodeIDs: `ua.NodeId('Profile.Equipment.Signal', ns)` for dot-separated paths
+- Variable creation: `folder.add_variable(node_id, name, initial_value, varianttype=ua.VariantType.Double)`
+- EURange: `var.add_property(ua.NodeId(0, 0), 'EURange', ua.Range(Low=..., High=...))`
+- Writable setpoints: `var.set_writable()`
+- Value update: `server_node.write_value(value, ua.VariantType.Double)`
+- StatusCode: `ua.DataValue(ua.Variant(val, vtype), ua.StatusCode(ua.StatusCodes.BadSensorFailure))`
 
 ## Notes
 

@@ -28,7 +28,7 @@
       "name": "Spike: asyncua multiple instances",
       "description": "Build and test 3 concurrent asyncua OPC-UA servers in one event loop. Each server has its own node tree on a unique port. Test subscriptions, data change notifications at 500ms, string NodeIDs, variable attributes, StatusCode propagation, and memory baseline. See plans/phase-0-validation-spikes.md Spike 3 for full spec.",
       "prd_refs": ["prd/03-protocol-endpoints.md", "prd/appendix-b-opcua-node-tree.md"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "0.5",
