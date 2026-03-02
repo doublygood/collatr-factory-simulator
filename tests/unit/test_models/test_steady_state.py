@@ -416,7 +416,8 @@ class TestQuantise:
         """Quantised value is always a multiple of resolution (within fp tolerance)."""
         q = quantise(value, resolution)
         remainder = abs(q / resolution - round(q / resolution))
-        assert remainder < 1e-9
+        # Tolerance scaled for large quotients (value/resolution ~ 1e9 at extremes)
+        assert remainder < 1e-6
 
 
 # ---------------------------------------------------------------------------

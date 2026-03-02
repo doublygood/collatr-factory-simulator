@@ -9,7 +9,7 @@
 - [x] 1.4: Signal Model Base + Noise Pipeline
 - [x] 1.5: Steady State Model
 - [x] 1.6: Sinusoidal Model
-- [ ] 1.7: First-Order Lag Model
+- [x] 1.7: First-Order Lag Model
 - [ ] 1.8: Ramp Model
 - [ ] 1.9: Random Walk Model
 - [ ] 1.10: Counter Model
@@ -255,3 +255,46 @@
 - Determinism (Rule 13): same seed → identical, different seeds differ, no noise always deterministic
 - Property-based (Hypothesis): output finite, within bounds without noise, determinism any seed, periodic
 - PRD examples: ambient humidity daily cycle (inverted phase), ambient temp daily base layer
+
+### Task 1.7: First-Order Lag Model (completed)
+
+**Files created:**
+- `src/factory_simulator/models/first_order_lag.py` -- FirstOrderLagModel class
+- `tests/unit/test_models/test_first_order_lag.py` -- 51 tests (property-based with Hypothesis)
+
+**Files modified:**
+- `src/factory_simulator/models/__init__.py` -- exports FirstOrderLagModel
+- `tests/unit/test_models/test_steady_state.py` -- fixed flaky Hypothesis test (fp tolerance for large values)
+
+**FirstOrderLagModel implementation (PRD 4.2.3):**
+- Core formula: `value += (setpoint - value) * (1 - exp(-dt / tau)) + noise`
+- Optional second-order underdamped response when `damping_ratio` < 1.0:
+  `value = setpoint + A * exp(-zeta * omega_n * t) * sin(omega_d * t + phase)`
+- omega_n = 1/tau, omega_d = omega_n * sqrt(1 - zeta^2)
+- A = step_size / sqrt(1 - zeta^2), phase = arccos(zeta)
+- Transient resets on each setpoint change. No stacking of transients (PRD requirement).
+- `set_setpoint(new_setpoint)` for runtime setpoint changes (used by equipment generators)
+- `reset()` restores initial value and restarts underdamped transient if applicable
+- Transient auto-settles when envelope < 1e-9 * scale, switching to first-order lag branch
+
+**Key design decisions:**
+- Same `_float_param()` helper pattern as other signal models for safe param extraction
+- `damping_ratio` validated in [0.1, 2.0] per PRD. Default 1.0 (critically damped = pure first-order lag).
+- Underdamped closed-form trajectory avoids numerical drift from tick-by-tick accumulation
+- `set_setpoint()` captures current value as starting point for new transient (mid-transient changes handled correctly)
+- `initial_value` defaults to setpoint; if different, underdamped models start with a transient at construction
+- `reset()` mirrors construction behaviour: restarts transient if initial_value != setpoint and damping < 1.0
+
+**Test coverage (51 tests):**
+- Construction: defaults, explicit params, initial_value defaults/explicit, invalid tau, invalid damping_ratio, boundary values
+- First-order lag: at setpoint stays, converges to setpoint, monotonic from below/above, 1-tau (~63.2%), 5-tau (~99.3%), smaller tau faster, overdamped no overshoot, negative setpoint
+- Setpoint changes: tracks new setpoint, multiple changes, no-op for same value, step down
+- Underdamped: overshoot from below, undershoot from above, eventually settles, higher damping less overshoot, overshoot magnitude matches theory (~16.3% for zeta=0.5), mid-transient setpoint change, stable after settle, no transient when value=setpoint, new setpoint triggers new transient
+- Noise: mean near setpoint after settling, adds variation, zero sigma clean signal
+- Reset: restores initial_value, defaults to current setpoint, restarts underdamped transient, clears AR(1) state
+- Determinism (Rule 13): same seed identical (first-order and underdamped), different seeds differ, no noise deterministic
+- Property-based (Hypothesis): output finite, converges to setpoint, determinism any seed, underdamped overshoots, critically/overdamped no overshoot
+- PRD examples: dryer temp zone (tau=60s, damping=0.6, overshoot verified), laminator nip temp (tau=45s, damping=0.7, less overshoot)
+
+**Incidental fix:**
+- Fixed pre-existing flaky Hypothesis test `test_quantised_is_multiple_of_resolution` in test_steady_state.py: widened fp tolerance from 1e-9 to 1e-6 for large value/small resolution combinations (732958/0.03 quotient ~24M)
