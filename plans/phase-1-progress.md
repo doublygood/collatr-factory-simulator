@@ -5,7 +5,7 @@
 ## Tasks
 - [x] 1.1: Configuration Models
 - [x] 1.2: Simulation Clock
-- [ ] 1.3: Signal Value Store
+- [x] 1.3: Signal Value Store
 - [ ] 1.4: Signal Model Base + Noise Pipeline
 - [ ] 1.5: Steady State Model
 - [ ] 1.6: Sinusoidal Model
@@ -85,3 +85,42 @@
 - from_config factory with SimulationConfig
 - Large runs: 1 hour at 100x (360 ticks), 1 day at 1000x (864 ticks)
 - Floating-point accumulation over 100k ticks (< 1e-9 relative error)
+
+### Task 1.3: Signal Value Store (completed)
+
+**Files created:**
+- `src/factory_simulator/store.py` -- SignalValue dataclass + SignalStore class
+- `tests/unit/test_store.py` -- 40 tests
+
+**SignalValue dataclass:**
+- `signal_id` (str), `value` (float | str), `timestamp` (float), `quality` (str, default "good")
+- Uses `@dataclass(slots=True)` for memory efficiency during rapid updates
+
+**SignalStore implementation:**
+- `set(signal_id, value, timestamp, quality)` -- creates or updates in place (reuses existing SignalValue object to avoid allocation)
+- `get(signal_id) -> SignalValue | None` -- returns None for missing signals
+- `get_value(signal_id, default) -> float | str` -- convenience accessor for just the value
+- `get_all() -> dict[str, SignalValue]` -- returns internal dict directly (no copy) for protocol adapter performance
+- `signal_ids() -> list[str]` -- sorted list of all registered IDs
+- Container protocol: `__len__`, `__contains__`, `__iter__`, `clear()`
+- Quality flag validation: rejects anything not in {"good", "uncertain", "bad"}
+
+**Key design decisions:**
+- No locks (Rule 9): single-writer (engine), multiple-reader (protocol adapters) in asyncio single-threaded model.
+- `set()` mutates existing SignalValue in place rather than creating a new object each tick. This avoids GC pressure across 47-68 signals x thousands of ticks.
+- `get_all()` returns the internal dict without copying for performance -- protocol adapters must not mutate it.
+- Supports both float and string values (F&B profile has `mixer.batch_id` as string).
+- `QUALITY_FLAGS` exported as a frozenset constant for use by other modules.
+
+**Test coverage:**
+- SignalValue construction with float, string, and all quality variants
+- set/get round-trip for float and string values
+- Quality flag validation (valid flags preserved, invalid rejected)
+- Missing signal returns None / default
+- Update in place: no duplicates, identity preserved, quality changes, type changes
+- get_value with default for missing signals
+- get_all returns all entries and reflects updates
+- signal_ids returns sorted list
+- Container protocol: len, contains, iter
+- clear empties store and allows reuse
+- Realistic scale: 47 packaging signals, 68 F&B signals, 1000 rapid update ticks

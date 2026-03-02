@@ -30,7 +30,7 @@
       "test_files": ["tests/unit/test_store.py"],
       "prd_refs": ["prd/08-architecture.md (8.2, 8.3)"],
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "1.4",
