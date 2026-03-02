@@ -745,3 +745,14 @@ data_quality:
   # Timezone offset (for MQTT timestamps)
   mqtt_timestamp_offset_hours: 0      # 0 = UTC, 1 = BST, -5 = US Eastern
 ```
+
+## Equipment Scheduling
+
+```yaml
+equipment:
+  slitter:
+    schedule_offset_hours: 2.0    # Hours after shift start before slitter begins
+    run_duration_hours: 4.0       # Hours per shift the slitter runs
+```
+
+The slitter starts at `schedule_offset_hours` after each shift start and runs for `run_duration_hours`. During its off period, `slitter.speed` is 0 and `slitter.reel_count` does not increment.

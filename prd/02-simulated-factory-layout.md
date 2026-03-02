@@ -30,7 +30,7 @@ The flexographic press is the primary machine. It produces 21 of the 47 signals.
 | # | Signal ID | Description | Range | Units | Rate | Protocol |
 |---|-----------|-------------|-------|-------|------|----------|
 | 1 | `press.line_speed` | Web speed through press | 0-400 | m/min | 1s | Modbus HR + OPC-UA |
-| 2 | `press.web_tension` | Web tension at infeed | 20-500 | N | 500ms | OPC-UA |
+| 2 | `press.web_tension` | Web tension at infeed | 20-500 | N | 500ms | Modbus HR + OPC-UA |
 | 3 | `press.registration_error_x` | Cross-web registration error | -0.5 to +0.5 | mm | 500ms | OPC-UA |
 | 4 | `press.registration_error_y` | Around-web registration error | -0.5 to +0.5 | mm | 500ms | OPC-UA |
 | 5 | `press.ink_viscosity` | Ink viscosity (Zahn cup equivalent) | 15-60 | seconds | 30s | Modbus HR |
@@ -91,7 +91,7 @@ The slitter cuts wide rolls into narrow reels. It produces 3 signals.
 | # | Signal ID | Description | Range | Units | Rate | Protocol |
 |---|-----------|-------------|-------|-------|------|----------|
 | 27 | `slitter.speed` | Slitting speed | 100-800 | m/min | 1s | Modbus HR |
-| 28 | `slitter.web_tension` | Slitter web tension | 10-200 | N | 500ms | OPC-UA |
+| 28 | `slitter.web_tension` | Slitter web tension | 10-200 | N | 500ms | Modbus HR + OPC-UA |
 | 29 | `slitter.reel_count` | Completed reels | 0-9999 | count | event | Modbus HR |
 
 The slitter operates independently from the press. It runs faster (up to 800 m/min vs 400 m/min for the press). It processes rolls that the press produced earlier. Its schedule is offset from press production by hours or shifts.
@@ -228,8 +228,8 @@ Additional public datasets worth cataloguing for future use: CNC Mill Tool Wear 
 | Protocol | Signal Count | Signals |
 |----------|-------------|---------|
 | Modbus TCP only | 18 | press.ink_viscosity, press.ink_temperature, press.dryer_temp_zone_1/2/3, press.dryer_setpoint_zone_1/2/3, press.impression_count, press.good_count, press.waste_count, press.main_drive_current, press.main_drive_speed, press.nip_pressure, press.unwind_diameter, press.rewind_diameter, energy.line_power, energy.cumulative_kwh |
-| OPC-UA only | 4 | press.web_tension, press.registration_error_x, press.registration_error_y, slitter.web_tension |
-| Modbus TCP + OPC-UA | 8 | press.line_speed, press.machine_state, laminator.nip_temp, laminator.nip_pressure, laminator.tunnel_temp, laminator.web_speed, laminator.adhesive_weight, slitter.speed |
+| OPC-UA only | 2 | press.registration_error_x, press.registration_error_y |
+| Modbus TCP + OPC-UA | 11 | press.line_speed, press.machine_state, press.web_tension, laminator.nip_temp, laminator.nip_pressure, laminator.tunnel_temp, laminator.web_speed, laminator.adhesive_weight, slitter.speed, slitter.web_tension, slitter.reel_count |
 | MQTT only | 16 | coder.state, coder.prints_total, coder.ink_level, coder.printhead_temp, coder.ink_pump_speed, coder.ink_pressure, coder.ink_viscosity_actual, coder.supply_voltage, coder.ink_consumption_ml, coder.nozzle_health, coder.gutter_fault, env.ambient_temp, env.ambient_humidity, vibration.main_drive_x/y/z |
 | Event + counter | 1 | slitter.reel_count (Modbus) |
 

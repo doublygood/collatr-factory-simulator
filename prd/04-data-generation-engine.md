@@ -652,7 +652,7 @@ All setpoints in a recipe update at the same simulation tick. The process variab
 - `mixer.torque` correlates with `mixer.speed` and `mixer.batch_temp` (viscosity changes with temperature).
 - Oven zones have thermal coupling (zone 1 drift affects zone 2).
 - `filler.reject_count` correlates with deviation of `filler.fill_weight` from target.
-- `chiller.compressor_power` correlates inversely with `chiller.room_temp` delta from setpoint.
+- `chiller.compressor_state` (bang-bang hysteresis) drives `chiller.room_temp`. Longer ON cycles indicate harder work. There is no continuous compressor power signal; the binary state and cycle frequency communicate compressor effort.
 
 Full F&B signal definitions, register maps, and protocol mappings are in `02b-factory-layout-food-and-beverage.md`.
 
@@ -706,6 +706,6 @@ When the connection recovers, the protocol adapter serves the current generated 
 
 The gap size depends on the drop duration and polling rate. A 5-second Modbus drop at 1-second polling produces 5 missing samples. A 30-second OPC-UA stale period produces values marked `UncertainLastUsableValue` for 30 seconds.
 
-**MQTT behaviour.** A broker-side drop means messages are not published during the drop. The behaviour depends on QoS level. QoS 0 messages are lost. The simulator silently discards them. QoS 1 messages queue and deliver when the connection resumes, if the broker session persists. The simulator models this: during an MQTT drop, QoS 1 messages accumulate in a buffer (configurable limit, default 1000 messages). On recovery, buffered messages publish in a burst. QoS 0 messages are silently discarded.
+**MQTT behaviour.** A broker-side drop means messages are not published during the drop. The behaviour depends on QoS level. QoS 0 messages are lost. The simulator silently discards them. QoS 1 messages accumulate in a client-side ring buffer within the MQTT adapter (configurable limit, default 1000 messages, drop-oldest on overflow). On reconnection, buffered messages publish in a burst. This buffering is entirely client-side in the simulator process. The paho-mqtt client uses `clean_session=True` (stateless) since the simulator manages its own retry logic. Broker-side session persistence is not required.
 
 **Ground truth.** The ground truth event log (Section 4.7) records each connection drop with: controller ID, protocol, start time, duration, and list of affected signals.

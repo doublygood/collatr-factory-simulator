@@ -54,8 +54,8 @@ The simulator always connects to Mosquitto as a client using `paho-mqtt`. The Do
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `pymodbus` | >=3.6 | Modbus TCP server |
-| `asyncua` (opcua-asyncio) | >=1.1 | OPC-UA server |
+| `pymodbus` | >=3.6,<4.0 | Modbus TCP server |
+| `asyncua` (opcua-asyncio) | >=1.1.5 | OPC-UA server |
 | `paho-mqtt` | >=2.0 | MQTT client (publishes to external broker) |
 | `numpy` | >=1.26 | Signal generation, noise, correlation |
 | `pyyaml` | >=6.0 | Configuration file parsing |
@@ -93,7 +93,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
 COPY config/ ./config/
 
-EXPOSE 502 4840 1883 8080
+EXPOSE 502 4840 8080
 
 CMD ["python", "-m", "src.main"]
 ```

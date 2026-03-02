@@ -82,7 +82,7 @@ Expanded from 2 weeks to 3. The F&B profile is 40% larger than packaging with ad
 - Six F&B equipment generators (mixer, oven, filler, sealer, chiller, CIP).
 - Shared generators (coder, environment, energy) work with both profiles.
 - F&B Modbus register map with CDAB byte order and multi-slave addressing.
-- Oven output power signal added (IR 2 on Eurotherm multi-slave per Section 3.1.6).
+- Oven output power signals (zone_1/2/3_output_power) implemented as correlated followers of temperature error. Served via Eurotherm multi-slave IR 2 per Section 3.1.6.
 - F&B OPC-UA `FoodBevLine` node tree.
 - F&B MQTT publishing on all F&B topics.
 - Thermal diffusion model for product core temperature with oven tunnel length parameter.

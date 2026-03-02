@@ -177,6 +177,9 @@ Eurotherm-style int16 x10 scaling for oven temperature registers. This mirrors t
 | 111 | chiller.setpoint | int16 | x10 | C |
 | 115 | cip.wash_temp | int16 | x10 | C |
 | 120-121 | energy.line_power | float32 | 1.0 | kW |
+| IR 2 (UID 11) | oven.zone_1_output_power | int16 | x10 | 0.1 | % | No |
+| IR 2 (UID 12) | oven.zone_2_output_power | int16 | x10 | 0.1 | % | No |
+| IR 2 (UID 13) | oven.zone_3_output_power | int16 | x10 | 0.1 | % | No |
 
 ### Coils — F&B (FC01 Read, FC05/FC15 Write)
 

@@ -53,6 +53,9 @@ collatr-factory-simulator/
       depletion.py            # Consumable depletion
       correlated.py           # Correlated follower
       state.py                # State machine
+      thermal_diffusion.py    # Oven thermal model (Fourier series)
+      bang_bang.py             # Bang-bang hysteresis (chiller)
+      string_generator.py     # String value generator (batch IDs)
     
     protocols/
       __init__.py
@@ -78,7 +81,9 @@ collatr-factory-simulator/
       seal_failure.py         # F&B
       chiller_door.py         # F&B
       cip_cycle.py            # F&B
-      cold_chain_break.py     # F&B
+      cold_chain_break.py     # F&B (compressor failure)
+      micro_stop.py           # Shared (speed dips)
+      material_splice.py      # Packaging (web splice)
     
     health/
       __init__.py

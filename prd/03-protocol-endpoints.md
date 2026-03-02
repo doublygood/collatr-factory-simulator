@@ -90,7 +90,7 @@ The F&B equipment uses the Allen-Bradley CompactLogix convention for the mixer (
 | 1002-1003 | mixer.torque | float32 | CDAB | 1.0 | % | |
 | 1004-1005 | mixer.batch_temp | float32 | CDAB | 1.0 | C | |
 | 1006-1007 | mixer.batch_weight | float32 | CDAB | 1.0 | kg | Load cells |
-| 1010-1011 | mixer.mix_time_elapsed | float32 | CDAB | 1.0 | s | |
+| 1010-1011 | mixer.mix_time_elapsed | uint32 | CDAB | 1 | s | |
 
 **Oven registers (HR 1100-1199, ABCD byte order):**
 
@@ -141,7 +141,7 @@ Note: Most filler signals are on OPC-UA. Only the hopper level (analog sensor vi
 | 1500-1501 | cip.wash_temp | float32 | 1.0 | C |
 | 1502-1503 | cip.flow_rate | float32 | 1.0 | L/min |
 | 1504-1505 | cip.conductivity | float32 | 1.0 | mS/cm |
-| 1506-1507 | cip.cycle_time_elapsed | float32 | 1.0 | s |
+| 1506-1507 | cip.cycle_time_elapsed | uint32 | 1 | s |
 
 #### Shared Registers (Both Profiles)
 
@@ -382,7 +382,7 @@ We use a custom server built with `opcua-asyncio` (Python). The Microsoft OPC PL
 
 ## 3.3 MQTT
 
-**Broker:** The simulator runs an embedded MQTT broker on `0.0.0.0:1883` (configurable). Alternatively, it publishes to an external broker.
+**Broker:** The simulator publishes to an MQTT broker via paho-mqtt. The default deployment uses a Mosquitto sidecar (see Section 6.3). Alternatively, it can publish to any external MQTT 3.1.1 or 5.0 broker.
 **Protocol version:** MQTT 3.1.1. Optional MQTT 5.0 support.
 **Authentication:** Anonymous by default. Configurable username/password.
 
@@ -526,7 +526,7 @@ Each DDATA message contains all metrics for that device in a single protobuf-enc
 
 ### 3.3.8 Retained Messages
 
-The most recent message on each topic is published with the retained flag set. This means a new CollatrEdge subscriber immediately receives the latest value for every signal without waiting for the next publish cycle. This matches common industrial MQTT gateway behaviour.
+The most recent message on each topic is published with the retained flag set, except vibration topics which publish without the retained flag to avoid stale high-frequency data in the broker. This means a new CollatrEdge subscriber immediately receives the latest value for every signal (except vibration) without waiting for the next publish cycle. This matches common industrial MQTT gateway behaviour.
 
 ## 3.4 Protocol Coverage by Factory Profile
 

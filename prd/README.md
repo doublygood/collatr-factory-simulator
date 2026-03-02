@@ -1,9 +1,9 @@
 # Collatr Factory Simulator: Product Requirements Document
 
-**Version:** 1.0
-**Date:** 2026-03-01
+**Version:** 1.1
+**Date:** 2026-03-02
 **Author:** Dex (Engineering)
-**Status:** Draft
+**Status:** Implementation-Ready
 **Audience:** Engineering, Product, QA
 
 ---

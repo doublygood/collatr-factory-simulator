@@ -317,7 +317,7 @@ Sequence:
 1. `sealer.seal_temp` drops below the minimum threshold (e.g. 170 C) due to heater element degradation or controller fault.
 2. `sealer.seal_pressure` decreases as the weakened seal bar fails to compress properly.
 3. `sealer.vacuum_level` degrades as poor seal geometry allows gas leakage.
-4. `sealer.reject_count` spikes as the quality system detects failed seals.
+4. `qc.reject_total` spikes as the downstream quality station detects failed seals.
 5. After detection, the line stops for seal bar replacement or adjustment.
 
 ### 5.14.5 Chiller Door Alarm
@@ -328,7 +328,7 @@ Sequence:
 Sequence:
 1. `chiller.door_open` discrete input sets to true.
 2. `chiller.room_temp` rises at 0.5-2 C per minute (warm air ingress).
-3. `chiller.compressor_power` increases as the compressor works harder.
+3. `chiller.compressor_state` cycles more frequently (shorter OFF periods) as the compressor works harder.
 4. After door close, room temperature recovers via first_order_lag to setpoint.
 
 ### 5.14.6 CIP Cycle
@@ -353,7 +353,7 @@ Each phase has a defined duration and temperature/flow profile. The recipe curve
 **Duration:** 30-120 minutes.
 
 Sequence:
-1. `chiller.compressor_power` drops to 0 (refrigeration failure).
+1. `chiller.compressor_state` locks to 0 (refrigeration failure, compressor off).
 2. `chiller.room_temp` rises from setpoint (2-4 C) toward ambient at 0.5-1.5 C per minute.
 3. `chiller.room_temp` crosses the alarm threshold (8 C). Alarm activates.
 4. Product in the chiller is at risk. The duration above threshold determines spoilage.

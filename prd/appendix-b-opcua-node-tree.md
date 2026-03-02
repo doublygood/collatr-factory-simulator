@@ -109,7 +109,7 @@ All leaf nodes across both profiles have the following OPC-UA attributes:
 - `EURange`: Set to the signal's configured min/max range
 - `EngineeringUnits`: Set to the signal's unit string
 
-**State enum nodes** (`*.State`) use `UInt16` data type with `EnumStrings` property listing the valid state names. See the equipment sections in [02-simulated-factory-layout.md](02-simulated-factory-layout.md) and [02b-factory-layout-food-and-beverage.md](02b-factory-layout-food-and-beverage.md) for enum definitions.
+**State enum nodes** (`*.State`) use `UInt16` data type. The `EnumStrings` property (listing valid state names as `LocalizedText[]`) SHOULD be set if asyncua supports it cleanly. If asyncua's `EnumStrings` support proves problematic, integer values alone are sufficient for MVP. Budget 0.5 days investigation in Phase 2. See the equipment sections in [02-simulated-factory-layout.md](02-simulated-factory-layout.md) and [02b-factory-layout-food-and-beverage.md](02b-factory-layout-food-and-beverage.md) for enum definitions.
 
 **Counter nodes** (`PacksProduced`, `RejectCount`, `OverweightCount`, `UnderweightCount`, `MetalDetectTrips`, `RejectTotal`) use `UInt32` data type and increment monotonically. They reset to 0 on shift change or via configuration. (OPC-UA method nodes such as `ResetCounters` are deferred to post-MVP.)
 

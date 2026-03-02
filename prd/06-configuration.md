@@ -200,8 +200,6 @@ shifts:
 File: `docker-compose.yaml`
 
 ```yaml
-version: "3.8"
-
 services:
   mqtt-broker:
     image: eclipse-mosquitto:2
@@ -253,6 +251,19 @@ services:
       timeout: 10s
       retries: 3
 ```
+
+### Mosquitto Configuration
+
+The `config/mosquitto.conf` file (mounted read-only into the Mosquitto container) must be created before first run. Mosquitto 2.x defaults to rejecting anonymous connections and binding to localhost only. Minimal configuration:
+
+```conf
+listener 1883 0.0.0.0
+allow_anonymous true
+persistence false
+log_dest stdout
+```
+
+For retained message persistence across restarts, enable the persistence volume in Docker Compose and set `persistence true` with `persistence_location /mosquitto/data/`.
 
 ## 6.4 Environment Variables
 

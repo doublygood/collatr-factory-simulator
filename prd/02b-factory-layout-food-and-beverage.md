@@ -8,7 +8,7 @@
 
 ## 2b.1 Factory Overview
 
-The simulator models a chilled ready meal production line with nine equipment groups. The equipment represents what a typical UK chilled food manufacturer operates. Companies like Compleat Food Group, Greencore, Raynor Foods, and Samworth Brothers run factories built around this pattern. The line produces 65 signals across three protocols.
+The simulator models a chilled ready meal production line with nine equipment groups. The equipment represents what a typical UK chilled food manufacturer operates. Companies like Compleat Food Group, Greencore, Raynor Foods, and Samworth Brothers run factories built around this pattern. The line produces 68 signals across three protocols.
 
 The ready meal line was chosen because it exercises equipment types absent from the packaging line (ovens, mixers, fillers, refrigeration, CIP) while sharing enough common ground (coding, environmental, energy, vibration) to validate the simulator's multi-profile architecture. It is also the strongest demo scenario for F&B prospects because ready meals touch every major food manufacturing process: ingredient handling, thermal processing, filling, sealing, coding, chilling, and inspection.
 
@@ -88,6 +88,11 @@ The oven is the primary thermal processing equipment. It produces 10 signals. It
 | 16 | `oven.product_core_temp` | Product core temperature probe | -5 to 95 | C | 5s | Modbus HR |
 | 17 | `oven.humidity_zone_2` | Mid-zone humidity | 30-90 | %RH | 10s | Modbus HR |
 | 18 | `oven.state` | Oven operating state | 0-4 | enum | event | OPC-UA |
+| 66 | `oven.zone_1_output_power` | Zone 1 PID output | 0-100 | % | 5s | Modbus IR (multi-slave) |
+| 67 | `oven.zone_2_output_power` | Zone 2 PID output | 0-100 | % | 5s | Modbus IR (multi-slave) |
+| 68 | `oven.zone_3_output_power` | Zone 3 PID output | 0-100 | % | 5s | Modbus IR (multi-slave) |
+
+Output power is a correlated follower of the temperature error (setpoint minus actual), clamped 0-100%. It uses int16 x10 scaling on Modbus (0-1000 = 0.0-100.0%), matching Eurotherm convention.
 
 **Oven state enum:**
 
@@ -320,10 +325,11 @@ In a food factory, the energy profile is different. Refrigeration is typically 4
 | Modbus HR | 31 | mixer.speed, mixer.torque, mixer.batch_temp, mixer.batch_weight, mixer.mix_time_elapsed, oven.zone_1/2/3_temp, oven.zone_1/2/3_setpoint, oven.belt_speed, oven.product_core_temp, oven.humidity_zone_2, filler.hopper_level, sealer.seal_temp, sealer.seal_pressure, sealer.seal_dwell, sealer.gas_co2_pct, sealer.gas_n2_pct, sealer.vacuum_level, chiller.room_temp, chiller.setpoint, chiller.suction_pressure, chiller.discharge_pressure, cip.wash_temp, cip.flow_rate, cip.conductivity, cip.cycle_time_elapsed, energy.line_power, energy.cumulative_kwh |
 | OPC-UA | 17 | mixer.state, mixer.batch_id, oven.state, filler.line_speed, filler.fill_weight, filler.fill_target, filler.fill_deviation, filler.packs_produced, filler.reject_count, filler.state, qc.actual_weight, qc.overweight_count, qc.underweight_count, qc.metal_detect_trips, qc.throughput, qc.reject_total, cip.state |
 | MQTT | 13 | coder.state, coder.prints_total, coder.ink_level, coder.printhead_temp, coder.ink_pump_speed, coder.ink_pressure, coder.ink_viscosity_actual, coder.supply_voltage, coder.ink_consumption_ml, coder.nozzle_health, coder.gutter_fault, env.ambient_temp, env.ambient_humidity |
+| Modbus IR (multi-slave) | 3 | oven.zone_1_output_power, oven.zone_2_output_power, oven.zone_3_output_power |
 | Modbus coils/DI | 4 | mixer.lid_closed, chiller.compressor_state, chiller.defrost_active, chiller.door_open |
-| **Subtotals** | **Unique to F&B: 50** | **Shared with packaging: 15** (coder ×11, env ×2, energy ×2) |
+| **Subtotals** | **Unique to F&B: 53** | **Shared with packaging: 15** (coder ×11, env ×2, energy ×2) |
 
-Total: 65 signals across 9 equipment groups (3 shared with packaging line, 6 unique to F&B).
+Total: 68 signals across 9 equipment groups (3 shared with packaging line, 6 unique to F&B).
 
 Average aggregate sample rate: approximately 4 samples per second across all signals. Data volume: approximately 14,400 data points per hour, 345,600 per day, 10.4 million per month.
 
