@@ -20,7 +20,7 @@
 - [x] 1.15: Bang-Bang Hysteresis + String Generator
 - [x] 1.16: Equipment Generator Base + Press Generator
 - [x] 1.17: Remaining Packaging Generators
-- [ ] 1.18: Data Engine
+- [x] 1.18: Data Engine
 - [ ] 1.19: Basic Scenarios
 - [ ] 1.20: Modbus TCP Server + Integration Tests
 
@@ -712,3 +712,27 @@
 - VibrationGenerator implements Cholesky correlation per PRD Section 4.3.1: generate independent N(0,1), apply Cholesky L, scale by effective sigma.
 
 **Test results:** 934 tests pass (ruff clean, mypy clean, pytest all green).
+
+### Task 1.18: Data Engine (completed)
+
+**Files created:**
+- `src/factory_simulator/engine/__init__.py` -- Package init, exports DataEngine.
+- `src/factory_simulator/engine/data_engine.py` -- DataEngine class: owns clock, store, generators. Drives the simulation loop.
+- `tests/unit/test_engine.py` -- 28 tests covering construction, tick behaviour, sample rate enforcement, determinism, atomic tick, generator ordering, async run loop, edge cases.
+
+**DataEngine design:**
+- Constructor takes FactoryConfig, SignalStore, and optionally a SimulationClock. If no clock provided, one is created from config.
+- Generator registry maps equipment type strings (from config YAML) to generator classes: `flexographic_press` → PressGenerator, `solvent_free_laminator` → LaminatorGenerator, `slitter_rewinder` → SlitterGenerator, `cij_printer` → CoderGenerator, `iolink_sensor` → EnvironmentGenerator, `power_meter` → EnergyGenerator, `wireless_vibration` → VibrationGenerator.
+- Master RNG created from config seed (Rule 13). Each generator gets an isolated child RNG via `rng.integers(0, 2**63)`.
+- `tick()` is synchronous (Rule 8: engine atomicity). Advances clock, runs due generators, writes all results to store before returning. No `await` between signal updates.
+- Sample rate enforcement: each generator tracked by its minimum signal `sample_rate_ms`. Generator last-run time initialised to `-inf` so all run on first tick. Generator only called when `sim_time - last_run >= interval`.
+- Generator order follows config dict iteration order (press first, then dependents). This ensures cross-equipment reads (coder reads press.machine_state) see current-tick values.
+- `run()` async method: loops calling `tick()` then `await asyncio.sleep(tick_interval_ms / 1000)`. Stoppable via `stop()` method or task cancellation.
+- `signal_count()` returns total signal IDs across all generators (47 for packaging).
+
+**Design decisions:**
+- Sample rate enforcement is at the generator level, not per-signal. The generator runs at its fastest signal's rate. This is simpler and correct since generators produce all signals atomically.
+- Disabled equipment is silently skipped. Unknown equipment types log a warning and are skipped.
+- No scenario engine hook yet (Task 1.19 will add it).
+
+**Test results:** 962 tests pass (ruff clean, mypy clean, pytest all green).
