@@ -1,6 +1,6 @@
 # Phase 2: OPC-UA, MQTT, and Packaging Scenarios - Progress
 
-## Status: In Progress (5/16 tasks complete)
+## Status: In Progress (6/16 tasks complete)
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
@@ -8,7 +8,7 @@
 - [x] 2.3: OPC-UA Integration Tests
 - [x] 2.4: MQTT Publisher Adapter
 - [x] 2.5: MQTT Batch Vibration Topic
-- [ ] 2.6: MQTT Integration Tests
+- [x] 2.6: MQTT Integration Tests
 - [ ] 2.7: Web Break Scenario
 - [ ] 2.8: Dryer Temperature Drift Scenario
 - [ ] 2.9: Ink Viscosity Excursion Scenario
@@ -158,3 +158,33 @@ Test classes:
 - `vibration_per_axis_enabled` is a plain Python field on `MqttProtocolConfig` — no YAML key needed for default use
 
 **Test results:** 105/105 unit tests pass. No regressions (1244 total tests pass).
+
+### Task 2.6 (Complete)
+
+**Files created:**
+- `tests/integration/test_mqtt_integration.py` — 10 integration tests, all pass
+
+**What was built:**
+Fixture: `mqtt_components` — creates config/store/clock/engine, ticks engine 5× to populate signal IDs, injects known test values for all 16 MQTT-published signals, creates MqttPublisher (NOT started — tests start it after subscribing to avoid missing event-driven publishes).
+
+Helper: `_make_subscriber(suffix)` — creates a paho-mqtt 2.0 subscriber with unique client_id, connects to Docker Mosquitto, starts loop, waits for CONNACK.
+
+Helper: `_wait_for_topics(collector, expected, timeout)` — async polling loop that checks `collector.topics_received()` against expected set without blocking the event loop.
+
+`MessageCollector` class — thread-safe (Lock-protected) paho on_message callback collector. Records topic, parsed JSON payload, QoS, retain flag for each message.
+
+Test classes:
+- `TestAllTopicsPublish` (1 test): subscribes to `{prefix}/#`, starts publisher, verifies all 17 topics (16 per-signal + 1 batch vibration) are received within 10s.
+- `TestPayloadStructure` (4 tests): per-signal payloads have {timestamp, value, unit, quality}; batch vibration has {timestamp, x, y, z, unit, quality} and no `value` field; values are numeric (not strings); timestamps are ISO 8601 UTC with 3-digit milliseconds.
+- `TestQosLevels` (2 tests): QoS 1 for state/prints_total/nozzle_health/gutter_fault; QoS 0 for analog/env/vibration topics.
+- `TestRetainBehavior` (2 tests): new subscriber to retained topic receives last value with msg.retain=True; new subscriber to vibration topics does NOT receive retained messages.
+- `TestPublishRate` (1 test): vibration x-axis publishes ≥3 times in 4 seconds (1s interval).
+
+**Decisions:**
+- Publisher NOT started in fixture: tests subscribe first, then start publisher, to reliably capture event-driven signals (which only fire once on value change from None).
+- `_wait_for_topics` uses `await asyncio.sleep(0.2)` polling instead of `threading.Event.wait()` to avoid blocking the asyncio event loop.
+- QoS 0 test filters out retained messages from prior runs (which may carry different QoS) by preferring non-retained messages in assertions.
+- Vibration retain test clears stale retained messages before verification.
+- `@pytest.mark.integration` + skipif broker unreachable: tests skip cleanly when Docker not running.
+
+**Test results:** 10/10 integration tests pass. No regressions (1254 total tests pass).

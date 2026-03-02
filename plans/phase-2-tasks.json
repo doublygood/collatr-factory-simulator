@@ -60,7 +60,7 @@
       "test_files": ["tests/integration/test_mqtt_integration.py"],
       "prd_refs": ["prd/appendix-c-mqtt-topic-map.md", "prd/13-test-strategy.md"],
       "depends_on": ["2.5"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "2.7",
