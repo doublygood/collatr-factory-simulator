@@ -12,6 +12,7 @@ from factory_simulator.models.noise import (
     CholeskyCorrelator,
     NoiseGenerator,
 )
+from factory_simulator.models.ramp import RampModel
 from factory_simulator.models.sinusoidal import SinusoidalModel
 from factory_simulator.models.steady_state import SteadyStateModel
 
@@ -19,6 +20,7 @@ __all__ = [
     "CholeskyCorrelator",
     "FirstOrderLagModel",
     "NoiseGenerator",
+    "RampModel",
     "SignalModel",
     "SinusoidalModel",
     "SteadyStateModel",

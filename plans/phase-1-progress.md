@@ -10,7 +10,7 @@
 - [x] 1.5: Steady State Model
 - [x] 1.6: Sinusoidal Model
 - [x] 1.7: First-Order Lag Model
-- [ ] 1.8: Ramp Model
+- [x] 1.8: Ramp Model
 - [ ] 1.9: Random Walk Model
 - [ ] 1.10: Counter Model
 - [ ] 1.11: Depletion Model
@@ -298,3 +298,43 @@
 
 **Incidental fix:**
 - Fixed pre-existing flaky Hypothesis test `test_quantised_is_multiple_of_resolution` in test_steady_state.py: widened fp tolerance from 1e-9 to 1e-6 for large value/small resolution combinations (732958/0.03 quotient ~24M)
+
+### Task 1.8: Ramp Model (completed)
+
+**Files created:**
+- `src/factory_simulator/models/ramp.py` -- RampModel class
+- `tests/unit/test_models/test_ramp.py` -- 50 tests (property-based with Hypothesis)
+
+**Files modified:**
+- `src/factory_simulator/models/__init__.py` -- exports RampModel
+
+**RampModel implementation (PRD 4.2.4):**
+- Smooth linear ramp: `value = start + (end - start) * (elapsed / duration)` when `steps=1`
+- Stepped operator ramp when `steps > 1`:
+  - Divides ramp range into N evenly-spaced step targets
+  - Random dwell times per step drawn from `uniform(dwell_min, dwell_max)`
+  - Dwell times compressed proportionally if total exceeds duration (hard cap)
+  - Each step transition triggers overshoot: `overshoot_pct * step_size * exp(-t/decay_s)`
+  - Overshoot direction follows ramp direction (positive for ramp up, negative for ramp down)
+- After duration, value holds at end value (no overshoot)
+- `start_ramp(start, end, duration)` for dynamic reconfiguration with fresh dwell times
+- `reset()` restores start state but preserves existing step plan
+
+**Key design decisions:**
+- Default `steps=4` per PRD 4.2.4 parameter specification. Set `steps=1` for smooth ramp.
+- Step plan pre-computed at construction: step targets, dwell times, transition times. Deterministic given same rng seed.
+- Elapsed time tracked by accumulating dt, not using sim_time (consistent with other models).
+- `start_ramp()` re-draws random dwell times for fresh ramp; `reset()` keeps existing plan for replay.
+- Overshoot uses `step_size` (signed) not `abs(step_size)`, so direction is automatic for ramp-up vs ramp-down.
+- `step_overshoot_decay_s` defaults to 7.0 (midpoint of PRD's "5-10 seconds" range).
+
+**Test coverage (50 tests):**
+- Construction: defaults (steps=4 per PRD), explicit params, stepped params, validation errors (duration, steps, decay, dwell_range)
+- Smooth ramp: linear progression, reaches end at duration, holds after duration, complete flag, monotonic up/down, 25/50/75% progress, negative range
+- Stepped ramp: reaches end at duration, step count visible (4 distinct levels), dwell times fit in duration, dwell compression, overshoot at step boundary, overshoot decays within step, overshoot direction for ramp down, two steps, many steps (10)
+- Noise: adds variation, zero sigma clean signal
+- Reset: restores start, preserves step plan, clears AR(1) noise state
+- start_ramp(): new params, partial update, invalid duration, reaches new end
+- Determinism (Rule 13): same seed identical (smooth and stepped), different seeds differ, no noise deterministic
+- Property-based (Hypothesis): output finite, reaches end (smooth and stepped), determinism any seed, smooth ramp monotonic, dwell sum within duration
+- PRD examples: press startup stepped (0→200 m/min, 180s, 4 steps), press shutdown smooth (200→0, 45s), overshoot magnitude (3% of step size), overshoot decay time constant verification
