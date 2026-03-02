@@ -1,6 +1,6 @@
 # Phase 2: OPC-UA, MQTT, and Packaging Scenarios - Progress
 
-## Status: In Progress (12/16 tasks complete)
+## Status: In Progress (13/16 tasks complete)
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
@@ -15,7 +15,7 @@
 - [x] 2.10: Registration Drift Scenario
 - [x] 2.11: Cold Start Energy Spike Scenario
 - [x] 2.12: Coder Consumable Depletion Scenario
-- [ ] 2.13: Material Splice Scenario
+- [x] 2.13: Material Splice Scenario
 - [ ] 2.14: Ground Truth Event Log
 - [ ] 2.15: Environment Composite Model
 - [ ] 2.16: Cross-Protocol Consistency Tests
@@ -360,3 +360,34 @@ Test classes:
 - The previous rate was ~18x too high. New rate matches PRD 5.12 requirement of MTBF 500+ hours.
 
 **Test results:** 26/26 unit tests pass. No regressions (1308 total unit tests pass).
+
+### Task 2.13 (Complete)
+
+**Files created:**
+- `src/factory_simulator/scenarios/material_splice.py` — MaterialSplice scenario class, 370 lines
+- `tests/unit/test_scenarios/test_material_splice.py` — 28 unit tests, all pass
+
+**What was built:**
+- `MaterialSplice` class inheriting from `Scenario` base
+- Internal `_Phase` enum: MONITORING (watching unwind_diameter), SPLICE (disturbance active)
+- Configurable params: `trigger_diameter` (default 150.0 mm), `refill_diameter` (default 1500.0 mm), `splice_duration_range` (default [10, 30] s), `tension_spike_range` (default [50, 100] N), `tension_spike_duration_range` (default [1, 3] s), `reg_error_increase_range` (default [0.1, 0.3] mm), `reg_error_duration_range` (default [10, 20] s), `waste_multiplier_range` (default [1.5, 2.5]), `speed_dip_pct_range` (default [0.05, 0.10]), `speed_recovery_range` (default [5, 10] s)
+
+**Sequence (PRD 5.13a):**
+1. MONITORING: watches `press._unwind_diameter.value`. Only triggers when press is Running AND unwind ≤ trigger_diameter.
+2. On splice trigger, five simultaneous effects:
+   - Tension spike: increases `CorrelatedFollowerModel._base` on `press._web_tension` by 50-100 N. Max clamp raised if spike would exceed. Restored after tension_spike_duration.
+   - Registration error: offsets both `_reg_error_x._value` and `_reg_error_y._value` by 0.1-0.3 mm. Suppresses `_reversion_rate` to 0. Re-applies offset each tick (generator may overwrite). Restores reversion rate after reg_error_duration.
+   - Waste rate: multiplies `press._waste_count._rate` by 1.5-2.5x. Restored on completion.
+   - Unwind refill: calls `press._unwind_diameter.refill(1500.0)` immediately.
+   - Speed dip: starts ramp from current speed to 90-95% over 2s, then recovery ramp back to target_speed over 5-10s.
+3. After splice_duration elapsed: scenario completes, all saved state restored.
+
+**Key design decisions:**
+- Reactive monitoring pattern (like ColdStart and CoderDepletion): watches model values rather than executing on a fixed timeline.
+- Machine stays Running throughout — no state change (flying splice per PRD 5.13a).
+- Multiple timed sub-effects within the splice: tension spike (1-3s), reg error (10-20s), speed dip (~2s down + 5-10s recovery), waste (full splice duration). Each has independent timers with the `_tension_restored`, `_reg_restored`, `_speed_restored` flags.
+- Both X and Y registration axes affected simultaneously (PRD says "x and y", not "x or y" like RegistrationDrift).
+- Tension spike uses `_base` offset (additive) rather than replacement: preserves the speed-correlated component of tension.
+- `_uniform_param` helper function extracted for DRY parameter sampling.
+
+**Test results:** 28/28 unit tests pass. No regressions (1336 total unit tests pass).
