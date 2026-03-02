@@ -18,9 +18,23 @@ Rationale:
 
 3. **The simulator is not CollatrEdge.** The simulator is a test tool. It does not ship to customers. It does not need to share CollatrEdge's runtime. Choosing the best tool for the job is more important than language consistency. CollatrEdge collects data. The simulator generates data. Different jobs.
 
-4. **Deployment isolation.** The simulator runs in Docker. The language inside the container is invisible to CollatrEdge. They communicate over network protocols. Language alignment across the network boundary has no engineering benefit.
+4. **Cross-stack testing finds more bugs.** Python on the server side exercises different protocol implementation code paths than Bun on the client side. Bugs masked by shared library behaviour in a same-stack test surface when the implementations differ. A `pymodbus` server and an `asyncua` OPC-UA server will encode registers, handle sessions, and manage subscriptions differently than the Node.js libraries CollatrEdge uses. This is a feature. The simulator should stress CollatrEdge's protocol handling, not confirm that one library talks to itself correctly.
 
-5. **Development speed.** Python prototyping is faster for this type of tool. The signal models, correlation engine, and scenario system are computationally straightforward. Python's expressiveness reduces boilerplate.
+5. **Deployment isolation.** The simulator runs in Docker. The language inside the container is invisible to CollatrEdge. They communicate over network protocols. Language alignment across the network boundary has no engineering benefit.
+
+6. **Development speed.** Python prototyping is faster for this type of tool. The signal models, correlation engine, and scenario system are computationally straightforward. Python's expressiveness reduces boilerplate.
+
+## 7.1.1 OPC-UA Server Choice
+
+The OPC-UA server is `asyncua` (formerly `opcua-asyncio`). Three options were evaluated:
+
+1. **`asyncua`** (chosen). Pure Python, async-native, mature server mode. Handles custom node trees, subscriptions, data change notifications, engineering units, and status codes. Active development. Not OPC Foundation certified. Sufficient for a test tool where we control both sides.
+
+2. **`open62541`** (post-MVP option). The C reference implementation from the OPC Foundation. Python bindings exist via `python-open62541`. More compliant, faster, handles edge cases that `asyncua` may not. Harder to integrate with a pure-Python signal engine. Worth adding as an alternative backend after MVP to test CollatrEdge against a stricter OPC-UA server.
+
+3. **Microsoft OPC PLC** (rejected). Azure IoT Edge demo tool. Generates canned signals from a black box. Cannot wire to a custom data generation engine with 65 signals, correlation models, and scenario injection. Wrong tool for the job.
+
+The MVP uses `asyncua`. Post-MVP, the OPC-UA server layer should support swapping to `open62541` via configuration. This gives two levels of protocol compliance testing: `asyncua` for development speed, `open62541` for stricter conformance testing before releases.
 
 ## 7.2 Dependencies
 
