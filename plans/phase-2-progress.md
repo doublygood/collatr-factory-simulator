@@ -1,6 +1,6 @@
 # Phase 2: OPC-UA, MQTT, and Packaging Scenarios - Progress
 
-## Status: In Progress (8/16 tasks complete)
+## Status: In Progress (9/16 tasks complete)
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
@@ -11,7 +11,7 @@
 - [x] 2.6: MQTT Integration Tests
 - [x] 2.7: Web Break Scenario
 - [x] 2.8: Dryer Temperature Drift Scenario
-- [ ] 2.9: Ink Viscosity Excursion Scenario
+- [x] 2.9: Ink Viscosity Excursion Scenario
 - [ ] 2.10: Registration Drift Scenario
 - [ ] 2.11: Cold Start Energy Spike Scenario
 - [ ] 2.12: Coder Consumable Depletion Scenario
@@ -250,3 +250,31 @@ Test classes:
 - `_stabilise_dryer()` helper forces lag model `_value` to setpoint before testing, avoiding the 600s warmup from initial_value=20 C to setpoint=75 C.
 
 **Test results:** 22/22 unit tests pass. No regressions (1208 total unit tests pass).
+
+### Task 2.9 (Complete)
+
+**Files created:**
+- `src/factory_simulator/scenarios/ink_excursion.py` — InkExcursion scenario class, 230 lines
+- `tests/unit/test_scenarios/test_ink_excursion.py` — 23 unit tests, all pass
+
+**What was built:**
+- `InkExcursion` class inheriting from `Scenario` base
+- `_Direction` enum: THIN (viscosity < 18s) or THICK (viscosity > 45s)
+- Configurable params: `duration_range` (default [300, 1800] = 5-30 min), `direction` (thin/thick/random), `thin_target_range` (default [14, 17]), `thick_target_range` (default [46, 50]), `reg_error_multiplier_range` (default [3.0, 5.0]), `waste_increase_range` (default [1.1, 1.3] = 10-30%), `ramp_fraction` (default 0.3)
+
+**Sequence (PRD 5.6):**
+1. On activation: choose direction (thin or thick), save original model parameters, increase registration error `_drift_rate` by multiplier, increase waste `_rate` by multiplier.
+2. Each tick: gradually ramp `SteadyStateModel._target` from original (28.0) toward excursion target (14-17 for thin, 46-50 for thick) over `ramp_fraction` of duration, then hold.
+3. After excursion_duration: restore all parameters — viscosity target, registration drift rates, waste rate.
+
+**Key design decisions:**
+- Direct `_target` override on `SteadyStateModel`: The scenario modifies the model's `_target` attribute, which shifts the center of the generated values. The model's `generate()` returns `target + drift_offset + noise`, so changing target shifts the entire distribution.
+- Gradual ramp: The `ramp_fraction` parameter (default 30% of duration) linearly interpolates from original target to excursion target. The remaining 70% holds at the excursion value. This produces a realistic gradual drift rather than a step change.
+- Registration error via `_drift_rate` multiplier: Increasing the `RandomWalkModel._drift_rate` by 3-5x causes the error to wander further from center, per PRD 5.6 step 2.
+- Direction randomness via `rng.random() < 0.5` instead of `rng.choice()`: avoids mypy type errors with numpy's choice on enum lists.
+
+**Test timing considerations:**
+- Ink viscosity generator fires every 30000ms (300 ticks). Tests checking store values must run ≥600 ticks for 2 generator fires.
+- Noise sigma=1.5 on ink_viscosity. Tests use extreme excursion targets (15 or 48) with enough ticks for the drifted value to be clearly separated from baseline (28.0).
+
+**Test results:** 23/23 unit tests pass. No regressions (1231 total unit tests pass).
