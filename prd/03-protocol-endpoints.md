@@ -96,12 +96,12 @@ The F&B equipment uses the Allen-Bradley CompactLogix convention for the mixer (
 | 1100-1101 | oven.zone_1_temp | float32 | 1.0 | C | Actual temperature |
 | 1102-1103 | oven.zone_2_temp | float32 | 1.0 | C | |
 | 1104-1105 | oven.zone_3_temp | float32 | 1.0 | C | |
-| 1120-1121 | oven.zone_1_setpoint | float32 | 1.0 | C | Writable |
-| 1122-1123 | oven.zone_2_setpoint | float32 | 1.0 | C | Writable |
-| 1124-1125 | oven.zone_3_setpoint | float32 | 1.0 | C | Writable |
-| 1140-1141 | oven.belt_speed | float32 | 1.0 | m/min | |
-| 1142-1143 | oven.product_core_temp | float32 | 1.0 | C | BRC critical control point |
-| 1144-1145 | oven.humidity_zone_2 | float32 | 1.0 | %RH | |
+| 1110-1111 | oven.zone_1_setpoint | float32 | 1.0 | C | Writable |
+| 1112-1113 | oven.zone_2_setpoint | float32 | 1.0 | C | Writable |
+| 1114-1115 | oven.zone_3_setpoint | float32 | 1.0 | C | Writable |
+| 1120-1121 | oven.belt_speed | float32 | 1.0 | m/min | |
+| 1122-1123 | oven.product_core_temp | float32 | 1.0 | C | BRC critical control point |
+| 1124-1125 | oven.humidity_zone_2 | float32 | 1.0 | %RH | |
 
 **Filler registers (HR 1200-1299):**
 

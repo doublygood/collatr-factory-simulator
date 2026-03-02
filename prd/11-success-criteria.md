@@ -6,7 +6,7 @@ CollatrEdge connects to the simulator via all three protocols and collects data 
 
 **Modbus TCP (packaging):** CollatrEdge reads holding registers, input registers, coils, and discrete inputs at configured poll intervals. All register addresses in the map return valid data. Float32 and uint32 values decode correctly with ABCD byte order. Int16 values in input registers decode correctly with x10 scaling.
 
-**Modbus TCP (F&B):** CollatrEdge reads mixer registers with CDAB byte order (Allen-Bradley convention). Multi-slave addressing works: mixer on slave 1, oven on slave 2, filler on slave 3, sealer on slave 4. All F&B register addresses return valid data.
+**Modbus TCP (F&B):** CollatrEdge reads all F&B equipment across the network topology defined in Section 3a.3. Mixer at 10.0.2.10:502 UID 1 uses CDAB byte order (Allen-Bradley convention). Oven gateway at 10.0.2.20:502 serves three zone controllers at UID 1, 2, 3 and an energy meter at UID 10. Filler at 10.0.2.30:502 UID 1, sealer at 10.0.2.31:502 UID 1, chiller at 10.0.2.40:502 UID 1, and CIP at 10.0.2.32:502 UID 1 all use ABCD byte order. All F&B register addresses return valid data.
 
 **OPC-UA:** CollatrEdge browses the node tree and subscribes to all nodes under both `PackagingLine` and `FoodBevLine` trees. All node values update at their configured rates. Status codes are correctly propagated.
 

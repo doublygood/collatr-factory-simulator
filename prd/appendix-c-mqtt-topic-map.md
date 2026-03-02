@@ -2,45 +2,45 @@
 
 ## Packaging Profile Topics
 
-Topic prefix: `collatr/factory/demo/line3/`
+Topic prefix: `collatr/factory/demo/packaging1/`
 
 ### Coder Topics
 
 | Topic | Signal | QoS | Retain | Publish Rate |
 |-------|--------|-----|--------|-------------|
-| `collatr/factory/demo/line3/coder/state` | coder.state | 1 | Yes | Event-driven |
-| `collatr/factory/demo/line3/coder/prints_total` | coder.prints_total | 1 | Yes | Event-driven |
-| `collatr/factory/demo/line3/coder/ink_level` | coder.ink_level | 0 | Yes | 60s |
-| `collatr/factory/demo/line3/coder/printhead_temp` | coder.printhead_temp | 0 | Yes | 30s |
-| `collatr/factory/demo/line3/coder/ink_pump_speed` | coder.ink_pump_speed | 0 | Yes | 5s |
-| `collatr/factory/demo/line3/coder/ink_pressure` | coder.ink_pressure | 0 | Yes | 5s |
-| `collatr/factory/demo/line3/coder/ink_viscosity_actual` | coder.ink_viscosity_actual | 0 | Yes | 30s |
-| `collatr/factory/demo/line3/coder/supply_voltage` | coder.supply_voltage | 0 | Yes | 60s |
-| `collatr/factory/demo/line3/coder/ink_consumption_ml` | coder.ink_consumption_ml | 0 | Yes | 60s |
-| `collatr/factory/demo/line3/coder/nozzle_health` | coder.nozzle_health | 1 | Yes | Event-driven |
-| `collatr/factory/demo/line3/coder/gutter_fault` | coder.gutter_fault | 1 | Yes | Event-driven |
+| `collatr/factory/demo/packaging1/coder/state` | coder.state | 1 | Yes | Event-driven |
+| `collatr/factory/demo/packaging1/coder/prints_total` | coder.prints_total | 1 | Yes | Event-driven |
+| `collatr/factory/demo/packaging1/coder/ink_level` | coder.ink_level | 0 | Yes | 60s |
+| `collatr/factory/demo/packaging1/coder/printhead_temp` | coder.printhead_temp | 0 | Yes | 30s |
+| `collatr/factory/demo/packaging1/coder/ink_pump_speed` | coder.ink_pump_speed | 0 | Yes | 5s |
+| `collatr/factory/demo/packaging1/coder/ink_pressure` | coder.ink_pressure | 0 | Yes | 5s |
+| `collatr/factory/demo/packaging1/coder/ink_viscosity_actual` | coder.ink_viscosity_actual | 0 | Yes | 30s |
+| `collatr/factory/demo/packaging1/coder/supply_voltage` | coder.supply_voltage | 0 | Yes | 60s |
+| `collatr/factory/demo/packaging1/coder/ink_consumption_ml` | coder.ink_consumption_ml | 0 | Yes | 60s |
+| `collatr/factory/demo/packaging1/coder/nozzle_health` | coder.nozzle_health | 1 | Yes | Event-driven |
+| `collatr/factory/demo/packaging1/coder/gutter_fault` | coder.gutter_fault | 1 | Yes | Event-driven |
 
 ### Environmental Topics
 
 | Topic | Signal | QoS | Retain | Publish Rate |
 |-------|--------|-----|--------|-------------|
-| `collatr/factory/demo/line3/env/ambient_temp` | env.ambient_temp | 0 | Yes | 60s |
-| `collatr/factory/demo/line3/env/ambient_humidity` | env.ambient_humidity | 0 | Yes | 60s |
+| `collatr/factory/demo/packaging1/env/ambient_temp` | env.ambient_temp | 0 | Yes | 60s |
+| `collatr/factory/demo/packaging1/env/ambient_humidity` | env.ambient_humidity | 0 | Yes | 60s |
 
 ### Vibration Topics
 
 | Topic | Signal | QoS | Retain | Publish Rate |
 |-------|--------|-----|--------|-------------|
-| `collatr/factory/demo/line3/vibration/main_drive_x` | vibration.main_drive_x | 0 | No | 1s |
-| `collatr/factory/demo/line3/vibration/main_drive_y` | vibration.main_drive_y | 0 | No | 1s |
-| `collatr/factory/demo/line3/vibration/main_drive_z` | vibration.main_drive_z | 0 | No | 1s |
+| `collatr/factory/demo/packaging1/vibration/main_drive_x` | vibration.main_drive_x | 0 | No | 1s |
+| `collatr/factory/demo/packaging1/vibration/main_drive_y` | vibration.main_drive_y | 0 | No | 1s |
+| `collatr/factory/demo/packaging1/vibration/main_drive_z` | vibration.main_drive_z | 0 | No | 1s |
 
 ### Batch Vibration Topic (Alternative)
 
 For high-frequency vibration data, an alternative batch topic publishes all three axes in one message:
 
 ```
-collatr/factory/demo/line3/vibration/main_drive
+collatr/factory/demo/packaging1/vibration/main_drive
 ```
 
 ```json
@@ -87,7 +87,7 @@ The F&B profile publishes coder and environmental topics using the same signal d
 | `collatr/factory/demo/foodbev1/env/ambient_temp` | env.ambient_temp | 0 | Yes | 60s |
 | `collatr/factory/demo/foodbev1/env/ambient_humidity` | env.ambient_humidity | 0 | Yes | 60s |
 
-> **No vibration topics for F&B.** The F&B line does not include a vibration monitoring equipment group. The packaging profile's vibration topics (`collatr/factory/demo/line3/vibration/*`) are exclusive to the packaging profile.
+> **No vibration topics for F&B.** The F&B line does not include a vibration monitoring equipment group. The packaging profile's vibration topics (`collatr/factory/demo/packaging1/vibration/*`) are exclusive to the packaging profile.
 
 ---
 

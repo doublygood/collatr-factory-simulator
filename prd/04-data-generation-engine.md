@@ -249,13 +249,30 @@ Parameters: `states[]`, `transitions[]` (each with `from`, `to`, `trigger`, `pro
 
 This model simulates heat penetration into a solid food product. The temperature profile follows an S-curve: slow start as the surface heats, rapid middle as heat conducts inward, slow asymptotic approach to equilibrium. A first-order lag would produce a pure exponential approach with no slow-start phase, which looks wrong to anyone familiar with food thermal processing.
 
-The model uses the first term of the Fourier series solution for 1D heat conduction in a slab:
+The model uses a truncated Fourier series solution for 1D heat conduction in a slab. The full series for the volume-averaged temperature is:
 
 ```
-T(t) = T_oven - (T_oven - T_initial) * (8 / pi^2) * exp(-pi^2 * alpha * t / L^2)
+T(t) = T_oven - (T_oven - T_initial) * SUM_{n=0}^{N} [ C_n * exp(-(2n+1)^2 * pi^2 * alpha * t / L^2) ]
 ```
 
-Where `alpha` is thermal diffusivity (m^2/s) and `L` is the product half-thickness (m). The factor `8/pi^2` (approximately 0.81) ensures the initial temperature starts near `T_initial`. As `t` increases, the exponential term decays and `T(t)` approaches `T_oven`.
+Where `C_n = 8 / ((2n+1)^2 * pi^2)`, `alpha` is thermal diffusivity (m^2/s), and `L` is the product half-thickness (m). The first three terms (n=0,1,2) have coefficients:
+
+| Term | Coefficient | Approximate Value |
+|------|------------|-------------------|
+| n=0 | 8 / pi^2 | 0.8106 |
+| n=1 | 8 / (9 * pi^2) | 0.0901 |
+| n=2 | 8 / (25 * pi^2) | 0.0324 |
+
+The three-term sum is 0.9331. At t=0 with T_initial=4C and T_oven=180C, T(0) = 180 - 0.9331 * 176 = 15.8C. The full infinite series sums to 1.0, giving T(0) = T_initial exactly. Each added term improves the initial condition. Five terms sum to 0.9638. Ten terms sum to 0.9818.
+
+The PRD shows three terms for clarity. Implementations must sum terms until T(0) falls within 1C of T_initial. In practice, 5 to 10 terms suffice. The convergence check is:
+
+```
+if abs(T(0) - T_initial) > 1.0:
+    add next term and recheck
+```
+
+As `t` increases, the higher-order terms decay fast. After a few seconds only the n=0 term matters. The extra terms correct the initial condition without affecting the long-term profile.
 
 Typical values for a chilled ready meal: half-thickness ~25 mm, thermal diffusivity ~1.4e-7 m^2/s (meat-based product). At 180C oven temperature, the core reaches 72C from 4C in approximately 15-20 minutes. BRC requires that product core temperature reaches 72C for 2 minutes, so the model must produce this profile accurately.
 

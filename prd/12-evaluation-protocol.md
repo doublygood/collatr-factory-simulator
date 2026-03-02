@@ -78,9 +78,20 @@ A **detection** is any alert produced by the anomaly detection system under test
 
 An event counts as **detected** if at least one detection falls within the event window. Multiple detections within the same window do not count as multiple true positives. They count as one.
 
-A detection that falls outside all event windows is a **false positive**.
+**Tolerance windows.** Detectors may fire before the annotated start (precursor signals) or after the annotated end (processing delay). Early detection is good behaviour and should not be penalised. Two configurable margins extend the matching window:
 
-An event with no detection inside its window is a **missed event** (false negative).
+- **Pre-margin** (`pre_margin_seconds`, default 30). A detection within `[start - pre_margin, start]` counts as a true positive for that event.
+- **Post-margin** (`post_margin_seconds`, default 60). A detection within `[end, end + post_margin]` counts as a true positive.
+
+The effective matching window becomes `[start - pre_margin, end + post_margin]`. If two adjacent events have overlapping effective windows, a single detection is assigned to the nearest event by start time.
+
+Detection latency is still measured from `scenario_start`. Early detections produce negative latency. Negative latency is desirable and should be reported as-is, not clamped to zero.
+
+The NAB benchmark uses a sigmoidal scoring function for partial credit. Our approach is simpler: binary match within the tolerance window. This is adequate for the simulator's primary use case (demos and integration testing). A sigmoidal scoring function can be added later for research benchmarking.
+
+A detection that falls outside all effective matching windows is a **false positive**.
+
+An event with no detection inside its effective matching window is a **missed event** (false negative).
 
 ### Metrics
 
@@ -108,6 +119,24 @@ F1 = 2 * precision * recall / (precision + recall)
 
 Report metrics per scenario type and overall. A detector may excel at web breaks (sudden, large magnitude) but miss dryer drift (gradual, small magnitude). Per-scenario breakdown reveals these patterns.
 
+### Statistical Significance
+
+A single-seed result is not statistically significant. Random scenario placement changes with each seed. A detector scoring 0.85 F1 on one seed might score 0.72 on another.
+
+**Internal evaluation (regression testing, development).** A single fixed seed is sufficient. The goal is deterministic comparison across code changes, not absolute scoring.
+
+**Published benchmarking or comparative evaluation.** Run N=10 independent seeds. Use consecutive integers starting from a base (seeds 1 through 10). This is reproducible. Report mean and standard deviation of precision, recall, F1, and detection latency (median and p90).
+
+**Significance test.** A result is statistically significant if the 95% confidence interval does not overlap between two detectors. Compute the interval as:
+
+```
+CI = mean +/- 1.96 * std / sqrt(N)
+```
+
+If the intervals for detector A and detector B do not overlap on a given metric, the difference is significant at p < 0.05.
+
+**Trivial baseline.** Report the performance of a random detector that fires with probability p per tick, where p equals the anomaly density of the dataset. Anomaly density is the fraction of ticks that fall inside any ground truth event window. This random baseline provides a floor. Any useful detector must beat it. If a detector does not beat the random baseline, it has no predictive value.
+
 ## 12.5 Recommended Run Configurations
 
 ### Run A: Normal Operations (24 hours)
@@ -121,6 +150,9 @@ Simulates a typical production day. Three shifts. Job changeovers, shift changes
 | Scenarios enabled | job_changeover, shift_change, micro_stop, dryer_drift (1 per shift), ink_viscosity_excursion |
 | Data quality | Default (communication drops, noise, duplicate timestamps) |
 | Seed | Any fixed value |
+| Seeds | 1 (development), 10 (benchmarking) |
+| pre_margin_seconds | 30 |
+| post_margin_seconds | 60 |
 
 ### Run B: Heavy Anomaly (24 hours)
 
@@ -133,6 +165,9 @@ Simulates a bad day. Multiple faults, intermittent failures, and contextual anom
 | Scenarios enabled | All scenarios enabled. web_break frequency doubled. unplanned_stop frequency doubled. contextual_anomaly frequency tripled. |
 | Data quality | All impairments enabled. sensor_disconnect frequency doubled. |
 | Seed | Any fixed value |
+| Seeds | 1 (development), 10 (benchmarking) |
+| pre_margin_seconds | 30 |
+| post_margin_seconds | 60 |
 
 ### Run C: Long-Term Degradation (7 days)
 
@@ -145,6 +180,9 @@ Simulates a full week including bearing wear progression and intermittent faults
 | Scenarios enabled | bearing_wear (start at hour 0, culminate_in_failure: true), intermittent_fault (bearing and electrical), all normal operations |
 | Data quality | Default |
 | Seed | Any fixed value |
+| Seeds | 1 (development), 10 (benchmarking) |
+| pre_margin_seconds | 30 |
+| post_margin_seconds | 60 |
 
 ## 12.6 Cross-References
 
