@@ -17,7 +17,7 @@
 - [x] 1.12: Correlated Follower Model
 - [x] 1.13: State Machine Model
 - [x] 1.14: Thermal Diffusion Model
-- [ ] 1.15: Bang-Bang Hysteresis + String Generator
+- [x] 1.15: Bang-Bang Hysteresis + String Generator
 - [ ] 1.16: Equipment Generator Base + Press Generator
 - [ ] 1.17: Remaining Packaging Generators
 - [ ] 1.18: Data Engine
@@ -604,3 +604,45 @@
 - Edge cases: very small alpha (slow), very large alpha (fast), negative T_initial, very thin/thick product
 - Property-based (Hypothesis): output always finite, determinism any seed, convergence within 1C, monotonic for any heating/cooling, bounded between T_initial and T_oven
 - Package imports: importable from models package, in __all__
+
+### Task 1.15: Bang-Bang Hysteresis + String Generator (completed)
+
+**Files created:**
+- `src/factory_simulator/models/bang_bang.py` -- BangBangModel class
+- `src/factory_simulator/models/string_generator.py` -- StringGeneratorModel class
+- `tests/unit/test_models/test_bang_bang.py` -- 54 tests (property-based with Hypothesis)
+- `tests/unit/test_models/test_string_generator.py` -- 35 tests
+
+**Files modified:**
+- `src/factory_simulator/models/__init__.py` -- exports BangBangModel, StringGeneratorModel
+
+**BangBangModel implementation (PRD 4.2.12):**
+- On/off controller with hysteresis dead band for chiller compressor simulation
+- Transition logic: OFF->ON when `pv > setpoint + dead_band_high`; ON->OFF when `pv < setpoint - dead_band_low`
+- When ON: `pv -= cooling_rate * dt / 60` (rates in C/min, dt in seconds)
+- When OFF: `pv += heat_gain_rate * dt / 60`
+- Produces characteristic sawtooth temperature pattern
+- `compressor_on` property exposes binary state for equipment generator to write to coil signal
+- `set_setpoint()` for runtime target changes
+- `add_disturbance(delta)` for door-open events and external heat loads
+- Noise is observation noise (does not affect internal PV state)
+- `reset()` restores initial temperature and compressor state
+
+**StringGeneratorModel implementation (PRD 4.2.14):**
+- Does NOT extend SignalModel (produces `str`, not `float`)
+- Assembles batch IDs from template: `"{date:%y%m%d}-{line}-{seq:03d}"`
+- `new_batch()` increments sequence counter (called by equipment generator on batch transitions)
+- Automatic sequence reset at configured time of day (default midnight)
+- Reset boundary tracking uses `_compute_reset_boundary()` initialized at construction time to correctly detect day crossings
+- Supports arbitrary format templates with `{date}`, `{line}`, `{seq}` placeholders
+
+**Key design decisions:**
+- BangBangModel follows same `_float_param()` helper and noise injection patterns as all other signal models
+- BangBangModel rates are in C/min per PRD but internally converted to C/s via `dt/60`
+- StringGeneratorModel is a separate class (not a SignalModel subclass) since it produces strings. The equipment generator handles it differently from numeric models.
+- StringGeneratorModel midnight reset boundary is computed from start_time at construction, not lazily on first generate(). This ensures day crossings are always detected correctly regardless of when the first generate() is called.
+- Both models use sim_time (Rule 6), never wall clock
+
+**Test coverage (54 bang-bang + 35 string = 89 tests):**
+- Bang-Bang: construction (defaults, explicit, initial_temp, initial_state, validation errors), sawtooth behaviour (heat gain when off, cooling when on, upper/lower threshold switching, full cycle, oscillation range), cycle timing (PRD ~8-12 min, cooling/heating phase duration), asymmetric dead band, setpoint changes, disturbance (warming/cooling, triggers compressor, PRD door event), noise (variation, zero sigma, state isolation, mean), negative setpoint (freezer), reset, determinism (Rule 13), time compression (Rule 6), PRD examples (chiller config, compressor state), edge cases (small/large dt, exact threshold), property-based (Hypothesis: finite output, determinism, boolean state)
+- String Generator: construction (defaults, explicit, datetime start, invalid reset_at), basic generation (default format, PRD example, sequence increments, custom template, date changes), midnight reset (at midnight, once per day, custom time, multiple day crossings), new_batch, reset (sequence, value, midnight tracking), value property, template variations, edge cases (zero sim_time, large sim_time, high sequence, format widening, naive timezone), package imports

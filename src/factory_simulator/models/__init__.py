@@ -6,6 +6,7 @@ utilities, and all concrete signal model implementations.
 PRD Reference: Section 4.2 (Signal Models), Section 4.3 (Correlation Model)
 """
 
+from factory_simulator.models.bang_bang import BangBangModel
 from factory_simulator.models.base import SignalModel, clamp, quantise
 from factory_simulator.models.correlated import CorrelatedFollowerModel
 from factory_simulator.models.counter import CounterModel
@@ -20,9 +21,11 @@ from factory_simulator.models.random_walk import RandomWalkModel
 from factory_simulator.models.sinusoidal import SinusoidalModel
 from factory_simulator.models.state import StateMachineModel
 from factory_simulator.models.steady_state import SteadyStateModel
+from factory_simulator.models.string_generator import StringGeneratorModel
 from factory_simulator.models.thermal_diffusion import ThermalDiffusionModel
 
 __all__ = [
+    "BangBangModel",
     "CholeskyCorrelator",
     "CorrelatedFollowerModel",
     "CounterModel",
@@ -35,6 +38,7 @@ __all__ = [
     "SinusoidalModel",
     "StateMachineModel",
     "SteadyStateModel",
+    "StringGeneratorModel",
     "ThermalDiffusionModel",
     "clamp",
     "quantise",
