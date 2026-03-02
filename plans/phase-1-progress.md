@@ -18,7 +18,7 @@
 - [x] 1.13: State Machine Model
 - [x] 1.14: Thermal Diffusion Model
 - [x] 1.15: Bang-Bang Hysteresis + String Generator
-- [ ] 1.16: Equipment Generator Base + Press Generator
+- [x] 1.16: Equipment Generator Base + Press Generator
 - [ ] 1.17: Remaining Packaging Generators
 - [ ] 1.18: Data Engine
 - [ ] 1.19: Basic Scenarios
@@ -646,3 +646,49 @@
 **Test coverage (54 bang-bang + 35 string = 89 tests):**
 - Bang-Bang: construction (defaults, explicit, initial_temp, initial_state, validation errors), sawtooth behaviour (heat gain when off, cooling when on, upper/lower threshold switching, full cycle, oscillation range), cycle timing (PRD ~8-12 min, cooling/heating phase duration), asymmetric dead band, setpoint changes, disturbance (warming/cooling, triggers compressor, PRD door event), noise (variation, zero sigma, state isolation, mean), negative setpoint (freezer), reset, determinism (Rule 13), time compression (Rule 6), PRD examples (chiller config, compressor state), edge cases (small/large dt, exact threshold), property-based (Hypothesis: finite output, determinism, boolean state)
 - String Generator: construction (defaults, explicit, datetime start, invalid reset_at), basic generation (default format, PRD example, sequence increments, custom template, date changes), midnight reset (at midnight, once per day, custom time, multiple day crossings), new_batch, reset (sequence, value, midnight tracking), value property, template variations, edge cases (zero sim_time, large sim_time, high sequence, format widening, naive timezone), package imports
+
+### Task 1.16: Equipment Generator Base + Press Generator (completed)
+
+**EquipmentGenerator ABC** (`src/factory_simulator/generators/base.py`):
+- Abstract base class per PRD Section 8.4 Plugin Architecture
+- Protocol mapping dataclasses: ModbusMapping, OpcuaMapping, MqttMapping, ProtocolMapping
+- Constructor takes (equipment_id, config, rng) -- no global state (Rule 12)
+- Abstract methods: `get_signal_ids()`, `generate(sim_time, dt, store)`
+- `generate()` includes `dt` parameter beyond PRD interface since all signal models need it
+- Default `get_protocol_mappings()` reads from signal configs (modbus_hr, opcua_node, mqtt_topic)
+- Helper methods: `_spawn_rng()` for isolated child RNGs (Rule 13), `_make_noise()`, `_signal_id()`
+
+**PressGenerator** (`src/factory_simulator/generators/press.py`):
+- 21 signals across 7 model types: state_machine, ramp, correlated_follower, random_walk, steady_state, first_order_lag, counter, depletion
+- 6 machine states: Off(0), Setup(1), Running(2), Idle(3), Fault(4), Maintenance(5)
+- State cascade: machine state drives line speed ramp, which feeds correlated followers (web_tension, drive_current, drive_speed), counters, and depletion
+- Generation order respects dependencies: state → cascade → speed → followers → independent → counters → depletion
+- Line speed noise only applied when Running (prevents positive noise leaking through min_clamp=0 when idle)
+- Noise for ramp model applied externally (not passed to RampModel constructor) to enable state-conditional noise
+- Counters use `set_speed(line_speed)` so they only increment proportional to speed
+- Registration errors frozen (last value held) when not Running
+- Nip pressure forced to 0 when Off/Fault/Maintenance
+- Dryer setpoints tracked when Running/Setup/Idle; dryers cool toward ambient (20C) when Off/Maintenance
+- State machine config handles both string lists (YAML) and dict lists, converting to canonical capitalized names
+- Equipment-level config (target_speed, speed_range) read from Pydantic `model_extra`
+- Default transitions table provides basic state cycling; scenarios can override via `force_state()`
+
+**Key design decisions:**
+- `generate()` interface adds `dt` beyond PRD 8.4 since models require it
+- Noise applied externally for line_speed (not passed to RampModel) to control noise only when running
+- Sample rate enforcement deferred to DataEngine (Task 1.18) -- generator produces all signals every tick
+- State machine string-to-dict conversion handles YAML's simple string list format
+- All signal models created at construction time from config; no lazy initialization
+- Post-processing pipeline: optional noise → quantise → clamp (same as other generators will use)
+
+**Test coverage (25 tests):**
+- SignalIds: count=21, complete list match, generate produces all, valid SignalValues
+- StateCascade: initial idle, idle speed zero, force_running starts ramp, reaches target speed, fault zeroes speed
+- Counters: zero when idle, increment when running, freeze on fault
+- CorrelatedFollowers: web_tension at zero speed near base, drive_current/speed scale with speed
+- DryerTemperatures: heat toward setpoints when running, cool toward ambient when off
+- Depletion: unwind_diameter depletes when running
+- Determinism: same seed produces identical output (Rule 13)
+- ProtocolMappings: 21 mappings, line_speed modbus [100,101] float32, machine_state modbus [210] uint16
+- Clamping: all signals within configured bounds after 200 ticks
+- NipPressure: zero when off, active when running
