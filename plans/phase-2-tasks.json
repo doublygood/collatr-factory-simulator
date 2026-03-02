@@ -1,0 +1,166 @@
+{
+  "phase": 2,
+  "name": "OPC-UA, MQTT, and Packaging Scenarios",
+  "tasks": [
+    {
+      "id": "2.1",
+      "name": "OPC-UA Server Adapter — Node Tree",
+      "group": "A: OPC-UA Server",
+      "source_files": ["src/factory_simulator/protocols/opcua_server.py"],
+      "test_files": ["tests/unit/test_protocols/test_opcua.py"],
+      "prd_refs": ["prd/03-protocol-endpoints.md (3.2)", "prd/appendix-b-opcua-node-tree.md"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "2.2",
+      "name": "OPC-UA Server Adapter — Value Sync + Subscriptions",
+      "group": "A: OPC-UA Server",
+      "source_files": ["src/factory_simulator/protocols/opcua_server.py"],
+      "test_files": ["tests/unit/test_protocols/test_opcua.py"],
+      "prd_refs": ["prd/03-protocol-endpoints.md (3.2.3, 3.2.4)"],
+      "depends_on": ["2.1"],
+      "passes": false
+    },
+    {
+      "id": "2.3",
+      "name": "OPC-UA Integration Tests",
+      "group": "A: OPC-UA Server",
+      "source_files": [],
+      "test_files": ["tests/integration/test_opcua_integration.py"],
+      "prd_refs": ["prd/appendix-b-opcua-node-tree.md", "prd/13-test-strategy.md"],
+      "depends_on": ["2.2"],
+      "passes": false
+    },
+    {
+      "id": "2.4",
+      "name": "MQTT Publisher Adapter",
+      "group": "B: MQTT Publisher",
+      "source_files": ["src/factory_simulator/protocols/mqtt_publisher.py"],
+      "test_files": ["tests/unit/test_protocols/test_mqtt.py"],
+      "prd_refs": ["prd/03-protocol-endpoints.md (3.3)", "prd/appendix-c-mqtt-topic-map.md"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "2.5",
+      "name": "MQTT Batch Vibration Topic",
+      "group": "B: MQTT Publisher",
+      "source_files": ["src/factory_simulator/protocols/mqtt_publisher.py"],
+      "test_files": ["tests/unit/test_protocols/test_mqtt.py"],
+      "prd_refs": ["prd/03-protocol-endpoints.md (3.3.6)"],
+      "depends_on": ["2.4"],
+      "passes": false
+    },
+    {
+      "id": "2.6",
+      "name": "MQTT Integration Tests",
+      "group": "B: MQTT Publisher",
+      "source_files": [],
+      "test_files": ["tests/integration/test_mqtt_integration.py"],
+      "prd_refs": ["prd/appendix-c-mqtt-topic-map.md", "prd/13-test-strategy.md"],
+      "depends_on": ["2.5"],
+      "passes": false
+    },
+    {
+      "id": "2.7",
+      "name": "Web Break Scenario",
+      "group": "C: Packaging Scenarios",
+      "source_files": ["src/factory_simulator/scenarios/web_break.py"],
+      "test_files": ["tests/unit/test_scenarios/test_web_break.py"],
+      "prd_refs": ["prd/05-scenario-system.md (5.3)"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "2.8",
+      "name": "Dryer Temperature Drift Scenario",
+      "group": "C: Packaging Scenarios",
+      "source_files": ["src/factory_simulator/scenarios/dryer_drift.py"],
+      "test_files": ["tests/unit/test_scenarios/test_dryer_drift.py"],
+      "prd_refs": ["prd/05-scenario-system.md (5.4)"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "2.9",
+      "name": "Ink Viscosity Excursion Scenario",
+      "group": "C: Packaging Scenarios",
+      "source_files": ["src/factory_simulator/scenarios/ink_excursion.py"],
+      "test_files": ["tests/unit/test_scenarios/test_ink_excursion.py"],
+      "prd_refs": ["prd/05-scenario-system.md (5.6)"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "2.10",
+      "name": "Registration Drift Scenario",
+      "group": "C: Packaging Scenarios",
+      "source_files": ["src/factory_simulator/scenarios/registration_drift.py"],
+      "test_files": ["tests/unit/test_scenarios/test_registration_drift.py"],
+      "prd_refs": ["prd/05-scenario-system.md (5.7)"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "2.11",
+      "name": "Cold Start Energy Spike Scenario",
+      "group": "C: Packaging Scenarios",
+      "source_files": ["src/factory_simulator/scenarios/cold_start.py"],
+      "test_files": ["tests/unit/test_scenarios/test_cold_start.py"],
+      "prd_refs": ["prd/05-scenario-system.md (5.10)"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "2.12",
+      "name": "Coder Consumable Depletion Scenario",
+      "group": "C: Packaging Scenarios",
+      "source_files": ["src/factory_simulator/scenarios/coder_depletion.py"],
+      "test_files": ["tests/unit/test_scenarios/test_coder_depletion.py"],
+      "prd_refs": ["prd/05-scenario-system.md (5.12)"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "2.13",
+      "name": "Material Splice Scenario",
+      "group": "C: Packaging Scenarios",
+      "source_files": ["src/factory_simulator/scenarios/material_splice.py"],
+      "test_files": ["tests/unit/test_scenarios/test_material_splice.py"],
+      "prd_refs": ["prd/05-scenario-system.md (5.13a)"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "2.14",
+      "name": "Ground Truth Event Log",
+      "group": "D: Ground Truth + Environment + Cross-Protocol",
+      "source_files": ["src/factory_simulator/engine/ground_truth.py"],
+      "test_files": ["tests/unit/test_ground_truth.py"],
+      "prd_refs": ["prd/04-data-generation-engine.md (4.7)"],
+      "depends_on": ["2.7"],
+      "passes": false
+    },
+    {
+      "id": "2.15",
+      "name": "Environment Composite Model",
+      "group": "D: Ground Truth + Environment + Cross-Protocol",
+      "source_files": ["src/factory_simulator/generators/environment.py"],
+      "test_files": ["tests/unit/test_generators/test_environment.py"],
+      "prd_refs": ["prd/04-data-generation-engine.md (4.2.2)"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "2.16",
+      "name": "Cross-Protocol Consistency Tests",
+      "group": "D: Ground Truth + Environment + Cross-Protocol",
+      "source_files": [],
+      "test_files": ["tests/integration/test_cross_protocol.py"],
+      "prd_refs": ["prd/13-test-strategy.md"],
+      "depends_on": ["2.3", "2.6"],
+      "passes": false
+    }
+  ]
+}
