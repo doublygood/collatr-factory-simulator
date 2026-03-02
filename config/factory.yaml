@@ -708,7 +708,13 @@ equipment:
         params:
           center: 22.0
           amplitude: 3.0
-          period: 86400.0         # 24-hour cycle
+          period: 86400.0                       # 24-hour cycle
+          # Composite model layers (PRD 4.2.2)
+          hvac_period_minutes: 20               # HVAC cycle period (15-30 min)
+          hvac_amplitude_c: 1.0                 # HVAC oscillation amplitude (0.5-1.5 C)
+          perturbation_rate_per_shift: 5        # Poisson events per 8-hour shift (3-8)
+          perturbation_magnitude_c: 2.0         # Centre of event magnitude (1-3 C)
+          perturbation_decay_tau_minutes: 7     # Exponential decay tau (5-10 min)
 
       ambient_humidity:
         model: "sinusoidal"

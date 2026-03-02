@@ -1,6 +1,6 @@
 # Phase 2: OPC-UA, MQTT, and Packaging Scenarios - Progress
 
-## Status: In Progress (14/16 tasks complete)
+## Status: In Progress (15/16 tasks complete)
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
@@ -17,7 +17,7 @@
 - [x] 2.12: Coder Consumable Depletion Scenario
 - [x] 2.13: Material Splice Scenario
 - [x] 2.14: Ground Truth Event Log
-- [ ] 2.15: Environment Composite Model
+- [x] 2.15: Environment Composite Model
 - [ ] 2.16: Cross-Protocol Consistency Tests
 
 ## Notes
@@ -419,3 +419,38 @@ Test classes:
 - JSON output uses `separators=(",",":")` (compact, no spaces) for minimal file size.
 
 **Test results:** 25/25 unit tests pass. No regressions (1361 total unit tests pass).
+
+### Task 2.15 (Complete)
+
+**Files modified/created:**
+- `src/factory_simulator/generators/environment.py` — Replaced plain sinusoidal model with 3-layer composite per PRD 4.2.2
+- `tests/unit/test_generators/test_environment.py` — 10 new unit tests, all pass
+- `config/factory.yaml` — Added composite model parameters to `ambient_temp` config
+
+**What was built:**
+Composite environmental model per PRD 4.2.2:
+```
+value = daily_sine(t) + hvac_cycle(t) + perturbation(t) + noise(0, sigma)
+```
+
+Three layers:
+1. **Daily sinusoidal** (existing): SinusoidalModel with 24-hour period, built WITHOUT noise (noise is a separate final layer per the PRD formula).
+2. **HVAC cycling**: BangBangModel centered at 0, producing a triangle-wave offset with configurable period (15-30 min, default 20) and amplitude (0.5-1.5 C, default 1.0). Rate computed as `4 * amplitude / period` for symmetric cycling.
+3. **Random perturbations**: Poisson process (3-8 events per 8-hour shift, default 5) with configurable magnitude (U[0.5*mag, 1.5*mag], default mag=2.0 → U[1.0, 3.0] matching PRD "1-3 C"). Each event adds a step offset that decays exponentially (tau 5-10 min, default 7 min).
+
+Humidity: same layered pattern but inverted. HVAC and perturbation offsets are negated and scaled by `humidity_amplitude / temp_amplitude` ratio (10/3 ≈ 3.33) to map °C → %RH.
+
+**Config parameters (on `ambient_temp.params`):**
+- `hvac_period_minutes` (default 20)
+- `hvac_amplitude_c` (default 1.0)
+- `perturbation_rate_per_shift` (default 5)
+- `perturbation_magnitude_c` (default 2.0)
+- `perturbation_decay_tau_minutes` (default 7)
+
+**Key design decisions:**
+- `real_dt` tracking: The data engine calls generators with the tick dt (0.1s) even though the environment fires every 60s. The generator tracks `_last_sim_time` and computes the actual elapsed time for the BangBang model and perturbation decay. This ensures correct HVAC cycling period and perturbation dynamics.
+- Noise separated from sinusoidal: The daily sine models are built WITHOUT noise. Noise is applied as a final additive layer after all composite layers are combined, matching the PRD formula exactly.
+- BangBang discrete-step overshoot: With 60s steps and rate=0.2 C/min, the PV overshoots the dead band by 0.2°C per half-cycle. This is acceptable and mimics real HVAC behaviour. Actual cycle period is ~24 min instead of the configured 20 min due to this overshoot.
+- Perturbation events use `numpy.poisson()` for correct Poisson statistics even with large dt values (60s). Magnitude drawn from `U[0.5*mag, 1.5*mag]` with random sign.
+
+**Test results:** 10/10 new tests pass. 1462 total tests pass (no regressions).
