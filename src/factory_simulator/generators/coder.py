@@ -96,6 +96,7 @@ class CoderGenerator(EquipmentGenerator):
     ) -> None:
         super().__init__(equipment_id, config, rng)
         self._prev_press_state: int = 3  # Idle
+        self._quality_overrides: dict[str, str] = {}
         self._build_models()
 
     def _build_models(self) -> None:
@@ -180,10 +181,11 @@ class CoderGenerator(EquipmentGenerator):
         else:
             state_dicts = list(raw_states)
 
-        # Gutter faults occur rarely and clear quickly
+        # Gutter faults: MTBF 500+ hours (PRD 5.12, fix G5)
+        # rate = 1 / (500 * 3600) ≈ 0.000000556 per second
         transitions = [
             {"from": "Clear", "to": "Fault", "trigger": "probability",
-             "probability": 0.00001, "min_duration": 300.0},
+             "probability": 0.000000556, "min_duration": 300.0},
             {"from": "Fault", "to": "Clear", "trigger": "timer",
              "min_duration": 5.0, "max_duration": 30.0},
         ]
@@ -354,9 +356,10 @@ class CoderGenerator(EquipmentGenerator):
     def _make_sv(
         self, signal_name: str, value: float, sim_time: float,
     ) -> SignalValue:
+        quality = self._quality_overrides.get(signal_name, "good")
         return SignalValue(
             signal_id=self._signal_id(signal_name),
             value=value,
             timestamp=sim_time,
-            quality="good",
+            quality=quality,
         )

@@ -1,6 +1,6 @@
 # Phase 2: OPC-UA, MQTT, and Packaging Scenarios - Progress
 
-## Status: In Progress (11/16 tasks complete)
+## Status: In Progress (12/16 tasks complete)
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
@@ -14,7 +14,7 @@
 - [x] 2.9: Ink Viscosity Excursion Scenario
 - [x] 2.10: Registration Drift Scenario
 - [x] 2.11: Cold Start Energy Spike Scenario
-- [ ] 2.12: Coder Consumable Depletion Scenario
+- [x] 2.12: Coder Consumable Depletion Scenario
 - [ ] 2.13: Material Splice Scenario
 - [ ] 2.14: Ground Truth Event Log
 - [ ] 2.15: Environment Composite Model
@@ -330,3 +330,33 @@ Test classes:
 - Idle tracking resets: If the press enters Fault/Maintenance, idle tracking resets. If a short idle doesn't meet the threshold, tracking resets when the press goes to Running. New idle periods restart the timer.
 
 **Test results:** 24/24 unit tests pass. No regressions (1282 total unit tests pass).
+
+### Task 2.12 (Complete)
+
+**Files created/modified:**
+- `src/factory_simulator/scenarios/coder_depletion.py` — CoderDepletion scenario class, 215 lines
+- `tests/unit/test_scenarios/test_coder_depletion.py` — 26 unit tests, all pass
+- `src/factory_simulator/generators/coder.py` — Added `_quality_overrides` dict, updated `_make_sv` to use it, fixed G5 gutter_fault probability
+
+**What was built:**
+- `CoderDepletion` class inheriting from `Scenario` base
+- Internal `_Phase` enum: MONITORING (watching ink level), DEPLETED (coder faulted, waiting for recovery)
+- Configurable params: `low_ink_threshold` (default 10.0%), `empty_threshold` (default 2.0%), `recovery_duration_range` (default [300, 1800] s = 5-30 min), `refill_level` (default 100.0%)
+
+**Sequence (PRD 5.12):**
+1. On activation: disables auto-refill on `DepletionModel._refill_threshold` (sets to None) so the scenario controls refill timing. Enters MONITORING phase.
+2. MONITORING: each tick checks `DepletionModel.value`. At ≤10%: sets `_quality_overrides["ink_level"] = "uncertain"` on coder generator. At ≤2%: forces coder to Fault state, enters DEPLETED phase.
+3. DEPLETED: temporarily sets Fault→Ready transition `min_duration` to 1e9 (prevents timer-based auto-recovery during scenario). Waits for configured recovery_duration.
+4. On complete: refills ink to 100% via `DepletionModel.refill()`, clears quality override, restores auto-refill threshold, restores Fault→Ready transition parameters, forces coder to Ready state.
+
+**Key design decisions:**
+- Quality override via `_quality_overrides` dict on `CoderGenerator`: the coder's `_make_sv` checks this dict before defaulting to "good". This allows scenarios to change quality without modifying generator logic. Clean pattern that could be reused by other scenarios.
+- Auto-refill suppression: config has `refill_threshold: 5.0`, which would auto-refill before reaching the 2% fault threshold. The scenario saves and sets `_refill_threshold = None` during its active period, then restores on completion.
+- Fault state locking: the coder state machine has a Fault→Ready timer (60-300s) that could fire before the scenario's recovery duration. The scenario temporarily sets this timer's `min_duration` to 1e9 and `max_duration` to 0.0 (disabling forced exit), then restores on completion.
+- Reactive monitoring pattern: like ColdStart, this scenario watches model values rather than executing on a fixed timeline. The "duration" is indeterminate for MONITORING plus a fixed recovery_duration.
+
+**G5 fix (gutter_fault probability):**
+- Changed probability from `0.00001` (MTBF ≈ 28 hours) to `0.000000556` (MTBF ≈ 500 hours = 1,800,000 seconds)
+- The previous rate was ~18x too high. New rate matches PRD 5.12 requirement of MTBF 500+ hours.
+
+**Test results:** 26/26 unit tests pass. No regressions (1308 total unit tests pass).

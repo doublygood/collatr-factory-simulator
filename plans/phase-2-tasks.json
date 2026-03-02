@@ -120,7 +120,7 @@
       "test_files": ["tests/unit/test_scenarios/test_coder_depletion.py"],
       "prd_refs": ["prd/05-scenario-system.md (5.12)"],
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "2.13",
