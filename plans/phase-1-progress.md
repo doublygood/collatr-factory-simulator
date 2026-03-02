@@ -1,9 +1,9 @@
 # Phase 1: Core Engine, Modbus, and Test Infrastructure - Progress
 
-## Status: Not Started
+## Status: In Progress
 
 ## Tasks
-- [ ] 1.1: Configuration Models
+- [x] 1.1: Configuration Models
 - [ ] 1.2: Simulation Clock
 - [ ] 1.3: Signal Value Store
 - [ ] 1.4: Signal Model Base + Noise Pipeline
@@ -26,4 +26,33 @@
 
 ## Notes
 
-_(Updated by the implementation agent as work progresses)_
+### Task 1.1: Configuration Models (completed)
+
+**Files created:**
+- `src/factory_simulator/config.py` -- Pydantic v2 models for full config schema
+- `config/factory.yaml` -- Default packaging profile with all 47 signals
+- `tests/unit/test_config.py` -- 69 tests covering validation, loading, env overrides
+
+**Pydantic models implemented:**
+- `FactoryInfo`, `SimulationConfig`, `ErrorInjectionConfig`
+- `ModbusProtocolConfig`, `OpcuaProtocolConfig`, `MqttProtocolConfig`, `ProtocolsConfig`
+- `SignalConfig` (extra="allow" for model-specific params), `EquipmentConfig` (extra="allow" for equipment-specific fields)
+- 9 scenario config models (one per PRD scenario type): `JobChangoverConfig`, `WebBreakConfig`, `DryerDriftConfig`, `BearingWearConfig`, `InkViscosityExcursionConfig`, `RegistrationDriftConfig`, `UnplannedStopConfig`, `ShiftChangeConfig`, `ColdStartSpikeConfig`
+- `ShiftOperatorConfig`, `ShiftsConfig`
+- `FactoryConfig` (top-level root model)
+
+**Key design decisions:**
+- `SignalConfig` and `EquipmentConfig` use `extra="allow"` for forward compatibility. Equipment-specific fields (target_speed, schedule_offset_hours) and signal-specific extra fields are captured via `model_extra`. Model-specific parameters go in `params` dict.
+- Environment variable overrides applied after YAML loading via `_apply_env_overrides()`. Maps SIM_* and MODBUS_*/OPCUA_*/MQTT_* env vars to nested config paths per PRD Section 6.4.
+- Range pair validation: all [min, max] fields validated for correct ordering.
+- Noise config: sigma >= 0, Student-t df >= 3, AR(1) phi in (-1, 1).
+- Installed `types-PyYAML` for mypy strict mode compatibility.
+- Installed package in editable mode (`pip install -e .`).
+
+**Validation coverage:**
+- Positive time_scale and tick_interval_ms
+- Valid port numbers (1-65535)
+- Valid byte_order (ABCD/CDAB), security_mode, QoS, buffer_overflow
+- Probability fields in [0, 1]
+- Range pair min <= max for all scenario configs
+- All 47 signals present with correct register addresses per Appendix A

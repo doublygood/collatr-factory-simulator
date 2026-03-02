@@ -10,7 +10,7 @@
       "test_files": ["tests/unit/test_config.py"],
       "prd_refs": ["prd/06-configuration.md"],
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "1.2",

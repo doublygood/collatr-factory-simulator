@@ -1,0 +1,834 @@
+# Collatr Factory Simulator Configuration
+# Profile: Packaging and Printing (47 signals, 7 equipment groups)
+# PRD Reference: Section 6.2
+
+factory:
+  name: "Demo Packaging Factory"
+  site_id: "demo"
+  timezone: "Europe/London"
+
+simulation:
+  time_scale: 1.0          # 1.0 = real-time, 10.0 = 10x speed
+  random_seed: null         # null = time-based, integer = deterministic
+  tick_interval_ms: 100     # Internal engine tick rate (ms)
+  start_time: null          # null = now, ISO8601 = specific start
+  log_level: "info"
+
+protocols:
+  modbus:
+    enabled: true
+    bind_address: "0.0.0.0"
+    port: 502
+    unit_id: 1
+    byte_order: "ABCD"
+    error_injection:
+      exception_probability: 0.001
+      timeout_probability: 0.0005
+      response_delay_ms: [0, 50]
+
+  opcua:
+    enabled: true
+    bind_address: "0.0.0.0"
+    port: 4840
+    server_name: "Collatr Factory Simulator"
+    namespace_uri: "urn:collatr:factory-simulator"
+    security_mode: "None"
+    anonymous_access: true
+    users:
+      - username: "collatr"
+        password: "collatr123"
+
+  mqtt:
+    enabled: true
+    broker_host: "mqtt-broker"
+    broker_port: 1883
+    topic_prefix: "collatr/factory"
+    sparkplug_b: false
+    retain: true
+    client_id: "factory-simulator"
+    username: null
+    password: null
+    qos_default: 1
+    buffer_limit: 1000
+    buffer_overflow: "drop_oldest"
+    lwt_topic: "collatr/factory/status"
+    lwt_payload: '{"status": "offline"}'
+
+# ---------------------------------------------------------------------------
+# Equipment: Packaging Profile (47 signals across 7 groups)
+# PRD Reference: Section 2.2-2.9, Appendix A (register map)
+# ---------------------------------------------------------------------------
+
+equipment:
+
+  # --- Flexographic Press: 21 signals (PRD 2.2) ---
+  press:
+    enabled: true
+    type: "flexographic_press"
+    target_speed: 200           # m/min normal operating speed
+    speed_range: [50, 400]
+    signals:
+      line_speed:
+        model: "ramp"
+        noise_sigma: 0.5
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 400.0
+        units: "m/min"
+        modbus_hr: [100, 101]
+        modbus_type: "float32"
+        opcua_node: "PackagingLine.Press1.LineSpeed"
+        opcua_type: "Double"
+        params:
+          ramp_duration_s: 180    # 3 min ramp to target speed
+
+      web_tension:
+        model: "correlated_follower"
+        parent: "press.line_speed"
+        transform: "linear"
+        noise_sigma: 5.0
+        sample_rate_ms: 500
+        min_clamp: 0.0
+        max_clamp: 500.0
+        units: "N"
+        modbus_hr: [102, 103]
+        modbus_type: "float32"
+        opcua_node: "PackagingLine.Press1.WebTension"
+        opcua_type: "Double"
+        params:
+          base: 80.0
+          factor: 0.5
+
+      registration_error_x:
+        model: "random_walk"
+        noise_sigma: 0.02
+        sample_rate_ms: 500
+        min_clamp: -0.5
+        max_clamp: 0.5
+        units: "mm"
+        opcua_node: "PackagingLine.Press1.Registration.ErrorX"
+        opcua_type: "Double"
+        params:
+          center: 0.0
+          drift_rate: 0.01
+          reversion_rate: 0.1
+
+      registration_error_y:
+        model: "random_walk"
+        noise_sigma: 0.02
+        sample_rate_ms: 500
+        min_clamp: -0.5
+        max_clamp: 0.5
+        units: "mm"
+        opcua_node: "PackagingLine.Press1.Registration.ErrorY"
+        opcua_type: "Double"
+        params:
+          center: 0.0
+          drift_rate: 0.01
+          reversion_rate: 0.1
+
+      ink_viscosity:
+        model: "steady_state"
+        noise_sigma: 1.5
+        sample_rate_ms: 30000
+        min_clamp: 15.0
+        max_clamp: 60.0
+        units: "seconds"
+        modbus_hr: [110, 111]
+        modbus_type: "float32"
+        params:
+          target: 28.0
+
+      ink_temperature:
+        model: "steady_state"
+        noise_sigma: 0.5
+        sample_rate_ms: 10000
+        min_clamp: 18.0
+        max_clamp: 35.0
+        units: "C"
+        modbus_hr: [112, 113]
+        modbus_type: "float32"
+        params:
+          target: 25.0
+
+      dryer_temp_zone_1:
+        model: "first_order_lag"
+        noise_sigma: 0.8
+        noise_type: "ar1"
+        noise_phi: 0.7
+        sample_rate_ms: 5000
+        min_clamp: 20.0
+        max_clamp: 150.0
+        units: "C"
+        modbus_hr: [120, 121]
+        modbus_type: "float32"
+        modbus_ir: [0]
+        opcua_node: "PackagingLine.Press1.Dryer.Zone1.Temperature"
+        opcua_type: "Double"
+        params:
+          tau: 120.0              # 2-minute time constant
+          initial_value: 20.0
+
+      dryer_temp_zone_2:
+        model: "first_order_lag"
+        noise_sigma: 0.8
+        noise_type: "ar1"
+        noise_phi: 0.7
+        sample_rate_ms: 5000
+        min_clamp: 20.0
+        max_clamp: 150.0
+        units: "C"
+        modbus_hr: [122, 123]
+        modbus_type: "float32"
+        modbus_ir: [1]
+        opcua_node: "PackagingLine.Press1.Dryer.Zone2.Temperature"
+        opcua_type: "Double"
+        params:
+          tau: 120.0
+          initial_value: 20.0
+
+      dryer_temp_zone_3:
+        model: "first_order_lag"
+        noise_sigma: 0.8
+        noise_type: "ar1"
+        noise_phi: 0.7
+        sample_rate_ms: 5000
+        min_clamp: 20.0
+        max_clamp: 150.0
+        units: "C"
+        modbus_hr: [124, 125]
+        modbus_type: "float32"
+        modbus_ir: [2]
+        opcua_node: "PackagingLine.Press1.Dryer.Zone3.Temperature"
+        opcua_type: "Double"
+        params:
+          tau: 120.0
+          initial_value: 20.0
+
+      dryer_setpoint_zone_1:
+        model: "steady_state"
+        noise_sigma: 0.0
+        min_clamp: 40.0
+        max_clamp: 120.0
+        units: "C"
+        modbus_hr: [140, 141]
+        modbus_type: "float32"
+        modbus_writable: true
+        opcua_node: "PackagingLine.Press1.Dryer.Zone1.Setpoint"
+        opcua_type: "Double"
+        params:
+          target: 75.0
+
+      dryer_setpoint_zone_2:
+        model: "steady_state"
+        noise_sigma: 0.0
+        min_clamp: 40.0
+        max_clamp: 120.0
+        units: "C"
+        modbus_hr: [142, 143]
+        modbus_type: "float32"
+        modbus_writable: true
+        opcua_node: "PackagingLine.Press1.Dryer.Zone2.Setpoint"
+        opcua_type: "Double"
+        params:
+          target: 80.0
+
+      dryer_setpoint_zone_3:
+        model: "steady_state"
+        noise_sigma: 0.0
+        min_clamp: 40.0
+        max_clamp: 120.0
+        units: "C"
+        modbus_hr: [144, 145]
+        modbus_type: "float32"
+        modbus_writable: true
+        opcua_node: "PackagingLine.Press1.Dryer.Zone3.Setpoint"
+        opcua_type: "Double"
+        params:
+          target: 85.0
+
+      impression_count:
+        model: "counter"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 999999999.0
+        units: "count"
+        modbus_hr: [200, 201]
+        modbus_type: "uint32"
+        opcua_node: "PackagingLine.Press1.ImpressionCount"
+        opcua_type: "UInt32"
+        params:
+          rate: 1.0
+          rollover: 999999999
+
+      good_count:
+        model: "counter"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 999999999.0
+        units: "count"
+        modbus_hr: [202, 203]
+        modbus_type: "uint32"
+        opcua_node: "PackagingLine.Press1.GoodCount"
+        opcua_type: "UInt32"
+        params:
+          rate: 0.97
+          rollover: 999999999
+
+      waste_count:
+        model: "counter"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 99999.0
+        units: "count"
+        modbus_hr: [204, 205]
+        modbus_type: "uint32"
+        opcua_node: "PackagingLine.Press1.WasteCount"
+        opcua_type: "UInt32"
+        params:
+          rate: 0.03
+          rollover: 99999
+
+      machine_state:
+        model: "state_machine"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 5.0
+        units: "enum"
+        modbus_hr: [210]
+        modbus_type: "uint16"
+        opcua_node: "PackagingLine.Press1.State"
+        opcua_type: "UInt16"
+        params:
+          states: ["off", "setup", "running", "idle", "fault", "maintenance"]
+          initial_state: "idle"
+
+      main_drive_current:
+        model: "correlated_follower"
+        parent: "press.line_speed"
+        transform: "linear"
+        noise_sigma: 2.0
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 200.0
+        units: "A"
+        modbus_hr: [300, 301]
+        modbus_type: "float32"
+        opcua_node: "PackagingLine.Press1.MainDrive.Current"
+        opcua_type: "Double"
+        params:
+          base: 15.0
+          factor: 0.35
+
+      main_drive_speed:
+        model: "correlated_follower"
+        parent: "press.line_speed"
+        transform: "linear"
+        noise_sigma: 5.0
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 3000.0
+        units: "RPM"
+        modbus_hr: [302, 303]
+        modbus_type: "float32"
+        opcua_node: "PackagingLine.Press1.MainDrive.Speed"
+        opcua_type: "Double"
+        params:
+          base: 0.0
+          factor: 7.5
+
+      nip_pressure:
+        model: "steady_state"
+        noise_sigma: 0.2
+        sample_rate_ms: 5000
+        min_clamp: 0.0
+        max_clamp: 10.0
+        units: "bar"
+        modbus_hr: [310, 311]
+        modbus_type: "float32"
+        opcua_node: "PackagingLine.Press1.NipPressure"
+        opcua_type: "Double"
+        params:
+          target: 4.5
+
+      unwind_diameter:
+        model: "depletion"
+        noise_sigma: 1.0
+        sample_rate_ms: 10000
+        min_clamp: 50.0
+        max_clamp: 1500.0
+        units: "mm"
+        modbus_hr: [320, 321]
+        modbus_type: "float32"
+        opcua_node: "PackagingLine.Press1.Unwind.Diameter"
+        opcua_type: "Double"
+        params:
+          initial_value: 1200.0
+          consumption_rate: 0.1
+          refill_threshold: 100.0
+          refill_value: 1200.0
+
+      rewind_diameter:
+        model: "counter"
+        noise_sigma: 1.0
+        sample_rate_ms: 10000
+        min_clamp: 50.0
+        max_clamp: 1500.0
+        units: "mm"
+        modbus_hr: [322, 323]
+        modbus_type: "float32"
+        opcua_node: "PackagingLine.Press1.Rewind.Diameter"
+        opcua_type: "Double"
+        params:
+          rate: 0.1
+          initial_value: 76.0
+          rollover: 1500
+
+  # --- Laminator: 5 signals (PRD 2.3) ---
+  laminator:
+    enabled: true
+    type: "solvent_free_laminator"
+    signals:
+      nip_temp:
+        model: "first_order_lag"
+        noise_sigma: 0.5
+        sample_rate_ms: 5000
+        min_clamp: 20.0
+        max_clamp: 100.0
+        units: "C"
+        modbus_hr: [400, 401]
+        modbus_type: "float32"
+        modbus_ir: [4]
+        opcua_node: "PackagingLine.Laminator1.NipTemperature"
+        opcua_type: "Double"
+        params:
+          tau: 90.0
+          initial_value: 20.0
+
+      nip_pressure:
+        model: "steady_state"
+        noise_sigma: 0.15
+        sample_rate_ms: 5000
+        min_clamp: 1.0
+        max_clamp: 8.0
+        units: "bar"
+        modbus_hr: [402, 403]
+        modbus_type: "float32"
+        opcua_node: "PackagingLine.Laminator1.NipPressure"
+        opcua_type: "Double"
+        params:
+          target: 4.0
+
+      tunnel_temp:
+        model: "first_order_lag"
+        noise_sigma: 0.8
+        sample_rate_ms: 5000
+        min_clamp: 20.0
+        max_clamp: 120.0
+        units: "C"
+        modbus_hr: [404, 405]
+        modbus_type: "float32"
+        modbus_ir: [5]
+        opcua_node: "PackagingLine.Laminator1.TunnelTemperature"
+        opcua_type: "Double"
+        params:
+          tau: 180.0
+          initial_value: 20.0
+
+      web_speed:
+        model: "correlated_follower"
+        parent: "press.line_speed"
+        transform: "linear"
+        noise_sigma: 0.3
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 400.0
+        units: "m/min"
+        modbus_hr: [406, 407]
+        modbus_type: "float32"
+        opcua_node: "PackagingLine.Laminator1.WebSpeed"
+        opcua_type: "Double"
+        params:
+          base: 0.0
+          factor: 1.0
+
+      adhesive_weight:
+        model: "steady_state"
+        noise_sigma: 0.15
+        sample_rate_ms: 30000
+        min_clamp: 1.0
+        max_clamp: 5.0
+        units: "g/m2"
+        modbus_hr: [408, 409]
+        modbus_type: "float32"
+        opcua_node: "PackagingLine.Laminator1.AdhesiveWeight"
+        opcua_type: "Double"
+        params:
+          target: 2.5
+
+  # --- Slitter: 3 signals (PRD 2.4) ---
+  slitter:
+    enabled: true
+    type: "slitter_rewinder"
+    schedule_offset_hours: 2.0
+    run_duration_hours: 4.0
+    signals:
+      speed:
+        model: "ramp"
+        noise_sigma: 1.0
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 800.0
+        units: "m/min"
+        modbus_hr: [500, 501]
+        modbus_type: "float32"
+        opcua_node: "PackagingLine.Slitter1.Speed"
+        opcua_type: "Double"
+        params:
+          ramp_duration_s: 60
+
+      web_tension:
+        model: "correlated_follower"
+        parent: "slitter.speed"
+        transform: "linear"
+        noise_sigma: 3.0
+        sample_rate_ms: 500
+        min_clamp: 0.0
+        max_clamp: 200.0
+        units: "N"
+        modbus_hr: [502, 503]
+        modbus_type: "float32"
+        opcua_node: "PackagingLine.Slitter1.WebTension"
+        opcua_type: "Double"
+        params:
+          base: 20.0
+          factor: 0.15
+
+      reel_count:
+        model: "counter"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 9999.0
+        units: "count"
+        modbus_hr: [510, 511]
+        modbus_type: "uint32"
+        opcua_node: "PackagingLine.Slitter1.ReelCount"
+        opcua_type: "UInt32"
+        params:
+          rate: 0.005
+          rollover: 9999
+
+  # --- Coding and Marking: 11 signals (PRD 2.5) ---
+  coder:
+    enabled: true
+    type: "cij_printer"
+    signals:
+      state:
+        model: "state_machine"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 4.0
+        units: "enum"
+        mqtt_topic: "coder/state"
+        params:
+          states: ["off", "ready", "printing", "fault", "standby"]
+          initial_state: "ready"
+
+      prints_total:
+        model: "counter"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 999999999.0
+        units: "count"
+        mqtt_topic: "coder/prints_total"
+        params:
+          rate: 1.0
+          rollover: 999999999
+
+      ink_level:
+        model: "depletion"
+        sample_rate_ms: 60000
+        min_clamp: 0.0
+        max_clamp: 100.0
+        units: "%"
+        mqtt_topic: "coder/ink_level"
+        params:
+          initial_value: 100.0
+          consumption_rate: 0.005
+          refill_threshold: 5.0
+          refill_value: 100.0
+
+      printhead_temp:
+        model: "steady_state"
+        noise_sigma: 2.0
+        sample_rate_ms: 30000
+        min_clamp: 25.0
+        max_clamp: 50.0
+        units: "C"
+        mqtt_topic: "coder/printhead_temp"
+        params:
+          target: 35.0
+
+      ink_pump_speed:
+        model: "correlated_follower"
+        parent: "press.line_speed"
+        transform: "linear"
+        noise_sigma: 10.0
+        sample_rate_ms: 5000
+        min_clamp: 0.0
+        max_clamp: 500.0
+        units: "RPM"
+        mqtt_topic: "coder/ink_pump_speed"
+        params:
+          base: 50.0
+          factor: 1.0
+
+      ink_pressure:
+        model: "steady_state"
+        noise_sigma: 10.0
+        sample_rate_ms: 5000
+        min_clamp: 0.0
+        max_clamp: 900.0
+        units: "mbar"
+        mqtt_topic: "coder/ink_pressure"
+        params:
+          target: 835.0
+
+      ink_viscosity_actual:
+        model: "steady_state"
+        noise_sigma: 0.5
+        sample_rate_ms: 30000
+        min_clamp: 2.0
+        max_clamp: 15.0
+        units: "cP"
+        mqtt_topic: "coder/ink_viscosity_actual"
+        params:
+          target: 8.0
+
+      supply_voltage:
+        model: "steady_state"
+        noise_sigma: 0.2
+        sample_rate_ms: 60000
+        min_clamp: 22.0
+        max_clamp: 26.0
+        units: "V"
+        mqtt_topic: "coder/supply_voltage"
+        params:
+          target: 24.0
+
+      ink_consumption_ml:
+        model: "counter"
+        sample_rate_ms: 60000
+        min_clamp: 0.0
+        max_clamp: 999999.0
+        units: "ml"
+        mqtt_topic: "coder/ink_consumption_ml"
+        params:
+          rate: 0.01
+          rollover: 999999
+
+      nozzle_health:
+        model: "depletion"
+        sample_rate_ms: 60000
+        min_clamp: 0.0
+        max_clamp: 100.0
+        units: "%"
+        mqtt_topic: "coder/nozzle_health"
+        params:
+          initial_value: 100.0
+          consumption_rate: 0.001
+          refill_threshold: 70.0
+          refill_value: 100.0
+
+      gutter_fault:
+        model: "state_machine"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 1.0
+        units: "bool"
+        mqtt_topic: "coder/gutter_fault"
+        params:
+          states: ["clear", "fault"]
+          initial_state: "clear"
+
+  # --- Environmental Sensors: 2 signals (PRD 2.7) ---
+  environment:
+    enabled: true
+    type: "iolink_sensor"
+    signals:
+      ambient_temp:
+        model: "sinusoidal"
+        noise_sigma: 0.3
+        sample_rate_ms: 60000
+        min_clamp: 15.0
+        max_clamp: 35.0
+        units: "C"
+        mqtt_topic: "environment/ambient_temp"
+        params:
+          center: 22.0
+          amplitude: 3.0
+          period: 86400.0         # 24-hour cycle
+
+      ambient_humidity:
+        model: "sinusoidal"
+        noise_sigma: 1.0
+        sample_rate_ms: 60000
+        min_clamp: 30.0
+        max_clamp: 80.0
+        units: "%RH"
+        mqtt_topic: "environment/ambient_humidity"
+        params:
+          center: 55.0
+          amplitude: 10.0
+          period: 86400.0
+          phase: 3.14159           # Inversely correlated with temperature
+
+  # --- Energy Monitoring: 2 signals (PRD 2.8) ---
+  energy:
+    enabled: true
+    type: "power_meter"
+    signals:
+      line_power:
+        model: "correlated_follower"
+        parent: "press.line_speed"
+        transform: "linear"
+        noise_sigma: 2.0
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 200.0
+        units: "kW"
+        modbus_hr: [600, 601]
+        modbus_type: "float32"
+        modbus_ir: [10, 11]
+        opcua_node: "PackagingLine.Energy.LinePower"
+        opcua_type: "Double"
+        params:
+          base: 10.0              # Base load (idle)
+          factor: 0.5
+
+      cumulative_kwh:
+        model: "counter"
+        sample_rate_ms: 60000
+        min_clamp: 0.0
+        max_clamp: 999999.0
+        units: "kWh"
+        modbus_hr: [602, 603]
+        modbus_type: "float32"
+        opcua_node: "PackagingLine.Energy.CumulativeKwh"
+        opcua_type: "Double"
+        params:
+          rate: 0.001
+          rollover: 999999
+
+  # --- Vibration Monitoring: 3 signals (PRD 2.9) ---
+  vibration:
+    enabled: true
+    type: "wireless_vibration"
+    signals:
+      main_drive_x:
+        model: "steady_state"
+        noise_sigma: 0.5
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 50.0
+        units: "mm/s"
+        mqtt_topic: "vibration/main_drive_x"
+        params:
+          target: 4.0
+
+      main_drive_y:
+        model: "steady_state"
+        noise_sigma: 0.5
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 50.0
+        units: "mm/s"
+        mqtt_topic: "vibration/main_drive_y"
+        params:
+          target: 3.5
+
+      main_drive_z:
+        model: "steady_state"
+        noise_sigma: 0.8
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 50.0
+        units: "mm/s"
+        mqtt_topic: "vibration/main_drive_z"
+        params:
+          target: 5.0
+
+# ---------------------------------------------------------------------------
+# Scenarios (PRD Section 5)
+# ---------------------------------------------------------------------------
+
+scenarios:
+  job_changeover:
+    enabled: true
+    frequency_per_shift: [3, 6]
+    duration_seconds: [600, 1800]
+    speed_change_probability: 0.3
+    counter_reset_probability: 0.7
+
+  web_break:
+    enabled: true
+    frequency_per_week: [1, 2]
+    recovery_seconds: [900, 3600]
+
+  dryer_drift:
+    enabled: true
+    frequency_per_shift: [1, 2]
+    max_drift_c: [5.0, 15.0]
+    duration_seconds: [1800, 7200]
+
+  bearing_wear:
+    enabled: true
+    start_after_hours: 48
+    duration_hours: 336
+    culminate_in_failure: false
+
+  ink_viscosity_excursion:
+    enabled: true
+    frequency_per_shift: [2, 3]
+    duration_seconds: [300, 1800]
+
+  registration_drift:
+    enabled: true
+    frequency_per_shift: [1, 3]
+    duration_seconds: [120, 600]
+
+  unplanned_stop:
+    enabled: true
+    frequency_per_shift: [1, 2]
+    duration_seconds: [300, 3600]
+
+  shift_change:
+    enabled: true
+    times: ["06:00", "14:00", "22:00"]
+    changeover_seconds: [300, 900]
+    night_shift_speed_factor: 0.9
+    weekend_enabled: false
+
+  cold_start_spike:
+    enabled: true
+    idle_threshold_minutes: 30
+    spike_duration_seconds: [2.0, 5.0]
+    spike_magnitude: [1.5, 2.0]
+
+# ---------------------------------------------------------------------------
+# Shifts (PRD Section 6.2)
+# ---------------------------------------------------------------------------
+
+shifts:
+  pattern: "3x8"
+  day_start: "06:00"
+  operators:
+    morning:
+      speed_bias: 1.0
+      waste_rate_bias: 1.0
+    afternoon:
+      speed_bias: 0.95
+      waste_rate_bias: 1.05
+    night:
+      speed_bias: 0.90
+      waste_rate_bias: 1.10
