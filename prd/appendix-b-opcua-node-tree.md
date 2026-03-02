@@ -98,7 +98,7 @@ Root (i=84)
         +-- CumulativeKwh         (ns=2;s=FoodBevLine.Energy.CumulativeKwh)            Double, kWh
 ```
 
-> `FoodBevLine` sits as a sibling of `PackagingLine` under the `Objects` folder. Both root nodes are always present in the address space. Only the active profile's nodes publish changing values; the inactive profile's nodes hold their last value with `quality = bad` (StatusCode `BadNotConnected`).
+> `FoodBevLine` sits as a sibling of `PackagingLine` under the `Objects` folder. Both root nodes are always present in the address space. Only the active profile's nodes publish changing values; the inactive profile's nodes report StatusCode.BadNotReadable with AccessLevel set to 0 (see Section 3.2.1).
 
 ## OPC-UA Attribute Conventions
 
@@ -111,6 +111,6 @@ All leaf nodes across both profiles have the following OPC-UA attributes:
 
 **State enum nodes** (`*.State`) use `UInt16` data type with `EnumStrings` property listing the valid state names. See the equipment sections in [02-simulated-factory-layout.md](02-simulated-factory-layout.md) and [02b-factory-layout-food-and-beverage.md](02b-factory-layout-food-and-beverage.md) for enum definitions.
 
-**Counter nodes** (`PacksProduced`, `RejectCount`, `OverweightCount`, `UnderweightCount`, `MetalDetectTrips`, `RejectTotal`) use `UInt32` data type and increment monotonically. They reset to 0 on shift change or manual reset via a `ResetCounters` method on the parent equipment node.
+**Counter nodes** (`PacksProduced`, `RejectCount`, `OverweightCount`, `UnderweightCount`, `MetalDetectTrips`, `RejectTotal`) use `UInt32` data type and increment monotonically. They reset to 0 on shift change or via configuration. (OPC-UA method nodes such as `ResetCounters` are deferred to post-MVP.)
 
 **String nodes** (`BatchId`) use OPC-UA `String` data type. Value changes are event-driven (published when a new batch starts).

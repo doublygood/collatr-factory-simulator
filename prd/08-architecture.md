@@ -146,7 +146,7 @@ async def main():
 
 In collapsed mode, a single Modbus server and single OPC-UA server handle all requests. In realistic mode, the topology manager spawns separate servers per controller. See [Section 3a: Network Topology](03a-network-topology.md) for the full controller layout and port mapping.
 
-The signal store uses no locks. The engine is the sole writer. Protocol adapters are readers. In Python's asyncio single-threaded model, there are no race conditions. Values are eventually consistent within one tick (100ms).
+The signal store uses no locks. The engine is the sole writer. Protocol adapters are readers. In Python's asyncio single-threaded model, there are no race conditions. The engine updates all signals for one tick before yielding (no `await` between individual signal updates within a tick). This makes each tick's updates atomic from the reader's perspective: a Modbus read handler will never see a mix of old and new tick values.
 
 ## 8.4 Plugin Architecture
 
@@ -186,8 +186,16 @@ class EquipmentGenerator(ABC):
         pass
     
     @abstractmethod
-    def get_protocol_mappings(self) -> dict:
-        """Return Modbus/OPC-UA/MQTT mappings for each signal."""
+    def get_protocol_mappings(self) -> dict[str, "ProtocolMapping"]:
+        """Return Modbus/OPC-UA/MQTT mappings for each signal.
+        
+        Returns a dict keyed by signal_id. Each ProtocolMapping
+        contains optional modbus, opcua, and mqtt fields:
+        
+            modbus: {address: int, type: str, byte_order: str}
+            opcua:  {node_id: str, data_type: str}
+            mqtt:   {topic: str, qos: int, retain: bool}
+        """
         pass
 ```
 
@@ -207,12 +215,10 @@ No changes to protocol adapters or the simulation engine are needed.
 The simulator exposes an HTTP endpoint on port 8080:
 
 ```
-GET /health -> 200 OK {
-  "status": "running",
-  "profile": "packaging",
-  "sim_time": "...",
-  "signals": 47
-}
+GET /health -> 200 OK or 503 Service Unavailable
+  200: {"status": "running", "profile": "packaging", "sim_time": "...", "signals": 47, "modbus": "up", "opcua": "up", "mqtt": "up"}
+  200: {"status": "degraded", "profile": "packaging", "sim_time": "...", "signals": 47, "modbus": "up", "opcua": "down", "mqtt": "up"}
+  503: {"status": "down", "error": "engine not running"}
 GET /metrics -> Prometheus metrics (optional)
 GET /status -> Detailed status of all signals and their current values
 ```

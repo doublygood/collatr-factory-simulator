@@ -123,7 +123,7 @@ Sequence:
 1. `press.machine_state` transitions to Fault (4).
 2. `press.line_speed` drops to 0.
 3. Coil 1 (`fault_active`) sets to true.
-4. A fault code is written to holding register 210 as a secondary uint16 value. The simulator maintains a set of realistic fault codes:
+4. A fault code is written to holding register 211 as a secondary uint16 value. The simulator maintains a set of realistic fault codes:
 
 | Code | Description |
 |------|-------------|
@@ -314,10 +314,10 @@ Sequence:
 **Duration:** 5-30 minutes.
 
 Sequence:
-1. `sealer.seal_temp` drops below the minimum threshold (e.g. 170 C).
-2. `sealer.seal_strength` decreases proportionally.
-3. `sealer.gas_leak_rate` increases as seal quality degrades.
-4. `sealer.reject_count` spikes.
+1. `sealer.seal_temp` drops below the minimum threshold (e.g. 170 C) due to heater element degradation or controller fault.
+2. `sealer.seal_pressure` decreases as the weakened seal bar fails to compress properly.
+3. `sealer.vacuum_level` degrades as poor seal geometry allows gas leakage.
+4. `sealer.reject_count` spikes as the quality system detects failed seals.
 5. After detection, the line stops for seal bar replacement or adjustment.
 
 ### 5.14.5 Chiller Door Alarm

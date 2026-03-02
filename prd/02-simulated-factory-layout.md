@@ -96,6 +96,8 @@ The slitter cuts wide rolls into narrow reels. It produces 3 signals.
 
 The slitter operates independently from the press. It runs faster (up to 800 m/min vs 400 m/min for the press). It processes rolls that the press produced earlier. Its schedule is offset from press production by hours or shifts.
 
+**Scheduling.** The slitter starts at a configurable time offset from shift start (default: 2 hours). It runs for a configurable duration (default: 4 hours per shift), then stops. This models a real packaging plant where the slitter processes accumulated rolls from the press rather than running continuously. Configuration: `slitter.schedule_offset_hours` (default 2.0), `slitter.run_duration_hours` (default 4.0). During its off period, `slitter.speed` is 0 and `slitter.reel_count` does not increment.
+
 ## 2.5 Equipment: Coding and Marking
 
 The coder is a continuous inkjet printer (modeled on industrial AX-series CIJ patterns). It prints date codes, batch numbers, and barcodes onto the packaging material. It produces 11 signals. The private reference data contains extensive telemetry from industrial digital presses with pneumatic ink systems, pump speeds, tank levels, and head temperatures that inform the signal set for this equipment group.

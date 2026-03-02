@@ -118,7 +118,7 @@ Where:
 - `A` = initial amplitude, derived from step size and damping ratio.
 - `t` = time since the last setpoint change.
 
-The implementation resets `t` to zero on each setpoint change. The amplitude `A` is recomputed as the difference between the new setpoint and the current value at the moment of change.
+The implementation resets `t` to zero on each setpoint change. The amplitude `A` is recomputed as the difference between the new setpoint and the current value at the moment of change. If a second setpoint change occurs before the first transient settles, the current transient is abandoned. A new transient starts from the current value toward the new setpoint. Transients do not stack additively.
 
 Default `damping_ratio` = 1.0 (critically damped). At this value, the model reduces to the existing first-order lag with no oscillation. Typical industrial PID tuning produces a damping ratio of 0.5 to 0.8. Lower values produce more overshoot and longer ringing.
 
@@ -142,6 +142,8 @@ An optional step quantisation layer simulates operator behaviour during manual s
 2. At each step boundary, the output jumps to the next step value.
 3. Each jump triggers a small overshoot (configurable, default 3% of step size) that decays exponentially over 5-10 seconds.
 4. The dwell time at each step is drawn from a uniform distribution (configurable, default 15-45 seconds).
+
+The total ramp duration (`ramp_up_seconds`) is a hard cap. If the sum of step dwells would exceed it, the remaining steps are compressed proportionally to fit. This models real press startups where the operator targets a specific speed within a known window regardless of how many intermediate adjustments they make.
 
 This produces the jerky, stepped acceleration that a real press operator creates when manually ramping speed. The step count, overshoot magnitude, and dwell time are configurable per equipment type. Set `steps=1` to disable quantisation and produce a smooth ramp.
 
@@ -223,7 +225,7 @@ lag:
   speed_signal: "press.line_speed"
 ```
 
-When mode is "transport", the lag recalculates each tick based on the current speed. At zero speed, no material transport occurs. The model freezes the downstream signal at its last value until the upstream speed resumes.
+When mode is "transport", the lag recalculates each tick based on the current speed. The implementation uses a ring buffer sized at 2x the maximum lag at minimum nonzero speed. At 50 m/min minimum speed with 5 m distance, the maximum lag is 6 seconds (60 ticks at 100ms). The ring buffer holds 120 entries. At zero speed, no material transport occurs. The model freezes the downstream signal at its last value. When speed resumes, the buffer drains normally from the frozen point. The ring buffer size is computed once at startup from the transport distance and the equipment's minimum operating speed.
 
 Key transport distances for the packaging line:
 
@@ -549,6 +551,8 @@ The correlation matrix R is configurable per group. Set all off-diagonal entries
 
 This order preserves the correlation structure. Scaling after correlation is correct because scaling is a diagonal transformation. It changes covariance magnitudes but does not change correlation coefficients. Reversing steps 2 and 3 would distort the correlations whenever signals have different sigma values.
 
+**Known approximation: Cholesky with non-Gaussian marginals.** The Cholesky pipeline generates correlated Gaussian samples. For signals configured with Student-t noise (e.g. vibration axes), the pipeline produces correlated Gaussian noise scaled by Student-t sigma, not true correlated Student-t random variables. Generating exact correlated Student-t samples requires a Gaussian copula transform (generate correlated Gaussians, map through the Gaussian CDF to uniform, then invert through the Student-t CDF). At the correlations specified in this PRD (0.15 to 0.2) and typical df values (5 to 8), the practical difference between the Cholesky approximation and the exact copula approach is negligible. The approximation is acceptable for all stated use cases (demos, integration testing, evaluation benchmarking). A Gaussian copula implementation could be added post-MVP if stricter statistical fidelity is needed.
+
 ### 4.3.2 Time-Varying Covariance
 
 The gain parameter `k` in a correlated follower (`child = base + k * parent + noise`) is not constant in the real world. Load changes. Bearings warm up. Mechanical wear shifts friction coefficients. The relationship between motor current and line speed drifts over hours and days. A fixed linear transform produces scatter plots that are too tight and too stable.
@@ -610,7 +614,9 @@ The F&B profile (65 signals) uses the same signal model types as the packaging p
 
 **Multi-zone thermal control.** The oven uses three independent temperature zones. Each zone tracks its setpoint via `first_order_lag` with a time constant of 120-300 seconds. Adjacent zones have thermal coupling: a drift in zone 1 nudges zone 2. The coupling factor is configurable (default 0.05).
 
-**Product core temperature.** The `oven.product_core_temp` signal uses the `thermal_diffusion` model (Section 4.2.10) rather than `first_order_lag`. Product core temperature follows an S-curve as heat penetrates from the surface inward. The model resets to `T_initial` each time a new product enters the oven (driven by belt speed and oven length). This is the single most important signal on a food production line. BRC auditors check it first.
+**Per-item signals.** The `filler.fill_weight` signal generates one value per simulated item arrival rather than on every engine tick. The item arrival rate is derived from `filler.line_speed` (packs per minute). On each tick, the engine checks whether a new item has arrived since the last fill_weight update. If so, it draws a new value from a Gaussian distribution centred on the target weight. Between items, the signal store holds the last fill_weight value. This models how a real checkweigher works: it produces one reading per pack, not a continuous stream. At 120 packs per minute, fill_weight updates approximately every 500ms. At 60 packs per minute, every 1000ms.
+
+**Product core temperature.** The `oven.product_core_temp` signal uses the `thermal_diffusion` model (Section 4.2.10) rather than `first_order_lag`. Product core temperature follows an S-curve as heat penetrates from the surface inward. The model resets to `T_initial` each time a new product enters the oven. Product dwell time is computed from belt speed and oven tunnel length: `dwell_seconds = tunnel_length_m / (belt_speed_m_per_min / 60)`. The tunnel length is configurable per equipment (default: 12.0 m). At belt speed 2 m/min, dwell time is 360 seconds. At 0.5 m/min, 1440 seconds. Both are realistic for a UK chilled ready meal multi-zone tunnel oven. This is the single most important signal on a food production line. BRC auditors check it first.
 
 **Fill weight distribution.** The filler produces a Gaussian distribution of fill weights around the target (e.g. 350g +/- 3g). The `steady_state` model drives each fill event. When the mean drifts from target, reject rate increases. This is a new application of the steady_state model at the event level rather than the continuous level.
 

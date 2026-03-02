@@ -60,6 +60,8 @@ protocols:
     qos_default: 1
     buffer_limit: 1000      # Max buffered messages during connection loss
     buffer_overflow: "drop_oldest"  # drop_oldest or drop_newest
+    lwt_topic: "collatr/factory/status"     # Last Will and Testament
+    lwt_payload: "{\"status\": \"offline\"}" # Published by broker on disconnect
 
 equipment:
   press:
@@ -214,6 +216,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    # Mosquitto persists retained messages to /mosquitto/data by default.
+    # Add a volume mount for persistence across container restarts:
+    # - mqtt-data:/mosquitto/data
 
   factory-simulator:
     build:

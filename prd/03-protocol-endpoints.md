@@ -7,6 +7,7 @@
 ## 3.1 Modbus TCP
 
 **Server address:** `0.0.0.0:502` (configurable)
+**Idle timeout:** 60 seconds (configurable). Connections with no Modbus transactions for longer than the idle timeout are closed by the server. Real PLCs (S7-1200, S7-1500) drop idle Modbus TCP connections after 30-120 seconds.
 **Unit ID:** 1 (configurable, additional unit IDs for multi-slave simulation)
 **Byte order:** Big-endian (ABCD) for Siemens-style registers. Configurable to CDAB (word-swapped) for Allen-Bradley emulation.
 
@@ -27,6 +28,8 @@ The register address space is partitioned by factory profile:
 When the packaging profile is active, addresses 1000-1999 return Modbus exception code 0x02 (Illegal Data Address). When the F&B profile is active, addresses 100-599 return the same exception. Energy registers (600-699) are always active regardless of profile. This simulates the real-world scenario where a CollatrEdge agent discovers which registers exist on a target PLC.
 
 ### 3.1.2 Holding Registers (FC03 Read, FC06/FC16 Write)
+
+Float32 setpoint registers span two consecutive addresses. Writes to float32 registers require FC16 (Write Multiple Registers). FC06 (Write Single Register) writes only one 16-bit word and corrupts the float32 value. The simulator rejects FC06 writes to float32 register pairs with Modbus exception code 0x01 (Illegal Function).
 
 Holding registers contain process values, setpoints, counters, and state variables. Float32 values occupy two consecutive registers (high word first in ABCD order). Uint32 counters occupy two consecutive registers.
 
@@ -242,14 +245,17 @@ This replicates the Eurotherm addressing pattern where each controller has the s
 The server supports configurable error injection:
 
 - **Exception response on specific registers.** Configure register addresses that return Modbus exception code 0x02 (Illegal Data Address) or 0x04 (Slave Device Failure) at a configurable probability (default: 0.1% of reads).
+- **Setpoint write handling.** Client writes to setpoint registers (e.g. dryer zone setpoints, oven zone setpoints) update the signal model's target setpoint. The process variable then tracks the new setpoint via its configured dynamics (first-order lag, second-order response). If the scenario engine is also driving setpoints, the last writer wins. This is essential for the LLM agent demo use case where the agent must change setpoints and observe the effect.
 - **Timeout simulation.** Configure a probability of not responding at all (default: 0.05% of reads), forcing the client to handle timeouts.
 - **Slow response.** Configure a response delay range (default: 0-50ms, configurable to 0-2000ms) to simulate network latency or slow PLC scan cycles.
+- **Maximum registers per read.** Each Modbus read request is limited to 125 registers (FC03/FC04), matching real PLC behaviour. Reads requesting more than 125 registers return Modbus exception code 0x03 (Illegal Data Value). pymodbus does not enforce this by default and requires explicit configuration.
 
 ## 3.2 OPC-UA
 
 **Server endpoint:** `opc.tcp://0.0.0.0:4840` (configurable)
-**Security:** Accept all client certificates (development mode). Configurable to require authentication.
-**Authentication:** Anonymous access enabled. Optional username/password: `collatr` / `collatr123`.
+**Security:** SecurityPolicy.None with auto-accept for all client certificates (development mode). Configurable to SecurityPolicy.Basic256Sha256 with certificate validation for production testing.
+**Authentication:** Anonymous access enabled.
+**Timestamps:** `SourceTimestamp` uses the controller's drifted clock (Section 3a.5). `ServerTimestamp` uses the true simulation clock. This matches standard OPC-UA practice where SourceTimestamp reflects the device time and ServerTimestamp reflects the server time. Optional username/password: `collatr` / `collatr123`.
 
 ### 3.2.1 Namespace Structure
 

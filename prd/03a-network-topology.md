@@ -223,6 +223,8 @@ Each simulated controller has independent connection behaviour:
 
 **Connection limits.** Real PLCs limit concurrent TCP connections. Siemens S7-1200 allows 3 Modbus TCP connections. S7-1500 allows 16. Eurotherm 3504 allows 1 (or 2 behind a gateway). The simulator enforces these limits per endpoint. If CollatrEdge opens too many connections to a single controller, the simulator rejects the excess. This tests CollatrEdge's connection pooling.
 
+In realistic mode, each controller serves only its own register addresses. Reads to addresses outside the controller's defined range return Modbus exception code 0x02 (Illegal Data Address). For example, the laminator controller on port 5021 serves only addresses 400-499. A read to address 100 (press register) on port 5021 returns exception 0x02.
+
 | Controller Type | Max Connections | Response Timeout |
 |---|---|---|
 | Siemens S7-1500 | 16 | 50ms typical, 200ms max |

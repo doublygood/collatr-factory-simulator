@@ -63,10 +63,12 @@
 ### I-M1: Fault Code Register Contradiction
 **Source:** Lead Python Dev
 **Description:** Section 3.1.2 shows press.fault_code at HR 211. Section 5.8 says "fault code written to holding register 210." HR 210 is press.machine_state. Fix Section 5.8 to say 211.
+**Resolution:** RESOLVED. Section 5.8 fixed to say register 211.
 
 ### I-M2: OPC-UA Inactive Profile Status Code Conflict
 **Source:** Lead Python Dev
 **Description:** Section 3.2.1 says inactive nodes report BadNotReadable with AccessLevel 0. Appendix B says they hold last value with BadNotConnected. Pick one.
+**Resolution:** RESOLVED. Appendix B updated to match Section 3.2.1: BadNotReadable with AccessLevel 0.
 
 ### I-M3: MQTT QoS 1 Buffer Overflow Unspecified
 **Source:** Lead Python Dev
@@ -76,14 +78,17 @@
 ### I-M4: Slitter Scheduling Logic Missing
 **Source:** Lead Python Dev
 **Description:** Section 2.4 says slitter "operates independently" but no scheduling logic. When does it start/stop? What triggers it? Not in correlation model either.
+**Resolution:** RESOLVED. Section 2.4 updated: slitter starts at configurable offset from shift start (default 2h), runs for configurable duration (default 4h), then stops. Speed 0 during off period.
 
 ### I-M5: Per-Item vs Tick-Based Signal Ambiguity (Filler)
 **Source:** Lead Python Dev, Data Science Expert
 **Description:** Section 2b.4 says fill weight updates "per item." Tick rate is 100ms. At 120 packs/min = 2 packs/sec, fill weight generates a value every 500ms. How does per-item signal interact with tick-based engine?
+**Resolution:** RESOLVED. Section 4.6 updated: fill_weight generates one value per simulated item arrival, gated by filler.line_speed. Between items, store holds last value.
 
 ### I-M6: Second Setpoint Change During Transient
 **Source:** Lead Python Dev
 **Description:** Section 4.2.3 second-order response resets t to zero on setpoint change. What if a second change occurs before first transient settles? Stack or replace?
+**Resolution:** RESOLVED. Section 4.2.3 updated: replace, not stack. New transient starts from current value. Old transient abandoned. Transients do not stack additively.
 
 ### I-M7: String Signal Storage
 **Source:** Lead Python Dev
@@ -93,26 +98,32 @@
 ### I-M8: Engine Update Atomicity Unspecified
 **Source:** Lead Python Dev
 **Description:** Does the engine await between individual signal updates within a tick? If yes, Modbus reads can see mix of old/new values. If no (batch update without await), updates are atomic from reader perspective.
+**Resolution:** RESOLVED. Section 8.3 updated: engine updates all signals for one tick before yielding, no await between signals. Atomic from reader perspective.
 
 ### I-M9: get_protocol_mappings() Return Type Undefined
 **Source:** Lead Python Dev
 **Description:** Section 8.4 EquipmentGenerator.get_protocol_mappings() returns dict but structure is not defined.
+**Resolution:** RESOLVED. Section 8.4 updated: returns dict[str, ProtocolMapping] with defined modbus/opcua/mqtt fields.
 
 ### I-M10: Oven Tunnel Length Parameter Missing
 **Source:** Data Science Expert
 **Description:** Thermal diffusion model (Section 4.2.10) resets on new product entry. Entry timing driven by belt speed and oven length. Oven length not specified anywhere. Cannot compute dwell time.
+**Resolution:** RESOLVED. Section 4.6 updated: tunnel_length_m configurable, default 12.0 m. Dwell time formula specified.
 
 ### I-M11: Ramp Duration Semantics with Step Quantisation
 **Source:** Data Science Expert
 **Description:** Step dwells are drawn from uniform distribution. Sum of step dwells may exceed ramp_up_seconds. Is ramp_up_seconds a hard cap or a mean?
+**Resolution:** RESOLVED. Section 4.2.4 updated: ramp_up_seconds is a hard cap. Remaining steps compressed proportionally if sum exceeds it.
 
 ### I-M12: Cholesky + Student-t Interaction
 **Source:** Data Science Expert
 **Description:** Cholesky pipeline produces correlated Gaussian samples. Vibration signals use Student-t noise AND peer correlation. The pipeline gives correlated Gaussian marginals scaled by Student-t sigma, not true correlated Student-t. Need Gaussian copula or document as known approximation.
+**Resolution:** RESOLVED. Section 4.3.1 updated: documented as known approximation. At r=0.15-0.2 and df=5-8, practical difference negligible. Gaussian copula deferred to post-MVP.
 
 ### I-M13: Transport Lag Buffer Specification
 **Source:** Data Science Expert
 **Description:** Correlated follower transport lag (Section 4.2.8) needs ring buffer. Buffer size not specified. Zero-speed freeze/thaw transition not fully specified. At min nonzero speed 50 m/min with 5m distance, lag = 6s = 60 ticks. Need ~120-tick buffer.
+**Resolution:** RESOLVED. Section 4.2.8 updated: ring buffer sized 2x max lag at min nonzero speed (120 ticks). Zero-speed freezes signal. Speed resume drains normally.
 
 ### I-M14: Reproducibility Implementation Constraints
 **Source:** Data Science Expert
@@ -166,100 +177,122 @@
 ### I-L1: Modbus TCP Connection Keep-Alive
 **Source:** IIoT Expert
 **Description:** PRD does not specify idle connection timeout. Real PLCs drop after 30-120s inactivity.
+**Resolution:** RESOLVED. Section 3.1 updated: idle timeout 60 seconds, configurable.
 
 ### I-L2: OPC-UA Security Policy
 **Source:** IIoT Expert
 **Description:** "Accept all client certificates" needs explicit asyncua SecurityPolicy config (None vs Basic256Sha256 with auto-accept).
+**Resolution:** RESOLVED. Section 3.2 updated: SecurityPolicy.None with auto-accept for dev mode.
 
 ### I-L3: MQTT Client ID Format
 **Source:** IIoT Expert
 **Description:** Simulator's MQTT publisher client ID not specified. Matters for QoS 1 session persistence.
+**Resolution:** RESOLVED. Section 6.2 MQTT config already specifies client_id: "factory-simulator" (from I-H7 changes).
 
 ### I-L4: MQTT LWT Messages
 **Source:** IIoT Expert
 **Description:** No Last Will and Testament specified. Real industrial publishers use LWT for disconnect announcement.
+**Resolution:** RESOLVED. Section 6.2 MQTT config updated with lwt_topic and lwt_payload.
 
 ### I-L5: Modbus FC06 vs FC16 Write Behaviour
 **Source:** IIoT Expert
 **Description:** Float32 setpoints span two registers. FC06 writes one register and corrupts the float. Specify FC16 required for float32 writes.
+**Resolution:** RESOLVED. Section 3.1.2 updated: FC16 required for float32 registers, FC06 rejected with exception 0x01.
 
 ### I-L6: OPC-UA Method Node Definition
 **Source:** IIoT Expert
 **Description:** Appendix B mentions ResetCounters method but signature, arguments, and behaviour undefined.
+**Resolution:** RESOLVED. ResetCounters removed from Appendix B. Counter resets driven by scenario engine. Method nodes deferred to post-MVP.
 
 ### I-L7: Modbus Register Gap Behaviour in Realistic Mode
 **Source:** IIoT Expert
 **Description:** Per-controller gaps (e.g., laminator on port 5021 only serves 400-499) should return exception 0x02 for out-of-range addresses. Confirm.
+**Resolution:** RESOLVED. Section 3a updated: confirmed exception 0x02 for out-of-range addresses in realistic mode.
 
 ### I-L8: MQTT Broker Persistence Across Restarts
 **Source:** IIoT Expert
 **Description:** amqtt does not persist retained messages across restart. Mosquitto does. Specify requirement.
+**Resolution:** RESOLVED. Section 6.3 Docker Compose updated with persistence volume note for Mosquitto.
 
 ### I-L9: Modbus Write Response Behaviour
 **Source:** IIoT Expert
 **Description:** Do client writes to setpoint registers affect the simulation model? Or acknowledged but ignored?
+**Resolution:** RESOLVED. Section 3.1.2 updated: writes to setpoint registers update the signal model's target setpoint. Last writer wins. Essential for LLM agent demo.
 
 ### I-L10: OPC-UA SourceTimestamp vs ServerTimestamp
 **Source:** IIoT Expert
 **Description:** Clock drift affects SourceTimestamp. Does ServerTimestamp use drifted or true clock? Standard practice: Source=drifted, Server=true. Specify.
+**Resolution:** RESOLVED. Section 3.2 updated: SourceTimestamp = drifted clock, ServerTimestamp = true simulation clock.
 
 ### I-L11: Maximum Registers Per Modbus Read
 **Source:** IIoT Expert
 **Description:** Real PLCs limit reads to 125 registers (FC03). pymodbus defaults to no limit. Specify per controller.
+**Resolution:** RESOLVED. Section 3.1 updated: max 125 registers per read (FC03/FC04), exception 0x03 for oversized requests.
 
 ### I-L12: uvloop Linux-Only
 **Source:** Lead Python Dev, IIoT Expert
 **Description:** uvloop requires Linux. macOS dev falls back to default event loop (2-4x slower). 10x compression may not work on default loop. Use conditional import.
+**Resolution:** RESOLVED. Section 7.3 dependencies table updated "Linux only". Section 7.6 platform note added with conditional import pattern.
 
 ### I-L13: Health Check Failure Modes
 **Source:** Lead Python Dev
 **Description:** What does /health return when one protocol server is down but others are running?
+**Resolution:** RESOLVED. Section 8.5 updated: 200 running/degraded with per-protocol status, 503 only when engine down.
 
 ### I-L14: Hot Reload
 **Source:** Lead Python Dev
 **Description:** Can configuration change without process restart?
+**Resolution:** RESOLVED. Decision: No hot reload. Restart the container. Not worth the complexity for a dev tool.
 
 ### I-L15: Monitoring/Prometheus Metrics
 **Source:** Lead Python Dev
 **Description:** Metric names, label conventions, what to export not specified.
+**Resolution:** RESOLVED. Decision: defer to post-MVP. Health endpoint is sufficient for now.
 
 ### I-L16: CIP Production Stop Cascade
 **Source:** Data Science Expert
 **Description:** CIP says "production stops" but does not list which F&B state machines transition to idle. Implement as: mixer, filler, sealer to Idle; oven at temperature with no product; chiller continues.
+**Resolution:** RESOLVED. Already specified in Appendix F Phase 3 (from I-H6 resolution).
 
 ### I-L17: Positive-Definiteness Validation
 **Source:** Data Science Expert
 **Description:** User-configured correlation matrices should be validated at startup. Bad matrix crashes Cholesky with cryptic LinAlgError.
+**Resolution:** RESOLVED. Already covered by I-H3 config validation rules: "correlation matrix positive-definiteness."
 
 ### I-L18: Time-Varying Covariance Noise Distribution
 **Source:** Lead Python Dev
 **Description:** Section 4.3.2 log-drift uses noise(0,1). Which distribution? Gaussian implied but not specified while all other noise is configurable.
+**Resolution:** RESOLVED. Decision: Gaussian, hardcoded. The log-drift is an internal mechanism, not a signal characteristic.
 
 ### I-L19: Counter Sub-Tick Interpolation at High Compression
 **Source:** Lead Python Dev
 **Description:** At 100x batch mode, counter increments are large and jerky per tick. Sub-tick interpolation not specified. Acceptable for batch output.
+**Resolution:** RESOLVED. Decision: not needed. Jerky counters in batch mode are acceptable. Real counters are jerky too.
 
 ### I-L20: EnumStrings OPC-UA Property
 **Source:** IIoT Expert
 **Description:** State enum nodes need EnumStrings property (LocalizedText[]). asyncua support untested for this specific property type. Budget 0.5 days investigation.
+**Resolution:** RESOLVED. Budget 0.5 days in Phase 2. If asyncua doesn't support it cleanly, skip. Enum integer values sufficient.
 
 ### I-L21: pymodbus API Churn
 **Source:** IIoT Expert
 **Description:** pymodbus async server API changed between 3.4 and 3.6. Pin exact version in requirements.txt.
+**Resolution:** RESOLVED. Standard practice. Pin in Phase 1.
 
 ### I-L22: asyncua Memory Leak on Long Runs
 **Source:** IIoT Expert
 **Description:** asyncua leaks memory when subscriptions are created/destroyed repeatedly over days. Monitor RSS during 7-day runs.
+**Resolution:** RESOLVED. Monitored in nightly 24-hour stability test (Section 13). Fix reactively if RSS grows.
 
 ---
 
 ## Early Validation Spikes (Week 1)
 
-**Source:** IIoT Expert (recommended), Lead Python Dev (endorsed)
+**Source:** IIoT Expert (recommended), Lead Python Dev (endorsed). Updated after I-H7 resolution.
 
 1. **Multi-server pymodbus** (2-3 hours): 7+ async Modbus servers on different ports, each with different register maps, one asyncio event loop. Verify concurrent serving under load.
 
-2. **MQTT broker under concurrent load** (2-3 hours): Embedded broker + pymodbus + asyncua in one event loop. 50 msg/s publish, external subscriber. Measure latency and message loss. If it fails, switch to external Mosquitto immediately.
+2. **Mosquitto sidecar integration** (2-3 hours): Docker Compose with Mosquitto sidecar and Python publisher using paho-mqtt. 50 msg/s mixed QoS 0/1, retained messages. External subscriber. Measure latency and message loss. Verify retained message behaviour on subscriber reconnect.
 
 3. **asyncua multiple instances** (1-2 hours): 3 asyncua servers on different ports, small node trees, one event loop. Verify subscription data change notifications at correct rate.
 
@@ -270,50 +303,23 @@
 | Severity | Total | Resolved | Remaining |
 |----------|-------|----------|-----------|
 | High     | 8     | 8        | 0         |
-| Medium   | 22    | 13       | 9         |
-| Low      | 22    | 0        | 22        |
-| **Total** | **52** | **21** | **31**    |
+| Medium   | 22    | 22       | 0         |
+| Low      | 22    | 22       | 0         |
+| **Total** | **52** | **52** | **0**    |
 
-### Resolved This Pass
+**All 52 issues resolved across two passes.**
 
-- I-H1: Test strategy (new Section 13)
-- I-H2: Startup/shutdown (Appendix F Phase 1)
-- I-H3: Config validation (Appendix F Phase 1)
-- I-H4: Scenario scheduling (Appendix F Phase 4)
-- I-H5: Scenario conflict rules (Appendix F Phase 4)
-- I-H6: Missing sealer signals (Appendix F Phase 3)
-- I-H7: amqtt replaced with Mosquitto (Section 7.2, 6.3, 8.3, App E)
-- I-H8: Timeline extended to 13 weeks (Appendix F)
-- I-M3: MQTT buffer overflow (Section 6.2)
-- I-M7: String signal storage (Appendix F Phase 1)
-- I-M14: Reproducibility constraints (Appendix F Phase 4)
-- I-M15: Oven output power signal (Appendix F Phase 3)
-- I-M16: OPC-UA publishing interval (Appendix F Phase 2)
-- I-M17: Batch output format (Appendix F Phase 5)
-- I-M18: CLI arguments (Appendix F Phase 5)
-- I-M19: Logging strategy (Appendix F Phase 1)
-- I-M20: Dual-profile contradiction (Appendix F Phase 3)
-- I-M21: Student-t df validation (Appendix F Phase 1 via I-H3)
-- I-M22: Intermittent fault exit criteria (Appendix F Phase 4)
+### Pass 1 (commit `8610baf`): High-severity + side effects
+- I-H1 through I-H8 (all 8 highs)
+- I-M3, I-M7, I-M14, I-M15, I-M16, I-M17, I-M18, I-M19, I-M20, I-M21, I-M22 (13 mediums)
 
-### Remaining Medium Issues (9)
+### Pass 2 (this commit): Remaining mediums + all lows
+- I-M1, I-M2, I-M4, I-M5, I-M6, I-M8, I-M9, I-M10, I-M11, I-M12, I-M13 (9 mediums)
+- I-L1 through I-L22 (all 22 lows)
 
-- I-M1: Fault code register contradiction (210 vs 211)
-- I-M2: OPC-UA inactive profile status code conflict
-- I-M4: Slitter scheduling logic
-- I-M5: Per-item vs tick-based signal (filler)
-- I-M6: Second setpoint change during transient
-- I-M8: Engine update atomicity
-- I-M9: get_protocol_mappings() return type
-- I-M10: Oven tunnel length parameter
-- I-M11: Ramp duration semantics with step quantisation
-- I-M12: Cholesky + Student-t interaction
-- I-M13: Transport lag buffer specification
-
-### Cross-Reviewer Agreement
-
-- **amqtt risk:** All three reviewers flagged (Lead Dev + IIoT as high risk, Data Science noted indirectly). RESOLVED: Mosquitto sidecar.
-- **Timeline:** Lead Dev says 12-14 weeks. IIoT says 10 is feasible for single dev. RESOLVED: 13 weeks.
-- **Test strategy:** Lead Dev flags as critical. Others do not mention explicitly. RESOLVED: Section 13.
-- **Scenario scheduling:** Data Science flags as high. Lead Dev touches on it via scenario overlap. RESOLVED: Poisson + priority rules.
-- **Reproducibility:** Data Science provides most detailed constraints. Lead Dev mentions floating-point platform issue. RESOLVED: SeedSequence + platform constraint.
+### Cross-Reviewer Agreement (all resolved)
+- **amqtt risk:** Mosquitto sidecar.
+- **Timeline:** 13 weeks.
+- **Test strategy:** Section 13.
+- **Scenario scheduling:** Poisson + priority rules.
+- **Reproducibility:** SeedSequence + platform constraint.

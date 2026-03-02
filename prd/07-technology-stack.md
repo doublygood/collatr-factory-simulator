@@ -59,7 +59,7 @@ The simulator always connects to Mosquitto as a client using `paho-mqtt`. The Do
 | `paho-mqtt` | >=2.0 | MQTT client (publishes to external broker) |
 | `numpy` | >=1.26 | Signal generation, noise, correlation |
 | `pyyaml` | >=6.0 | Configuration file parsing |
-| `uvloop` | >=0.19 | Fast asyncio event loop (Linux) |
+| `uvloop` | >=0.19 | Fast asyncio event loop (Linux only) |
 
 **External services (Docker sidecar):**
 
@@ -121,3 +121,5 @@ mypy src/
 # Linting
 ruff check src/
 ```
+
+**Platform note:** `uvloop` requires Linux. On macOS during development, the code falls back to the default asyncio event loop via conditional import: `try: import uvloop; uvloop.install() except ImportError: pass`. The default event loop is 2-4x slower. Signal generation at 10x compression should still work on the default loop (signal generation uses less than 1% of per-tick budget), but verify during development.
