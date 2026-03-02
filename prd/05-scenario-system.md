@@ -142,7 +142,7 @@ Sequence:
 
 ## 5.9 Shift Change
 
-**Frequency:** 3 per day. Fixed times: 06:00, 14:00, 22:00 (configurable).
+**Frequency:** 3 per day. Nominal times: 06:00, 14:00, 22:00 (configurable). Each shift change has uniform jitter of +/- 10 minutes applied to the start time. Real factories do not change shifts at exact times.
 **Duration:** 5-15 minutes.
 
 Sequence:

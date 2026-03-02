@@ -267,7 +267,7 @@ Where `C_n = 8 / ((2n+1)^2 * pi^2)`, `alpha` is thermal diffusivity (m^2/s), and
 
 The three-term sum is 0.9331. At t=0 with T_initial=4C and T_oven=180C, T(0) = 180 - 0.9331 * 176 = 15.8C. The full infinite series sums to 1.0, giving T(0) = T_initial exactly. Each added term improves the initial condition. Five terms sum to 0.9638. Ten terms sum to 0.9818.
 
-The PRD shows three terms for clarity. Implementations must sum terms until T(0) falls within 1C of T_initial. In practice, 5 to 10 terms suffice. The convergence check is:
+The PRD shows three terms for clarity. Implementations must sum terms until T(0) falls within 1C of T_initial. The number of terms depends on the temperature difference. For small differences (T_oven - T_initial < 50C), 10 terms suffice. For large differences (176C for a 4C product entering a 180C oven), 20 to 30 terms are needed. The convergence check is:
 
 ```
 if abs(T(0) - T_initial) > 1.0:

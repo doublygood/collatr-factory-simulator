@@ -128,8 +128,8 @@ Note: Most filler signals are on OPC-UA. Only the hopper level (analog sensor vi
 |---------|--------|-----------|---------|-------|
 | 1400-1401 | chiller.room_temp | float32 | 1.0 | C |
 | 1402-1403 | chiller.setpoint | float32 | 1.0 | C |
-| 1410-1411 | chiller.suction_pressure | float32 | 1.0 | bar |
-| 1412-1413 | chiller.discharge_pressure | float32 | 1.0 | bar |
+| 1404-1405 | chiller.suction_pressure | float32 | 1.0 | bar |
+| 1406-1407 | chiller.discharge_pressure | float32 | 1.0 | bar |
 
 **CIP registers (HR 1500-1599):**
 

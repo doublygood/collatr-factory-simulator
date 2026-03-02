@@ -12,7 +12,7 @@ CollatrEdge connects to the simulator via all three protocols and collects data 
 
 **MQTT (packaging):** CollatrEdge subscribes to `collatr/factory/#` and receives JSON messages on all 17 packaging MQTT topics. Payloads parse correctly. QoS 0 and QoS 1 messages are both handled.
 
-**MQTT (F&B):** CollatrEdge subscribes to `collatr/foodbev/#` and receives JSON messages on all 13 F&B MQTT topics. Payloads parse correctly.
+**MQTT (F&B):** CollatrEdge subscribes to `collatr/factory/demo/foodbev1/#` and receives JSON messages on all 13 F&B MQTT topics. Payloads parse correctly.
 
 ## 11.2 Data Realism
 
