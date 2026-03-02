@@ -2,7 +2,7 @@
 
 ## 4.1 Design Principles
 
-The data generation engine produces parametric synthetic data. It does not replay recorded timeseries. Every run generates unique data from configurable models. The engine runs at a configurable time scale (1x, 10x, 100x real-time).
+The data generation engine produces parametric synthetic data. It does not replay recorded timeseries. Every run generates unique data from configurable models. The engine runs at a configurable time scale (1x to 10x for live protocol serving, 100x+ for batch generation).
 
 Key principles:
 
@@ -53,7 +53,7 @@ calibration_bias += calibration_drift_rate * dt
 value = value + calibration_bias
 ```
 
-The `calibration_drift_rate` parameter specifies the drift in signal units per simulated hour. Default: 0 (disabled). Typical values for thermocouples: 0.001 to 0.01 C/hour, producing 0.5 to 5 C of drift over a simulated month. The drift is linear over the simulated time horizon. For runs shorter than a simulated week, the effect is negligible. For multi-week runs at 100x compression, the drift becomes visible.
+The `calibration_drift_rate` parameter specifies the drift in signal units per simulated hour. Default: 0 (disabled). Typical values for thermocouples: 0.001 to 0.01 C/hour, producing 0.5 to 5 C of drift over a simulated month. The drift is linear over the simulated time horizon. For runs shorter than a simulated week, the effect is negligible. For multi-week runs at 100x compression (batch mode), the drift becomes visible.
 
 The ground truth event log does not record calibration drift as an event. It is a continuous process, not a discrete event. The configuration documents the drift rate per signal.
 
@@ -178,7 +178,7 @@ The reference data showed `FPGA_Head_PrintedTotal` wrapping at 999. The press co
 
 **Rollover and reset behaviour.** Counters that reach their configured maximum (`rollover_value` or range maximum) wrap to zero. Counters configured with `reset_on_job_change: true` reset to zero at each job changeover (Section 5.2).
 
-Under time compression, counters increment faster but the rollover and reset logic is unchanged. At 100x speed, a counter incrementing at 200/minute in simulated time reaches 99,999 in approximately 8 real minutes. This is expected behaviour. CollatrEdge must handle counter rollovers at any speed.
+Under time compression, counters increment faster but the rollover and reset logic is unchanged. At 100x speed (batch mode), a counter incrementing at 200/minute in simulated time reaches 99,999 in approximately 8 real minutes. This is expected behaviour. CollatrEdge must handle counter rollovers at any speed.
 
 To prevent counters from dominating the value range during compressed runs, the simulator supports an optional `max_before_reset` parameter. When set, the counter resets to zero after reaching this value. This simulates the real-world practice of operators resetting counters at shift changes or job starts. Default: disabled (counter wraps at `rollover_value`).
 
@@ -587,15 +587,16 @@ Enable per signal by setting `gain_drift_volatility` > 0 in the correlated follo
 
 The simulation clock advances at a configurable multiple of real time:
 
-| Mode | Clock Rate | 1 Real Hour = | Use Case |
-|------|-----------|---------------|----------|
-| 1x | Real-time | 1 sim hour | Integration testing, demos |
-| 10x | 10x | 10 sim hours | Quick scenario walkthroughs |
-| 100x | 100x | ~4 sim days | Long-term trend testing |
+| Mode | Clock Rate | 1 Real Hour = | Protocol Serving | Use Case |
+|------|-----------|---------------|------------------|----------|
+| 1x | Real-time | 1 sim hour | Yes | Integration testing, demos |
+| 10x | 10x | 10 sim hours | Yes | Quick scenario walkthroughs |
+| 100x | 100x | ~4 sim days | No (batch only) | Evaluation datasets, long-term trends |
+| 1000x | 1000x | ~42 sim days | No (batch only) | Predictive modelling, schedule optimisation |
 
-At higher compression rates, the data generation engine produces values at the same simulated intervals but publishes them more frequently. A 1-second signal at 100x publishes 100 values per real second. Protocol adapters batch these if the client cannot keep up.
+At 1x to 10x, protocol adapters serve data live. CollatrEdge connects and polls over Modbus TCP, subscribes via OPC-UA, and receives MQTT messages. At 10x, a 1-second signal updates every 100ms. Modbus controllers with 50-200ms response latency can just keep up. This is the protocol serving ceiling.
 
-At 100x with the packaging profile (47 signals), the aggregate data rate is approximately 235 values per real second. The F&B profile (65 signals) produces approximately 325 values per real second. Both are within the throughput capacity of Modbus TCP, OPC-UA, and MQTT on localhost.
+Above 10x, the simulator switches to batch generation mode. Protocol adapters are disabled. The engine writes signal data to CSV or Parquet files and the ground truth log to JSONL. The engine runs as fast as the CPU allows. A 24-hour simulation at 100x completes in minutes. A 7-day simulation at 100x completes in under 2 hours. Batch mode is used for evaluation datasets (Section 12), long-term degradation analysis, and predictive modelling (Section 9.4).
 
 ## 4.5 Random Seed
 

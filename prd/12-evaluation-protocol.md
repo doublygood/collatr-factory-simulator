@@ -228,13 +228,15 @@ Simulates a full week including bearing wear progression and intermittent faults
 | Parameter | Value |
 |---|---|
 | Duration | 7 simulated days |
-| Time compression | 100x (1.68 real hours) |
+| Time compression | 100x batch mode (under 2 real hours, no live protocol serving) |
 | Scenarios enabled | bearing_wear (start at hour 0, culminate_in_failure: true), intermittent_fault (bearing and electrical), all normal operations |
 | Data quality | Default |
 | Seed | Any fixed value |
 | Seeds | 1 (development), 10 (benchmarking) |
 | pre_margin_seconds | 30 |
 | post_margin_seconds | 60 |
+
+Run C uses batch generation mode. CollatrEdge is not connected during generation. Import the output files into CollatrEdge for replay testing.
 
 ## 12.6 Cross-References
 

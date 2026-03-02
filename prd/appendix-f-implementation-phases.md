@@ -81,7 +81,7 @@
 - Multi-slave Modbus polling (oven gateway: UID 1/2/3/10 on same port).
 - CDAB byte order enforcement on Allen-Bradley mixer endpoint.
 
-**Exit criteria:** Run each profile for 7 days at 100x speed (1.68 real hours). All scenario types fire at least once. Anomaly patterns are detectable by threshold-based checks. No divergent values. Memory stable. CollatrEdge maintains connections to all controllers simultaneously in realistic mode. One controller dropping does not affect data collection from others.
+**Exit criteria:** Run each profile for 7 days at 100x in batch mode (under 2 real hours). Separately, run each profile for 24 hours at 10x in protocol serving mode (2.4 real hours) and verify CollatrEdge maintains connections to all controllers. All scenario types fire at least once. Anomaly patterns are detectable by threshold-based checks. No divergent values. Memory stable. CollatrEdge maintains connections to all controllers simultaneously in realistic mode. One controller dropping does not affect data collection from others.
 
 ## Phase 5: Polish, Documentation, and Demo (Week 10)
 
@@ -92,7 +92,7 @@
 - Example CollatrEdge configuration files for both packaging and F&B profiles.
 - Docker Compose with health checks.
 - CI pipeline running integration tests against both profiles.
-- Performance profiling at 100x speed (47 signals and 65 signals).
+- Performance profiling at 10x (protocol serving) and 100x (batch generation).
 - Web dashboard showing current signal values and active scenarios (optional).
 
 **Exit criteria:** A new engineer can clone the repo, run `docker compose up`, and connect CollatrEdge to either profile within 15 minutes following the README.

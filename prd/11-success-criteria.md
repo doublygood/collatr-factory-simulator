@@ -61,7 +61,9 @@ The simulator runs for 7 consecutive days without:
 
 ## 11.5 Time Compression
 
-At 100x speed, all signals in the active profile (47 packaging or 65 F&B) produce values at 100x their configured rate. The protocol servers can keep up. No data is dropped due to throughput limits. CollatrEdge collects data at the compressed rate.
+**Protocol serving mode (up to 10x).** At 10x speed, all signals in the active profile produce values at 10x their configured rate. The protocol servers keep up. CollatrEdge collects data at the compressed rate without gaps. A 24-hour simulation completes in 2.4 real hours.
+
+**Batch generation mode (above 10x).** At 100x and above, protocol adapters are disabled. The engine writes signal data and ground truth to files. Success criterion: the output files contain the correct number of data points for the simulated duration, with no NaN, no infinity, and no values outside configured ranges. A 7-day simulation at 100x completes in under 2 real hours.
 
 ## 11.6 Reproducibility
 

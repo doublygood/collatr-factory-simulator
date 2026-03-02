@@ -87,7 +87,7 @@ Sequence:
 
 The IMS/NASA bearing run-to-failure dataset showed this pattern over 35 days. The Paderborn bearing dataset added motor current increase as a correlated signal. Our simulator reproduces both with the exponential degradation model.
 
-This scenario operates at a different timescale than other scenarios. At 1x speed, the full degradation plays out over weeks. At 100x speed, it plays out over hours. The bearing wear scenario is the primary test for CollatrEdge's ability to detect slow trends.
+This scenario operates at a different timescale than other scenarios. At 1x speed, the full degradation plays out over weeks. At 100x in batch mode, it plays out over hours. The bearing wear scenario is the primary test for CollatrEdge's ability to detect slow trends.
 
 ## 5.6 Ink Viscosity Excursion
 
@@ -469,6 +469,6 @@ The intermittent fault model has three phases.
 
 4. **Pneumatic intermittent.** `coder.ink_pressure` drops to 0 for 2-30 seconds, then recovers. Caused by sticking solenoid valve or air leak that opens under vibration. Frequency increases. May culminate in coder Fault state.
 
-**Timescale.** Intermittent faults operate on long timescales. At 1x speed, the full sporadic-to-permanent progression takes weeks. At 100x, it takes hours. The bearing intermittent scenario should precede and connect to the existing bearing wear scenario (Section 5.5).
+**Timescale.** Intermittent faults operate on long timescales. At 1x speed, the full sporadic-to-permanent progression takes weeks. At 100x in batch mode, it takes hours. The bearing intermittent scenario should precede and connect to the existing bearing wear scenario (Section 5.5).
 
 **Ground truth.** The ground truth event log (Section 4.7) records each intermittent fault occurrence with: phase (1, 2, or 3), affected signal, spike magnitude, duration, and whether it transitions to permanent.

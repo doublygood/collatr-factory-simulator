@@ -34,7 +34,7 @@ The following items are explicitly deferred:
 
 The simulator's architecture has properties that extend beyond test data generation.
 
-The simulation clock decouples simulated time from wall-clock time. Run a factory at 100x to project 6 months of bearing degradation in 45 minutes. Run it at 1000x to model a year of shift patterns overnight. This is the core capability of a discrete-event simulation engine.
+The simulation clock decouples simulated time from wall-clock time. Run a factory at 100x or 1000x in batch mode to project months of bearing degradation in minutes. Run it at 1000x to model a year of shift patterns overnight. This is the core capability of a discrete-event simulation engine.
 
 The signal models encode real physics: thermal diffusion, exponential degradation, Ornstein-Uhlenbeck processes, correlated cascades, bang-bang control loops. These are not curve-fitting approximations. They are parametric models that respond to input changes. Change a dryer setpoint and the temperature model produces a physically plausible transient. Change the production schedule and the energy model responds.
 
