@@ -11,8 +11,10 @@
 ## Table of Contents
 
 1. [Overview and Goals](01-overview-and-goals.md)
-2. [Simulated Factory Layout](02-simulated-factory-layout.md)
+2. [Simulated Factory Layout: Packaging & Printing](02-simulated-factory-layout.md)
+   - 2b. [Factory Layout: Food & Beverage](02b-factory-layout-food-and-beverage.md)
 3. [Protocol Endpoints](03-protocol-endpoints.md)
+   - 3a. [Network Topology](03a-network-topology.md)
 4. [Data Generation Engine](04-data-generation-engine.md)
 5. [Scenario System](05-scenario-system.md)
 6. [Configuration](06-configuration.md)

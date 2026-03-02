@@ -1,5 +1,15 @@
 # Appendix D: Configuration Reference
 
+## Profile Selection
+
+The simulator supports two factory profiles. Set the active profile in the top-level configuration:
+
+```yaml
+profile: "packaging"          # "packaging" or "food_bev"
+```
+
+The packaging profile activates press, laminator, slitter, coder, environment, energy, and vibration generators (47 signals). The food_bev profile activates mixer, oven, filler, sealer, chiller, CIP, coder, environment, and energy generators (65 signals). Only one profile runs at a time.
+
 ## Signal Model Parameters
 
 ### steady_state
@@ -260,6 +270,74 @@ scenarios:
     low_ink_warning_percent: 10.0
     empty_fault_percent: 2.0
     refill_delay_seconds: [60, 300]
+
+  # --- F&B Profile Scenarios ---
+
+  # Batch cycle (mixer)
+  batch_cycle:
+    enabled: true
+    batch_duration_seconds: [1200, 2700]   # 20-45 minutes
+    loading_seconds: [120, 300]            # 2-5 minutes
+    mixing_seconds: [600, 1500]            # 10-25 minutes
+    hold_seconds: [300, 600]               # 5-10 minutes
+    target_temp_c: [65, 85]                # Batch temperature range
+    mixer_speed_rpm: [30, 120]             # Mixer speed range
+
+  # Oven thermal excursion
+  oven_excursion:
+    enabled: true
+    frequency_per_shift: [1, 2]
+    affected_zone: "random"                # random, 1, 2, or 3
+    drift_rate_c_per_min: [0.1, 0.3]
+    max_drift_c: [5, 20]
+    duration_seconds: [1800, 5400]         # 30-90 minutes
+    coupling_factor: 0.05                  # Thermal coupling to adjacent zones
+
+  # Fill weight drift
+  fill_weight_drift:
+    enabled: true
+    frequency_per_shift: [1, 3]
+    drift_rate_g_per_min: [0.05, 0.2]
+    max_drift_g: [3, 8]
+    duration_seconds: [600, 3600]          # 10-60 minutes
+    target_weight_g: 350.0
+    acceptable_range_g: 5.0
+
+  # Seal integrity failure
+  seal_failure:
+    enabled: true
+    frequency_per_week: [1, 2]
+    temp_drop_rate_c_per_min: [0.5, 2.0]
+    min_seal_temp_c: 170.0
+    duration_seconds: [300, 1800]          # 5-30 minutes
+    recovery_seconds: [600, 1800]          # Line stop for repair
+
+  # Chiller door alarm
+  chiller_door:
+    enabled: true
+    frequency_per_week: [1, 3]
+    temp_rise_rate_c_per_min: [0.5, 2.0]
+    door_open_seconds: [300, 1200]         # 5-20 minutes
+    recovery_tau_seconds: 120              # First-order recovery time constant
+
+  # CIP cycle
+  cip_cycle:
+    enabled: true
+    frequency_per_day: [1, 3]
+    total_duration_seconds: [1800, 3600]   # 30-60 minutes
+    pre_rinse_seconds: [180, 300]
+    caustic_temp_c: [70, 80]
+    acid_wash_seconds: [300, 600]
+    final_rinse_conductivity_max: 50       # uS/cm acceptance threshold
+
+  # Cold chain break
+  cold_chain_break:
+    enabled: true
+    frequency_per_month: [1, 2]
+    temp_rise_rate_c_per_min: [0.5, 1.5]
+    alarm_threshold_c: 8.0
+    duration_seconds: [1800, 7200]         # 30-120 minutes
+    compressor_restart_delay_seconds: [60, 300]
 ```
 
 ## Data Quality Injection Parameters

@@ -6,6 +6,7 @@ collatr-factory-simulator/
     factory.yaml              # Main configuration
     scenarios/
       packaging-line.yaml     # Default packaging line scenarios
+      food-bev-line.yaml      # Default F&B line scenarios
       bearing-failure.yaml    # Long-duration bearing failure scenario
       stress-test.yaml        # High-rate stress test configuration
   
@@ -26,13 +27,19 @@ collatr-factory-simulator/
     generators/
       __init__.py
       base.py                 # EquipmentGenerator ABC
-      press.py                # Flexographic press signals
-      laminator.py            # Laminator signals
-      slitter.py              # Slitter signals
-      coder.py                # Coding and marking signals
-      environment.py          # Environmental sensors
-      energy.py               # Energy monitoring
-      vibration.py            # Vibration monitoring
+      press.py                # Flexographic press signals (packaging)
+      laminator.py            # Laminator signals (packaging)
+      slitter.py              # Slitter signals (packaging)
+      coder.py                # Coding and marking signals (shared)
+      environment.py          # Environmental sensors (shared)
+      energy.py               # Energy monitoring (shared)
+      vibration.py            # Vibration monitoring (packaging)
+      mixer.py                # Batch mixer signals (F&B)
+      oven.py                 # Multi-zone oven signals (F&B)
+      filler.py               # Filler/portioner signals (F&B)
+      sealer.py               # MAP sealer signals (F&B)
+      chiller.py              # Blast chiller signals (F&B)
+      cip.py                  # Clean-in-place signals (F&B)
     
     models/
       __init__.py
@@ -54,16 +61,23 @@ collatr-factory-simulator/
     
     scenarios/
       __init__.py
-      job_changeover.py
-      web_break.py
-      dryer_drift.py
-      bearing_wear.py
-      ink_excursion.py
-      registration_drift.py
-      unplanned_stop.py
-      shift_change.py
-      cold_start.py
-      coder_depletion.py
+      job_changeover.py       # Packaging
+      web_break.py            # Packaging
+      dryer_drift.py          # Packaging
+      bearing_wear.py         # Packaging
+      ink_excursion.py        # Packaging
+      registration_drift.py   # Packaging
+      unplanned_stop.py       # Packaging
+      shift_change.py         # Shared
+      cold_start.py           # Shared
+      coder_depletion.py      # Shared
+      batch_cycle.py          # F&B
+      oven_excursion.py       # F&B
+      fill_weight_drift.py    # F&B
+      seal_failure.py         # F&B
+      chiller_door.py         # F&B
+      cip_cycle.py            # F&B
+      cold_chain_break.py     # F&B
     
     health/
       __init__.py

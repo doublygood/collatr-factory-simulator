@@ -35,6 +35,11 @@ Every analog signal includes Gaussian noise. The noise magnitude (sigma) is conf
 | press.nip_pressure | 0.05 bar | Pressure transducer noise |
 | laminator.* | similar to press | Same sensor types |
 | coder.printhead_temp | 0.5 C | Reference: PS_Head_TempFirepulse sigma=2.8C |
+| coder.ink_pump_speed | 0.5 RPM | Pump motor encoder noise |
+| coder.ink_pressure | 60 mbar | Reference: PS_Pnm_LungPressure sigma=60 mbar |
+| coder.ink_viscosity_actual | 0.3 cP | Viscosity sensor measurement noise |
+| coder.supply_voltage | 0.1 V | PSU ripple and measurement noise |
+| coder.ink_consumption_ml | 0.0 | Counter, no noise on accumulation |
 | env.ambient_temp | 0.1 C | IOLink sensor resolution |
 | env.ambient_humidity | 0.5 %RH | IOLink sensor resolution |
 | energy.line_power | 0.2 kW | Power meter resolution |

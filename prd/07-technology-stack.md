@@ -14,7 +14,7 @@ Rationale:
 
 1. **Protocol library maturity.** `pymodbus` handles all four Modbus function codes, configurable byte ordering, error injection, and slave simulation out of the box. The Node.js Modbus server libraries are thinner. `opcua-asyncio` is mature for server-side use. `node-opcua` is excellent but its documentation is oriented toward client use. Server creation in `node-opcua` requires more boilerplate.
 
-2. **Signal generation.** NumPy array operations generate 40 signals per tick faster than per-value JavaScript loops. The correlation model involves matrix operations (applying transforms across signal vectors) that NumPy handles natively.
+2. **Signal generation.** NumPy array operations generate 47 signals (packaging) or 65 signals (F&B) per tick faster than per-value JavaScript loops. The correlation model involves matrix operations (applying transforms across signal vectors) that NumPy handles natively.
 
 3. **The simulator is not CollatrEdge.** The simulator is a test tool. It does not ship to customers. It does not need to share CollatrEdge's runtime. Choosing the best tool for the job is more important than language consistency. CollatrEdge collects data. The simulator generates data. Different jobs.
 

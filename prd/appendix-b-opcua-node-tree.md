@@ -3,6 +3,8 @@
 Namespace URI: `urn:collatr:factory-simulator`
 Namespace index: 2
 
+## Packaging Line
+
 ```
 Root (i=84)
   Objects (i=85)
@@ -59,8 +61,56 @@ Root (i=84)
         +-- CumulativeKwh         (ns=2;s=PackagingLine.Energy.CumulativeKwh)          Double, kWh
 ```
 
-All leaf nodes have the following OPC-UA attributes:
+## Food & Beverage Line
+
+```
+    FoodBevLine (ns=2;s=FoodBevLine)
+    |
+    +-- Mixer1 (ns=2;s=FoodBevLine.Mixer1)
+    |   +-- State                 (ns=2;s=FoodBevLine.Mixer1.State)                    UInt16, enum
+    |   +-- BatchId               (ns=2;s=FoodBevLine.Mixer1.BatchId)                  String
+    |
+    +-- Oven1 (ns=2;s=FoodBevLine.Oven1)
+    |   +-- State                 (ns=2;s=FoodBevLine.Oven1.State)                     UInt16, enum
+    |
+    +-- Filler1 (ns=2;s=FoodBevLine.Filler1)
+    |   +-- LineSpeed             (ns=2;s=FoodBevLine.Filler1.LineSpeed)               Double, packs/min
+    |   +-- FillWeight            (ns=2;s=FoodBevLine.Filler1.FillWeight)              Double, g
+    |   +-- FillTarget            (ns=2;s=FoodBevLine.Filler1.FillTarget)              Double, g
+    |   +-- FillDeviation         (ns=2;s=FoodBevLine.Filler1.FillDeviation)           Double, g
+    |   +-- PacksProduced         (ns=2;s=FoodBevLine.Filler1.PacksProduced)           UInt32
+    |   +-- RejectCount           (ns=2;s=FoodBevLine.Filler1.RejectCount)             UInt32
+    |   +-- State                 (ns=2;s=FoodBevLine.Filler1.State)                   UInt16, enum
+    |
+    +-- QC1 (ns=2;s=FoodBevLine.QC1)
+    |   +-- ActualWeight          (ns=2;s=FoodBevLine.QC1.ActualWeight)                Double, g
+    |   +-- OverweightCount       (ns=2;s=FoodBevLine.QC1.OverweightCount)             UInt32
+    |   +-- UnderweightCount      (ns=2;s=FoodBevLine.QC1.UnderweightCount)            UInt32
+    |   +-- MetalDetectTrips      (ns=2;s=FoodBevLine.QC1.MetalDetectTrips)            UInt32
+    |   +-- Throughput            (ns=2;s=FoodBevLine.QC1.Throughput)                  Double, items/min
+    |   +-- RejectTotal           (ns=2;s=FoodBevLine.QC1.RejectTotal)                 UInt32
+    |
+    +-- CIP1 (ns=2;s=FoodBevLine.CIP1)
+    |   +-- State                 (ns=2;s=FoodBevLine.CIP1.State)                      UInt16, enum
+    |
+    +-- Energy (ns=2;s=FoodBevLine.Energy)
+        +-- LinePower             (ns=2;s=FoodBevLine.Energy.LinePower)                Double, kW
+        +-- CumulativeKwh         (ns=2;s=FoodBevLine.Energy.CumulativeKwh)            Double, kWh
+```
+
+> `FoodBevLine` sits as a sibling of `PackagingLine` under the `Objects` folder. Both root nodes are always present in the address space. Only the active profile's nodes publish changing values; the inactive profile's nodes hold their last value with `quality = bad` (StatusCode `BadNotConnected`).
+
+## OPC-UA Attribute Conventions
+
+All leaf nodes across both profiles have the following OPC-UA attributes:
+
 - `AccessLevel`: Read-only (except setpoint nodes which are Read/Write)
 - `MinimumSamplingInterval`: Matches the signal's configured sample rate in milliseconds
 - `EURange`: Set to the signal's configured min/max range
 - `EngineeringUnits`: Set to the signal's unit string
+
+**State enum nodes** (`*.State`) use `UInt16` data type with `EnumStrings` property listing the valid state names. See the equipment sections in [02-simulated-factory-layout.md](02-simulated-factory-layout.md) and [02b-factory-layout-food-and-beverage.md](02b-factory-layout-food-and-beverage.md) for enum definitions.
+
+**Counter nodes** (`PacksProduced`, `RejectCount`, `OverweightCount`, `UnderweightCount`, `MetalDetectTrips`, `RejectTotal`) use `UInt32` data type and increment monotonically. They reset to 0 on shift change or manual reset via a `ResetCounters` method on the parent equipment node.
+
+**String nodes** (`BatchId`) use OPC-UA `String` data type. Value changes are event-driven (published when a new batch starts).

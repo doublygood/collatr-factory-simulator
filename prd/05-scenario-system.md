@@ -156,7 +156,7 @@ The Steel Industry Energy dataset (from the datasets research) showed clear cold
 
 ## 5.11 Vision Inspection Fail Rate Patterns
 
-This scenario does not directly produce one of the 40 signals but influences `press.waste_count` and informs the coder behaviour.
+This scenario does not directly produce one of the packaging profile signals but influences `press.waste_count` and informs the coder behaviour.
 
 When the press is Idle (3) or Off (0), the vision inspection system (if it were a signal) would report near-100% fail rates. The R-Series reference data showed 85.6% fail rate in a typical month because the camera reports "fail" for no-read events during idle periods.
 
@@ -223,3 +223,97 @@ scenarios:
     frequency: "1-2 per 8h shift"
     duration_range: [300, 3600]  # 5-60 minutes
 ```
+
+## 5.14 F&B Profile Scenarios
+
+The F&B profile adds seven scenarios specific to food and beverage production. Each scenario uses the same signal model types as packaging scenarios (first_order_lag, state_machine, ramp, counter) with F&B parameters.
+
+### 5.14.1 Batch Cycle (Mixer)
+
+**Frequency:** 8-16 per shift (continuous batch production).
+**Duration:** 20-45 minutes per batch.
+
+Sequence:
+1. Mixer state transitions to Loading. Ingredient valves open.
+2. After 2-5 minutes, mixer state transitions to Mixing. Mixer speed ramps to target RPM.
+3. `mixer.torque` follows `mixer.speed` with load factor. `mixer.batch_temp` ramps toward setpoint.
+4. After mixing duration (10-25 minutes), state transitions to Hold. Temperature holds at setpoint for 5-10 minutes.
+5. State transitions to Discharge. Mixer speed drops to low RPM. Batch counter increments.
+6. State returns to Loading for the next batch.
+
+Batch-to-batch variation: each batch has slightly different ingredient volumes, target temperatures, and mixing times. This produces natural variation in torque profiles and cycle durations.
+
+### 5.14.2 Oven Thermal Excursion
+
+**Frequency:** 1-2 per shift.
+**Duration:** 30-90 minutes.
+
+Sequence:
+1. One oven zone drifts from its setpoint. Drift rate: 0.1-0.3 C per minute.
+2. Adjacent zones respond via thermal coupling (0.05 factor on the drifting zone's deviation).
+3. Product temperature at the exit deviates from target.
+4. After drift duration, the zone returns to setpoint (operator correction or controller recovery).
+
+This scenario is analogous to the packaging dryer drift but operates at oven scale (setpoints 160-220 C instead of 50-80 C).
+
+### 5.14.3 Fill Weight Drift
+
+**Frequency:** 1-3 per shift.
+**Duration:** 10-60 minutes.
+
+Sequence:
+1. `filler.fill_weight` mean drifts from target (e.g. 350g) at 0.05-0.2 g per minute.
+2. As the mean drifts, more fills fall outside the acceptable range.
+3. `filler.reject_count` increment rate increases proportionally to the deviation.
+4. After drift duration, the mean returns to target (operator recalibrates).
+
+### 5.14.4 Seal Integrity Failure
+
+**Frequency:** 1-2 per week.
+**Duration:** 5-30 minutes.
+
+Sequence:
+1. `sealer.seal_temp` drops below the minimum threshold (e.g. 170 C).
+2. `sealer.seal_strength` decreases proportionally.
+3. `sealer.gas_leak_rate` increases as seal quality degrades.
+4. `sealer.reject_count` spikes.
+5. After detection, the line stops for seal bar replacement or adjustment.
+
+### 5.14.5 Chiller Door Alarm
+
+**Frequency:** 1-3 per week.
+**Duration:** 5-20 minutes.
+
+Sequence:
+1. `chiller.door_open` discrete input sets to true.
+2. `chiller.room_temp` rises at 0.5-2 C per minute (warm air ingress).
+3. `chiller.compressor_power` increases as the compressor works harder.
+4. After door close, room temperature recovers via first_order_lag to setpoint.
+
+### 5.14.6 CIP Cycle
+
+**Frequency:** 1-3 per day (between production batches).
+**Duration:** 30-60 minutes.
+
+Sequence:
+1. Production stops. CIP state transitions to Pre-Rinse.
+2. `cip.wash_temp` ramps to rinse temperature (40-50 C). `cip.flow_rate` ramps to target.
+3. State transitions to Caustic Wash. Temperature ramps to 70-80 C. `cip.conductivity` rises as caustic solution circulates.
+4. State transitions to Rinse. Temperature drops. Conductivity drops toward zero.
+5. State transitions to Acid Wash. Conductivity changes reflect acid concentration.
+6. Final Rinse. Conductivity drops below acceptance threshold.
+7. CIP state transitions to Complete. Production resumes.
+
+Each phase has a defined duration and temperature/flow profile. The recipe curve is deterministic with minor noise.
+
+### 5.14.7 Cold Chain Break
+
+**Frequency:** Rare, 1-2 per month.
+**Duration:** 30-120 minutes.
+
+Sequence:
+1. `chiller.compressor_power` drops to 0 (refrigeration failure).
+2. `chiller.room_temp` rises from setpoint (2-4 C) toward ambient at 0.5-1.5 C per minute.
+3. `chiller.room_temp` crosses the alarm threshold (8 C). Alarm activates.
+4. Product in the chiller is at risk. The duration above threshold determines spoilage.
+5. After repair, compressor restarts. Room temperature recovers via first_order_lag.

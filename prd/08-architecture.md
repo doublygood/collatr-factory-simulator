@@ -3,71 +3,93 @@
 ## 8.1 Component Diagram
 
 ```
-+--------------------------------------------------------------------+
-|                     Collatr Factory Simulator                       |
-|                                                                     |
-|  +-------------------+     +-------------------+                    |
-|  |   Configuration   |     |  Scenario Engine  |                    |
-|  |   (YAML loader)   |     |  (event scheduler)|                    |
-|  +--------+----------+     +--------+----------+                    |
-|           |                          |                               |
-|           v                          v                               |
-|  +--------------------------------------------------+               |
-|  |              Simulation Clock                     |               |
-|  |   (manages sim time, tick rate, compression)      |               |
-|  +---------------------------+----------------------+               |
-|                              |                                      |
-|                              v                                      |
-|  +--------------------------------------------------+               |
-|  |              Machine State Engine                 |               |
-|  |   (state machine per equipment, transition logic) |               |
-|  +---------------------------+----------------------+               |
-|                              |                                      |
-|                              v                                      |
-|  +--------------------------------------------------+               |
-|  |           Signal Generation Engine                |               |
-|  |                                                    |               |
-|  |  +----------+ +----------+ +----------+           |               |
-|  |  | Press    | | Lam.     | | Slitter  |           |               |
-|  |  | Generator| | Generator| | Generator|           |               |
-|  |  +----------+ +----------+ +----------+           |               |
-|  |  +----------+ +----------+ +----------+           |               |
-|  |  | Coder    | | Env      | | Energy   |           |               |
-|  |  | Generator| | Generator| | Generator|           |               |
-|  |  +----------+ +----------+ +----------+           |               |
-|  |  +----------+                                     |               |
-|  |  | Vibration|    (correlation model links         |               |
-|  |  | Generator|     generators together)            |               |
-|  |  +----------+                                     |               |
-|  +---------------------------+----------------------+               |
-|                              |                                      |
-|                              v                                      |
-|  +--------------------------------------------------+               |
-|  |              Signal Value Store                   |               |
-|  |   (current value of all 40 signals + metadata)    |               |
-|  +------+------------------+------------------+-----+               |
-|         |                  |                  |                      |
-|         v                  v                  v                      |
-|  +-----------+    +-------------+    +------------+                 |
-|  | Modbus    |    | OPC-UA      |    | MQTT       |                 |
-|  | Adapter   |    | Adapter     |    | Adapter    |                 |
-|  |           |    |             |    |            |                 |
-|  | Reads from|    | Reads from  |    | Reads from |                 |
-|  | store,    |    | store,      |    | store,     |                 |
-|  | encodes   |    | updates     |    | publishes  |                 |
-|  | registers |    | node values |    | messages   |                 |
-|  +-----+-----+   +------+------+   +------+------+                 |
-|        |                 |                 |                         |
-+--------|-----------------|-----------------|-------------------------+
-         |                 |                 |
-         v                 v                 v
-    Port 502          Port 4840         Port 1883
-   (Modbus TCP)      (OPC-UA TCP)     (MQTT TCP)
++------------------------------------------------------------------------+
+|                       Collatr Factory Simulator                         |
+|                                                                         |
+|  +-------------------+ +-------------------+ +-------------------+      |
+|  |   Configuration   | |  Scenario Engine  | | Profile Manager   |      |
+|  |   (YAML loader)   | |  (event scheduler)| | (packaging / F&B) |      |
+|  +--------+----------+ +--------+----------+ +--------+----------+      |
+|           |                      |                     |                 |
+|           v                      v                     v                 |
+|  +--------------------------------------------------+                   |
+|  |              Simulation Clock                     |                   |
+|  |   (manages sim time, tick rate, compression)      |                   |
+|  +---------------------------+----------------------+                   |
+|                              |                                          |
+|                              v                                          |
+|  +--------------------------------------------------+                   |
+|  |              Machine State Engine                 |                   |
+|  |   (state machine per equipment, transition logic) |                   |
+|  +---------------------------+----------------------+                   |
+|                              |                                          |
+|                              v                                          |
+|  +--------------------------------------------------+                   |
+|  |           Signal Generation Engine                |                   |
+|  |                                                    |                   |
+|  |  Packaging Profile (47 signals):                  |                   |
+|  |  +----------+ +----------+ +----------+           |                   |
+|  |  | Press    | | Lam.     | | Slitter  |           |                   |
+|  |  | Generator| | Generator| | Generator|           |                   |
+|  |  +----------+ +----------+ +----------+           |                   |
+|  |  +----------+ +----------+ +----------+           |                   |
+|  |  | Coder    | | Env      | | Energy   |           |                   |
+|  |  | Generator| | Generator| | Generator|           |                   |
+|  |  +----------+ +----------+ +----------+           |                   |
+|  |  +----------+                                     |                   |
+|  |  | Vibration|                                     |                   |
+|  |  | Generator|                                     |                   |
+|  |  +----------+                                     |                   |
+|  |                                                    |                   |
+|  |  F&B Profile (65 signals):                        |                   |
+|  |  +----------+ +----------+ +----------+           |                   |
+|  |  | Mixer    | | Oven     | | Filler   |           |                   |
+|  |  | Generator| | Generator| | Generator|           |                   |
+|  |  +----------+ +----------+ +----------+           |                   |
+|  |  +----------+ +----------+ +----------+           |                   |
+|  |  | Sealer   | | Chiller  | | CIP      |           |                   |
+|  |  | Generator| | Generator| | Generator|           |                   |
+|  |  +----------+ +----------+ +----------+           |                   |
+|  |  +----------+ +----------+ +----------+           |                   |
+|  |  | Coder    | | Env      | | Energy   |           |                   |
+|  |  | Generator| | Generator| | Generator|           |                   |
+|  |  +----------+ +----------+ +----------+           |                   |
+|  |                                                    |                   |
+|  |  (correlation model links generators together)    |                   |
+|  +---------------------------+----------------------+                   |
+|                              |                                          |
+|                              v                                          |
+|  +--------------------------------------------------+                   |
+|  |              Signal Value Store                   |                   |
+|  |   (47 or 65 signals per profile + metadata)       |                   |
+|  +------+------------------+------------------+-----+                   |
+|         |                  |                  |                          |
+|         v                  v                  v                          |
+|  +-----------+    +-------------+    +------------+                     |
+|  | Modbus    |    | OPC-UA      |    | MQTT       |                     |
+|  | Adapter   |    | Adapter     |    | Adapter    |                     |
+|  |           |    |             |    |            |                     |
+|  | Reads from|    | Reads from  |    | Reads from |                     |
+|  | store,    |    | store,      |    | store,     |                     |
+|  | encodes   |    | updates     |    | publishes  |                     |
+|  | registers |    | node values |    | messages   |                     |
+|  +-----+-----+   +------+------+   +------+------+                     |
+|        |                 |                 |                             |
+|  +-----+-----------------+-----------------+-----+                      |
+|  |        Network Topology Manager               |                      |
+|  |  (collapsed: single port per protocol)        |                      |
+|  |  (realistic: per-controller ports + UID)      |                      |
+|  +---+-------+-------+-------+-------+-------+--+                      |
+|      |       |       |       |       |       |                          |
++------|-------|-------|-------|-------|-------|----------------------------+
+       v       v       v       v       v       v
+  Port 5020  5021  5022  ...  4840  4841  1883
+  (Modbus per controller)  (OPC-UA x N)  (MQTT)
 ```
 
 ## 8.2 Data Flow
 
-1. **Configuration loads.** The YAML config is parsed into typed configuration objects. Signal definitions, protocol mappings, and scenario schedules are validated.
+1. **Configuration loads.** The YAML config is parsed into typed configuration objects. The profile manager selects the active equipment set (packaging or F&B). Signal definitions, protocol mappings, and scenario schedules are validated for the selected profile.
 
 2. **Simulation clock starts.** The clock ticks at `tick_interval_ms` (default: 100ms). At each tick, the clock advances by `tick_interval_ms * time_scale` simulated milliseconds.
 
@@ -93,21 +115,34 @@ async def main():
     config = load_config()
     store = SignalStore()
     clock = SimulationClock(config.simulation)
+    topology = NetworkTopology(config.network)
     
     engine = DataEngine(config, store, clock)
     
     tasks = [
         engine.run(),                           # Signal generation loop
-        ModbusServer(config.protocols.modbus, store).run(),
-        OpcuaServer(config.protocols.opcua, store).run(),
-        MqttBroker(config.protocols.mqtt, store).run(),
         HealthServer(config).run(),             # HTTP health check
+        MqttBroker(config.protocols.mqtt, store).run(),
     ]
+    
+    # In realistic mode, spawn one Modbus server per controller
+    for controller in topology.modbus_controllers():
+        tasks.append(
+            ModbusServer(controller, store).run()
+        )
+    
+    # In realistic mode, spawn one OPC-UA server per endpoint
+    for endpoint in topology.opcua_endpoints():
+        tasks.append(
+            OpcuaServer(endpoint, store).run()
+        )
     
     async with asyncio.TaskGroup() as tg:
         for task in tasks:
             tg.create_task(task)
 ```
+
+In collapsed mode, a single Modbus server and single OPC-UA server handle all requests. In realistic mode, the topology manager spawns separate servers per controller. See [Section 3a: Network Topology](03a-network-topology.md) for the full controller layout and port mapping.
 
 The signal store uses no locks. The engine is the sole writer. Protocol adapters are readers. In Python's asyncio single-threaded model, there are no race conditions. Values are eventually consistent within one tick (100ms).
 
@@ -161,9 +196,14 @@ No changes to protocol adapters or the simulation engine are needed.
 The simulator exposes an HTTP endpoint on port 8080:
 
 ```
-GET /health -> 200 OK {"status": "running", "sim_time": "...", "signals": 40}
+GET /health -> 200 OK {
+  "status": "running",
+  "profile": "packaging",
+  "sim_time": "...",
+  "signals": 47
+}
 GET /metrics -> Prometheus metrics (optional)
 GET /status -> Detailed status of all signals and their current values
 ```
 
-The `/status` endpoint returns a JSON object with current values for all 40 signals. This is useful for debugging and for building a simple web dashboard.
+The `profile` field shows the active profile ("packaging" or "food_bev"). The `signals` field shows the count for that profile (47 for packaging, 65 for F&B). The `/status` endpoint returns a JSON object with current values for all signals in the active profile. This is useful for debugging and for building a simple web dashboard.

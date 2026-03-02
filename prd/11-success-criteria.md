@@ -4,17 +4,21 @@
 
 CollatrEdge connects to the simulator via all three protocols and collects data continuously for 24 hours with zero configuration changes to CollatrEdge beyond specifying the endpoint addresses.
 
-**Modbus TCP:** CollatrEdge reads holding registers, input registers, coils, and discrete inputs at configured poll intervals. All register addresses in the map return valid data. Float32 and uint32 values decode correctly with ABCD byte order. Int16 values in input registers decode correctly with x10 scaling.
+**Modbus TCP (packaging):** CollatrEdge reads holding registers, input registers, coils, and discrete inputs at configured poll intervals. All register addresses in the map return valid data. Float32 and uint32 values decode correctly with ABCD byte order. Int16 values in input registers decode correctly with x10 scaling.
 
-**OPC-UA:** CollatrEdge browses the node tree, subscribes to all nodes under `PackagingLine`, and receives data change notifications. All node values update at their configured rates. Status codes are correctly propagated.
+**Modbus TCP (F&B):** CollatrEdge reads mixer registers with CDAB byte order (Allen-Bradley convention). Multi-slave addressing works: mixer on slave 1, oven on slave 2, filler on slave 3, sealer on slave 4. All F&B register addresses return valid data.
 
-**MQTT:** CollatrEdge subscribes to `collatr/factory/#` and receives JSON messages on all 9 MQTT topics. Payloads parse correctly. QoS 0 and QoS 1 messages are both handled.
+**OPC-UA:** CollatrEdge browses the node tree and subscribes to all nodes under both `PackagingLine` and `FoodBevLine` trees. All node values update at their configured rates. Status codes are correctly propagated.
+
+**MQTT (packaging):** CollatrEdge subscribes to `collatr/factory/#` and receives JSON messages on all 17 packaging MQTT topics. Payloads parse correctly. QoS 0 and QoS 1 messages are both handled.
+
+**MQTT (F&B):** CollatrEdge subscribes to `collatr/foodbev/#` and receives JSON messages on all 13 F&B MQTT topics. Payloads parse correctly.
 
 ## 11.2 Data Realism
 
 A packaging industry professional (or someone with equivalent domain knowledge) reviews 24 hours of simulator output in a time-series chart and cannot distinguish it from real factory data based on signal shapes, value ranges, noise characteristics, and correlation patterns.
 
-Specific checks:
+Specific checks (packaging):
 - Line speed shows realistic ramp-up profiles, not step functions.
 - Dryer temperatures track setpoints with thermal lag, not instant response.
 - Web tension fluctuates during speed changes and stabilizes during steady state.
@@ -23,6 +27,14 @@ Specific checks:
 - Vibration levels increase when the machine is running.
 - Environmental temperature follows a daily cycle.
 - Ink level depletes over hours, not minutes.
+
+Specific checks (F&B):
+- Mixer batch cycles complete in 20-45 minutes with distinct phase transitions.
+- Oven zones track setpoints independently with thermal coupling between adjacent zones.
+- Fill weight distribution is Gaussian around target with realistic sigma (2-4g).
+- CIP wash cycles follow the recipe curve: temperature, flow, and conductivity profiles match expected shapes.
+- Chiller room temperature recovers with first-order dynamics after door close events.
+- Seal temperature maintains minimum threshold during normal operation.
 
 ## 11.3 Anomaly Detection
 
@@ -49,7 +61,7 @@ The simulator runs for 7 consecutive days without:
 
 ## 11.5 Time Compression
 
-At 100x speed, all 40 signals produce values at 100x their configured rate. The protocol servers can keep up. No data is dropped due to throughput limits. CollatrEdge collects data at the compressed rate.
+At 100x speed, all signals in the active profile (47 packaging or 65 F&B) produce values at 100x their configured rate. The protocol servers can keep up. No data is dropped due to throughput limits. CollatrEdge collects data at the compressed rate.
 
 ## 11.6 Reproducibility
 

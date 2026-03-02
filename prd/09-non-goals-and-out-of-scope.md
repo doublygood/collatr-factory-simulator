@@ -14,8 +14,6 @@
 
 The following items are explicitly deferred:
 
-**Food and beverage overlay.** Add oven temperature zones, fill weight signals, cold room monitoring, and CIP cycle simulation. This extends the simulator to address the food manufacturing prospect list (Compleat Food Group, Warburtons, etc.). The research identified a complete data gap for food manufacturing in public datasets. All signals must be synthesized.
-
 **CNC machine cell.** Add spindle speed, spindle load, feed rate, axis positions, and tool wear signals. The CNC datasets from the Round 2 research (Hannover, Bosch, MU-TCM) provide reference patterns. This addresses the automotive and aerospace prospect list (Mettis Aerospace, Sertec, ASG Group).
 
 **Pharma tablet press.** Add compression force, turret speed, tablet weight, and cleanroom environmental monitoring. The Lek Pharmaceuticals tablet compression dataset provides direct reference data. This addresses the pharmaceutical prospect list (Sterling Pharma Solutions, Almac Group).
@@ -31,3 +29,7 @@ The following items are explicitly deferred:
 **MTConnect support.** Add MTConnect agent for CNC machine data. This is relevant for the CNC machine cell phase.
 
 **Web dashboard.** Add a browser-based UI showing real-time signal values, machine state, and scenario status. The health check endpoint provides raw data. A dashboard adds visualization.
+
+## 9.3 Items Promoted to Phase 1
+
+**Food and beverage profile.** Originally listed as a Phase 2 item, the F&B profile was promoted to Phase 1 scope. The full F&B layout is defined in `02b-factory-layout-food-and-beverage.md`. It covers a chilled ready meal line with mixer, oven, filler, sealer, chiller, and CIP equipment (65 signals total). Protocol mappings for Modbus, OPC-UA, and MQTT are complete.

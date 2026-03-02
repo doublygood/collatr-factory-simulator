@@ -26,7 +26,7 @@ The simplest model. The signal stays near a target value with Gaussian noise.
 value = target + noise(0, sigma)
 ```
 
-Used for: `press.nip_pressure`, `laminator.nip_pressure`, `laminator.adhesive_weight`, `env.ambient_temp` (within each hour), `coder.printhead_temp` (during printing).
+Used for: `press.nip_pressure`, `laminator.nip_pressure`, `laminator.adhesive_weight`, `env.ambient_temp` (within each hour), `coder.printhead_temp` (during printing), `coder.ink_pressure` (lung pressure, target ~1500 mbar, sigma ~60 mbar), `coder.supply_voltage` (target 24V, sigma 0.1V).
 
 Parameters: `target`, `sigma`, `min_clamp`, `max_clamp`.
 
@@ -77,7 +77,7 @@ delta = drift_rate * noise(0, 1) - reversion_rate * (value - center)
 value = value + delta * dt
 ```
 
-Used for: `press.ink_viscosity`, `press.registration_error_x/y`.
+Used for: `press.ink_viscosity`, `press.registration_error_x/y`, `coder.ink_viscosity_actual` (mean reversion around target viscosity from reference data, sigma 0.3 cP).
 
 Parameters: `center`, `drift_rate`, `reversion_rate`, `min_clamp`, `max_clamp`.
 
@@ -89,7 +89,7 @@ The signal increments at a rate proportional to machine speed.
 value = value + rate * line_speed * dt
 ```
 
-Used for: `press.impression_count`, `press.good_count`, `press.waste_count`, `coder.prints_total`, `energy.cumulative_kwh`.
+Used for: `press.impression_count`, `press.good_count`, `press.waste_count`, `coder.prints_total`, `energy.cumulative_kwh`, `coder.ink_consumption_ml` (accumulates linearly during printing, rate proportional to ink pump speed).
 
 Parameters: `rate` (increments per m/min per second), `rollover_value` (for counter wrap simulation).
 
@@ -117,7 +117,7 @@ The signal derives from another signal with a transformation.
 value = f(parent_value) + noise(0, sigma)
 ```
 
-Used for: `press.main_drive_current` follows `press.line_speed` (linear relationship: current = base_current + k * speed). `press.main_drive_speed` follows `press.line_speed` (gear ratio). `laminator.web_speed` follows `press.line_speed` with offset and lag. `press.rewind_diameter` inversely derives from `press.unwind_diameter`.
+Used for: `press.main_drive_current` follows `press.line_speed` (linear relationship: current = base_current + k * speed). `press.main_drive_speed` follows `press.line_speed` (gear ratio). `laminator.web_speed` follows `press.line_speed` with offset and lag. `press.rewind_diameter` inversely derives from `press.unwind_diameter`. `coder.ink_pump_speed` follows `coder.state` (steady RPM during Printing, 0 during idle states).
 
 Parameters: `parent_signal`, `transform_function`, `sigma`, `lag` (optional delay).
 
@@ -129,7 +129,7 @@ The signal transitions between discrete states based on rules and probabilities.
 state = transition(current_state, triggers, probabilities)
 ```
 
-Used for: `press.machine_state`, `coder.state`.
+Used for: `press.machine_state`, `coder.state`, `coder.nozzle_health` (states: Good/Degraded/Blocked, event-driven transitions over hours of printing), `coder.gutter_fault` (states: OK/Fault, rare event, MTBF 500+ hours).
 
 Parameters: `states[]`, `transitions[]` (each with `from`, `to`, `trigger`, `probability`, `min_duration`, `max_duration`).
 
@@ -155,6 +155,9 @@ press.machine_state changes to Running
     -> coder.state transitions to Printing
     -> coder.prints_total starts incrementing
     -> coder.ink_level starts depleting
+    -> coder.ink_pump_speed ramps to operating RPM
+    -> coder.ink_pressure stabilizes at ~1500 mbar
+    -> coder.ink_consumption_ml starts accumulating
     -> vibration.main_drive_x/y/z increases from idle (0.5-1 mm/s) to running (3-8 mm/s)
     -> laminator.web_speed follows press speed with lag
     -> press.unwind_diameter decreases
@@ -209,8 +212,28 @@ The simulation clock advances at a configurable multiple of real time:
 
 At higher compression rates, the data generation engine produces values at the same simulated intervals but publishes them more frequently. A 1-second signal at 100x publishes 100 values per real second. Protocol adapters batch these if the client cannot keep up.
 
-At 100x, the aggregate data rate across 40 signals is approximately 200 values per real second. This is within the throughput capacity of Modbus TCP, OPC-UA, and MQTT on localhost.
+At 100x with the packaging profile (47 signals), the aggregate data rate is approximately 235 values per real second. The F&B profile (65 signals) produces approximately 325 values per real second. Both are within the throughput capacity of Modbus TCP, OPC-UA, and MQTT on localhost.
 
 ## 4.5 Random Seed
 
 The engine accepts an optional random seed. With the same seed and configuration, the engine produces identical output. This enables reproducible test scenarios. Without a seed, the engine uses a time-based seed for unique runs.
+
+## 4.6 F&B Profile Signal Models
+
+The F&B profile (65 signals) uses the same signal model types as the packaging profile. The parameters differ to match food and beverage equipment. Key model patterns unique to the F&B profile:
+
+**Batch process.** The mixer operates in discrete batch cycles: ingredient addition, mixing, temperature hold, discharge. Each cycle runs 20-45 minutes. The `state_machine` model drives the batch phase. Mixer speed, torque, and batch temperature change with each phase transition. This contrasts with the packaging press, which runs continuously.
+
+**Multi-zone thermal control.** The oven uses three independent temperature zones. Each zone tracks its setpoint via `first_order_lag` with a time constant of 120-300 seconds. Adjacent zones have thermal coupling: a drift in zone 1 nudges zone 2. The coupling factor is configurable (default 0.05).
+
+**Fill weight distribution.** The filler produces a Gaussian distribution of fill weights around the target (e.g. 350g +/- 3g). The `steady_state` model drives each fill event. When the mean drifts from target, reject rate increases. This is a new application of the steady_state model at the event level rather than the continuous level.
+
+**CIP wash cycles.** Clean-in-place runs between production batches. Wash temperature, flow rate, and conductivity follow a recipe curve over 30-60 minutes. The `ramp` and `first_order_lag` models combine to produce the CIP profile: rinse, caustic wash, rinse, acid wash, final rinse.
+
+**F&B correlation model.** The correlation engine extends for F&B equipment:
+- `mixer.torque` correlates with `mixer.speed` and `mixer.batch_temp` (viscosity changes with temperature).
+- Oven zones have thermal coupling (zone 1 drift affects zone 2).
+- `filler.reject_count` correlates with deviation of `filler.fill_weight` from target.
+- `chiller.compressor_power` correlates inversely with `chiller.room_temp` delta from setpoint.
+
+Full F&B signal definitions, register maps, and protocol mappings are in `02b-factory-layout-food-and-beverage.md`.
