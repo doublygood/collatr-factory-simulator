@@ -9,6 +9,7 @@ PRD Reference: Section 3.2, Appendix B (OPC-UA Node Tree)
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ from factory_simulator.protocols.opcua_server import (
     NAMESPACE_INDEX,
     NAMESPACE_URI,
     OpcuaServer,
+    _cast_to_opcua_value,
     _initial_value,
 )
 from factory_simulator.store import SignalStore
@@ -497,3 +499,174 @@ class TestServerLifecycle:
         await server.start()
         await server.stop()
         await server.stop()  # second stop should be a no-op
+
+
+# ---------------------------------------------------------------------------
+# Tests: _cast_to_opcua_value helper (no server required)
+# ---------------------------------------------------------------------------
+
+
+class TestCastToOpcuaValue:
+    """Test the _cast_to_opcua_value pure function."""
+
+    def test_double_from_float(self) -> None:
+        result = _cast_to_opcua_value(42.7, ua.VariantType.Double)
+        assert result == pytest.approx(42.7)
+        assert isinstance(result, float)
+
+    def test_uint32_rounds_and_casts(self) -> None:
+        result = _cast_to_opcua_value(1234.9, ua.VariantType.UInt32)
+        assert result == 1235
+        assert isinstance(result, int)
+
+    def test_uint32_clamped_to_zero(self) -> None:
+        assert _cast_to_opcua_value(-1.0, ua.VariantType.UInt32) == 0
+
+    def test_uint16_clamped_high(self) -> None:
+        assert _cast_to_opcua_value(70000.0, ua.VariantType.UInt16) == 0xFFFF
+
+    def test_string_pass_through(self) -> None:
+        assert _cast_to_opcua_value("hello", ua.VariantType.String) == "hello"
+
+    def test_non_numeric_string_to_double_returns_zero(self) -> None:
+        assert _cast_to_opcua_value("abc", ua.VariantType.Double) == pytest.approx(0.0)
+
+    def test_non_numeric_string_to_uint32_returns_zero(self) -> None:
+        assert _cast_to_opcua_value("abc", ua.VariantType.UInt32) == 0
+
+
+# ---------------------------------------------------------------------------
+# Subscription helper (for TestValueSync)
+# ---------------------------------------------------------------------------
+
+
+class _ChangeHandler:
+    """Collects subscription data-change notifications during tests."""
+
+    def __init__(self) -> None:
+        self.values: list[object] = []
+
+    def datachange_notification(self, node: object, val: object, data: object) -> None:
+        self.values.append(val)
+
+
+# ---------------------------------------------------------------------------
+# Tests: value sync (requires running server)
+# ---------------------------------------------------------------------------
+
+
+class TestValueSync:
+    """Verify value sync and setpoint write-back (PRD 3.2.3, 3.2.4)."""
+
+    async def test_store_value_appears_on_opcua(
+        self,
+        opcua_system: tuple[OpcuaServer, Client, int],
+    ) -> None:
+        """Value set in SignalStore is readable via OPC-UA after one sync cycle."""
+        server, client, ns = opcua_system
+        node_path = "PackagingLine.Press1.LineSpeed"
+        signal_id = "press.line_speed"
+
+        server._store.set(signal_id, 250.0, 1.0, "good")
+        # Wait for at least one full sync cycle (MIN_PUBLISHING_INTERVAL_MS = 500ms)
+        await asyncio.sleep(0.7)
+
+        node = client.get_node(ua.NodeId(node_path, ns))
+        val = await node.read_value()
+        assert val == pytest.approx(250.0)
+
+    async def test_uint32_counter_cast_correctly(
+        self,
+        opcua_system: tuple[OpcuaServer, Client, int],
+    ) -> None:
+        """Float store value is cast to UInt32 when writing a counter node."""
+        server, client, ns = opcua_system
+        node_path = "PackagingLine.Press1.ImpressionCount"
+        signal_id = "press.impression_count"
+
+        server._store.set(signal_id, 5000.0, 1.0, "good")
+        await asyncio.sleep(0.7)
+
+        node = client.get_node(ua.NodeId(node_path, ns))
+        val = await node.read_value()
+        assert val == 5000
+        assert isinstance(val, int)
+
+    async def test_bad_quality_gives_bad_sensor_failure(
+        self,
+        opcua_system: tuple[OpcuaServer, Client, int],
+    ) -> None:
+        """Quality 'bad' in store maps to StatusCode BadSensorFailure (PRD 3.2.3)."""
+        server, client, ns = opcua_system
+        node_path = "PackagingLine.Press1.LineSpeed"
+        signal_id = "press.line_speed"
+
+        server._store.set(signal_id, 0.0, 1.0, "bad")
+        await asyncio.sleep(0.7)
+
+        node = client.get_node(ua.NodeId(node_path, ns))
+        dv = await node.read_data_value(raise_on_bad_status=False)
+        assert dv.StatusCode.value == ua.StatusCodes.BadSensorFailure
+
+    async def test_good_quality_gives_good_status(
+        self,
+        opcua_system: tuple[OpcuaServer, Client, int],
+    ) -> None:
+        """Quality 'good' maps to StatusCode.Good on the OPC-UA node."""
+        server, client, ns = opcua_system
+        node_path = "PackagingLine.Press1.LineSpeed"
+        signal_id = "press.line_speed"
+
+        server._store.set(signal_id, 100.0, 1.0, "good")
+        await asyncio.sleep(0.7)
+
+        node = client.get_node(ua.NodeId(node_path, ns))
+        dv = await node.read_data_value()
+        assert dv.StatusCode.is_good()
+
+    async def test_setpoint_write_propagates_to_store(
+        self,
+        opcua_system: tuple[OpcuaServer, Client, int],
+    ) -> None:
+        """OPC-UA client write to a setpoint node propagates back to SignalStore."""
+        server, client, ns = opcua_system
+        node_path = "PackagingLine.Press1.Dryer.Zone1.Setpoint"
+        signal_id = "press.dryer_setpoint_zone_1"
+
+        # Client writes a new setpoint value
+        node = client.get_node(ua.NodeId(node_path, ns))
+        await node.write_value(175.0)
+
+        # Wait for update loop to detect and propagate
+        await asyncio.sleep(0.7)
+
+        store_val = server._store.get_value(signal_id)
+        assert store_val == pytest.approx(175.0)
+
+    async def test_subscription_receives_data_change(
+        self,
+        opcua_system: tuple[OpcuaServer, Client, int],
+    ) -> None:
+        """OPC-UA subscriptions receive data change notifications (PRD 3.2.4)."""
+        server, client, ns = opcua_system
+        node_path = "PackagingLine.Press1.LineSpeed"
+        signal_id = "press.line_speed"
+
+        handler = _ChangeHandler()
+        sub = await client.create_subscription(500, handler)
+        node = client.get_node(ua.NodeId(node_path, ns))
+        await sub.subscribe_data_change(node)
+
+        # Initial notification fires immediately on subscribe (value = 0.0)
+        # Now update the store and wait for update loop + subscription publish
+        server._store.set(signal_id, 150.0, 1.0, "good")
+        # update loop (500ms) + subscription publish interval (500ms) + buffer
+        await asyncio.sleep(2.0)
+
+        await sub.delete()
+
+        assert len(handler.values) >= 1, "No subscription notifications received"
+        assert any(
+            isinstance(v, float) and abs(v - 150.0) < 0.5
+            for v in handler.values
+        ), f"Expected 150.0 in received values, got {handler.values}"

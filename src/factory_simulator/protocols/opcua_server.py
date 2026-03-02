@@ -9,9 +9,11 @@ Features:
 - String NodeIDs: ns=2;s=PackagingLine.Press1.LineSpeed etc.
 - EURange property on every variable node
 - Read-only access by default; setpoints (modbus_writable=True) are writable
-- Periodic value sync from SignalStore (task 2.2, placeholder here)
+- Periodic value sync from SignalStore every MIN_PUBLISHING_INTERVAL_MS
+- StatusCode.Good for good/uncertain quality; BadSensorFailure for bad quality
+- Setpoint write-back: client OPC-UA writes propagate to SignalStore
 
-PRD Reference: Section 3.2, Appendix B (OPC-UA Node Tree)
+PRD Reference: Section 3.2, 3.2.3, 3.2.4, Appendix B (OPC-UA Node Tree)
 CLAUDE.md Rule 9: No locks (single writer, asyncio single-threaded).
 CLAUDE.md Rule 10: Configuration via Pydantic.
 """
@@ -61,6 +63,36 @@ def _initial_value(vtype: Any) -> float | int | str:
     return 0.0
 
 
+def _cast_to_opcua_value(value: float | str, vtype: Any) -> float | int | str:
+    """Cast a SignalStore value to the Python type required by the VariantType.
+
+    Parameters
+    ----------
+    value:
+        Raw value from :class:`~factory_simulator.store.SignalValue`.
+    vtype:
+        asyncua ``VariantType`` for the target OPC-UA node.
+
+    Returns
+    -------
+    float | int | str
+        Python value compatible with ``write_value(val, varianttype=vtype)``.
+    """
+    if vtype == ua.VariantType.String:
+        return str(value)
+    if isinstance(value, str):
+        # Non-string node type but string store value — return zero
+        return 0 if vtype in (ua.VariantType.UInt32, ua.VariantType.UInt16) else 0.0
+    fval = float(value)
+    if vtype == ua.VariantType.Double:
+        return fval
+    if vtype == ua.VariantType.UInt32:
+        return int(min(max(round(fval), 0), 0xFFFF_FFFF))
+    if vtype == ua.VariantType.UInt16:
+        return int(min(max(round(fval), 0), 0xFFFF))
+    return fval
+
+
 # ---------------------------------------------------------------------------
 # OpcuaServer
 # ---------------------------------------------------------------------------
@@ -106,12 +138,16 @@ class OpcuaServer:
 
         # node_path → asyncua variable node (populated by _build_node_tree)
         self._nodes: dict[str, Any] = {}
-        # node_path → signal_id (for value sync in task 2.2)
+        # node_path → signal_id
         self._node_to_signal: dict[str, str] = {}
-        # node_path → VariantType (for encoding in task 2.2)
+        # node_path → VariantType
         self._node_types: dict[str, Any] = {}
-        # signal_id → node_path (for setpoint write-back in task 2.2)
+        # signal_id → node_path
         self._signal_to_node: dict[str, str] = {}
+        # node_paths of writable setpoint nodes
+        self._setpoint_nodes: set[str] = set()
+        # last value written to OPC-UA for setpoints (for client write detection)
+        self._last_written_setpoints: dict[str, float | int | str] = {}
 
     # -- Properties -----------------------------------------------------------
 
@@ -209,6 +245,14 @@ class OpcuaServer:
         PRD Reference: Appendix B (full node tree), Section 3.2.
         """
         assert self._server is not None
+        # Clear state so restart produces a clean tree
+        self._nodes.clear()
+        self._node_to_signal.clear()
+        self._node_types.clear()
+        self._signal_to_node.clear()
+        self._setpoint_nodes.clear()
+        self._last_written_setpoints.clear()
+
         objects = self._server.nodes.objects
         folder_cache: dict[str, Any] = {}
 
@@ -267,8 +311,13 @@ class OpcuaServer:
                 # Writable for setpoints (PRD 3.2)
                 if sig_cfg.modbus_writable:
                     await var_node.set_writable()
+                    self._setpoint_nodes.add(node_path)
+                    # Initialise last-written to zero so the first update cycle
+                    # does not false-detect a client write (OPC-UA node also
+                    # starts at zero from init_val).
+                    self._last_written_setpoints[node_path] = init_val
 
-                # Register for value sync (task 2.2)
+                # Register for value sync
                 self._nodes[node_path] = var_node
                 self._node_to_signal[node_path] = signal_id
                 self._node_types[node_path] = vtype
@@ -280,18 +329,106 @@ class OpcuaServer:
             len(folder_cache),
         )
 
-    # -- Value sync (task 2.2) -----------------------------------------------
+    # -- Value sync ----------------------------------------------------------
 
     async def _update_loop(self) -> None:
         """Periodically sync signal values from SignalStore to OPC-UA nodes.
 
-        Full sync implementation is task 2.2.  This placeholder keeps the
-        server alive at the correct publishing interval.
+        Runs a full sync pass every MIN_PUBLISHING_INTERVAL_MS (500ms).
+        Syncs immediately on first invocation so values are available as
+        soon as the server starts.
 
-        PRD Reference: Section 3.2 (minimum 500ms publishing interval)
+        PRD Reference: Section 3.2 (minimum 500ms publishing interval),
+        Section 3.2.3 (StatusCode mapping), Section 3.2.4 (setpoint write-back)
         """
         try:
             while True:
+                await self._sync_values()
                 await asyncio.sleep(MIN_PUBLISHING_INTERVAL_MS / 1000.0)
         except asyncio.CancelledError:
             pass
+
+    async def _sync_values(self) -> None:
+        """Single sync pass: detect client setpoint writes, then push store → OPC-UA.
+
+        Phase 1 — Setpoint write-back (PRD 3.2.4):
+            For each writable setpoint node, read the current OPC-UA value.
+            If it differs from the last value *we* wrote, a client has changed
+            it.  Propagate the new value back to the SignalStore so the signal
+            model's target setpoint updates.
+
+        Phase 2 — Store → OPC-UA push (PRD 3.2.3):
+            For every registered node, read from the store and write to the
+            OPC-UA node.  Maps quality to StatusCode:
+              - ``"good"`` / ``"uncertain"`` → ``StatusCode.Good``
+              - ``"bad"`` → ``StatusCode.BadSensorFailure``
+            If the signal is not yet in the store the node keeps its last
+            value (or initial zero) until the engine populates the store.
+        """
+        if self._server is None:
+            return
+
+        # -- Phase 1: detect client writes on setpoint nodes -----------------
+        for node_path in self._setpoint_nodes:
+            signal_id = self._node_to_signal.get(node_path)
+            var_node = self._nodes.get(node_path)
+            if signal_id is None or var_node is None:
+                continue
+
+            vtype = self._node_types.get(node_path, ua.VariantType.Double)
+            try:
+                dv = await var_node.read_data_value(raise_on_bad_status=False)
+                raw = dv.Value.Value if dv.Value is not None else None
+            except Exception:
+                continue
+
+            if raw is None:
+                continue
+
+            node_val = _cast_to_opcua_value(raw, vtype)
+            last_written = self._last_written_setpoints.get(node_path)
+
+            if last_written is not None and node_val != last_written:
+                # Client wrote a different value — propagate to store.
+                store_val: float | str = (
+                    float(node_val) if isinstance(node_val, int) else node_val
+                )
+                self._store.set(signal_id, store_val, 0.0, "good")
+                self._last_written_setpoints[node_path] = node_val
+                logger.debug(
+                    "OPC-UA setpoint write: %s = %s (was %s)",
+                    signal_id,
+                    node_val,
+                    last_written,
+                )
+
+        # -- Phase 2: push store values to OPC-UA nodes ----------------------
+        for node_path, var_node in self._nodes.items():
+            signal_id = self._node_to_signal.get(node_path)
+            if signal_id is None:
+                continue
+
+            sv = self._store.get(signal_id)
+            if sv is None:
+                continue
+
+            vtype = self._node_types.get(node_path, ua.VariantType.Double)
+            cast_val = _cast_to_opcua_value(sv.value, vtype)
+
+            try:
+                if sv.quality == "bad":
+                    dv = ua.DataValue(
+                        ua.Variant(cast_val, vtype),
+                        ua.StatusCode(ua.StatusCodes.BadSensorFailure),
+                    )
+                    await var_node.write_value(dv)
+                else:
+                    await var_node.write_value(cast_val, varianttype=vtype)
+            except Exception as exc:
+                logger.debug("OPC-UA write failed for %s: %s", node_path, exc)
+                continue
+
+            # Update last-written tracker for setpoints so we can distinguish
+            # server-driven writes from client-driven writes next cycle.
+            if node_path in self._setpoint_nodes:
+                self._last_written_setpoints[node_path] = cast_val

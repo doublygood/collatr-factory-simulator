@@ -4,7 +4,7 @@
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
-- [ ] 2.2: OPC-UA Server Adapter — Value Sync + Subscriptions
+- [x] 2.2: OPC-UA Server Adapter — Value Sync + Subscriptions
 - [ ] 2.3: OPC-UA Integration Tests
 - [ ] 2.4: MQTT Publisher Adapter
 - [ ] 2.5: MQTT Batch Vibration Topic
@@ -45,3 +45,25 @@
 - `ua.NodeId(0, 0)` for EURange property NodeID: asyncua generates an auto-assigned NodeId for property nodes; passing `(0, 0)` works correctly.
 
 **Test results:** 25/25 unit tests pass. No regressions (1045 total unit tests pass).
+
+### Task 2.2 (Complete)
+
+**Files modified:**
+- `src/factory_simulator/protocols/opcua_server.py` — Added `_cast_to_opcua_value` helper, `_setpoint_nodes`/`_last_written_setpoints` tracking, full `_sync_values` implementation, updated `_update_loop`
+- `tests/unit/test_protocols/test_opcua.py` — Added `TestCastToOpcuaValue` (7 tests) and `TestValueSync` (6 tests)
+
+**What was built:**
+- `_cast_to_opcua_value(value, vtype)`: casts SignalStore float/str values to correct Python type (float/int/str) for the OPC-UA VariantType
+- `_update_loop`: now calls `_sync_values()` immediately on start, then every 500ms (PRD 3.2 minimum publishing interval)
+- `_sync_values()`: two-phase sync:
+  - Phase 1 (setpoint write-back): reads each writable setpoint node; if value differs from last server-written value, a client wrote it → propagates new value to SignalStore
+  - Phase 2 (store → OPC-UA): for every registered node, reads from store; writes with `StatusCode.Good` for good/uncertain quality, `StatusCode.BadSensorFailure` for bad quality; updates `_last_written_setpoints` for setpoint nodes
+- `_build_node_tree`: now clears all node state dicts before rebuild (clean restart support); populates `_setpoint_nodes` and initialises `_last_written_setpoints` to zero for each setpoint
+
+**Decisions:**
+- Setpoint write detection uses "last written" tracking rather than raw comparison: avoids false positives when engine and client both write setpoints within the same cycle
+- Phase 1 (read from OPC-UA) runs before Phase 2 (write to OPC-UA) so client writes are detected before being overwritten by the store value
+- `store_val` timestamp is 0.0 for client-written setpoints (engine controls timing; it overwrites on next tick)
+- Only `quality="bad"` maps to `BadSensorFailure`; "uncertain" maps to Good (PRD: "Phase 4 will add more")
+
+**Test results:** 38/38 unit tests pass. No regressions (1058 total unit tests pass).
