@@ -173,9 +173,14 @@ class EquipmentGenerator(ABC):
         pass
     
     @abstractmethod
-    def generate(self, sim_time: float, machine_state: int, 
-                 store: SignalStore) -> list[SignalValue]:
-        """Generate new signal values for the current tick."""
+    def generate(self, sim_time: float, store: SignalStore) -> list[SignalValue]:
+        """Generate new signal values for the current tick.
+        
+        Each generator reads its own equipment state from the store.
+        The store provides access to all signals across all equipment,
+        enabling cross-equipment correlations (e.g. coder follows
+        press state, CIP triggers after mixer batch completes).
+        """
         pass
     
     @abstractmethod
@@ -183,6 +188,10 @@ class EquipmentGenerator(ABC):
         """Return Modbus/OPC-UA/MQTT mappings for each signal."""
         pass
 ```
+
+The `generate()` method does not take a `machine_state` parameter. Each generator reads its own equipment state from the store. The F&B profile has multiple independent state machines running concurrently: mixer cycles through Loading/Mixing/Hold/Discharge, the filler runs independently, CIP has its own state, the oven runs continuously. A single `machine_state: int` parameter cannot represent this. The store is the single source of truth. Each generator reads whichever signals it needs, including other equipment's state when cross-equipment correlations apply.
+
+On the packaging profile, the press state machine drives most other equipment (coder follows press, laminator follows press). On the F&B profile, the relationships are looser. The mixer, filler, and sealer each have their own state. The CIP state is independent and triggers between production batches. The oven runs continuously regardless of upstream equipment. Each generator owns its own state transitions and reads peer state from the store when needed.
 
 Adding a new equipment type requires:
 1. Create a new generator class implementing `EquipmentGenerator`.
