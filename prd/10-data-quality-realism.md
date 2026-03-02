@@ -20,30 +20,31 @@ The reference data showed one site agent having extended connectivity issues (97
 
 ## 10.3 Sensor Noise
 
-Every analog signal includes Gaussian noise. The noise magnitude (sigma) is configured per signal.
+Every analog signal includes noise. The noise magnitude (sigma) and distribution are configured per signal. Gaussian is the default distribution. Signals with heavy-tailed behaviour use Student-t. Signals with autocorrelated residuals use AR(1). See Section 4.2.11 for distribution definitions.
 
-| Signal | Noise Sigma | Rationale |
-|--------|-------------|-----------|
-| press.line_speed | 0.5 m/min | Encoder resolution + motor controller jitter |
-| press.web_tension | 5.0 N | Load cell noise, typical for web handling |
-| press.registration_error_x/y | 0.01 mm | Camera resolution limit |
-| press.ink_viscosity | 0.5 s | Measurement method variability |
-| press.ink_temperature | 0.2 C | Thermocouple noise |
-| press.dryer_temp_zone_* | 0.3 C | Thermocouple noise + control oscillation |
-| press.main_drive_current | 0.5 A | CT clamp resolution |
-| press.main_drive_speed | 2.0 RPM | Encoder resolution |
-| press.nip_pressure | 0.05 bar | Pressure transducer noise |
-| laminator.* | similar to press | Same sensor types |
-| coder.printhead_temp | 0.5 C | Reference: PS_Head_TempFirepulse sigma=2.8C |
-| coder.ink_pump_speed | 0.5 RPM | Pump motor encoder noise |
-| coder.ink_pressure | 60 mbar | Reference: PS_Pnm_LungPressure sigma=60 mbar |
-| coder.ink_viscosity_actual | 0.3 cP | Viscosity sensor measurement noise |
-| coder.supply_voltage | 0.1 V | PSU ripple and measurement noise |
-| coder.ink_consumption_ml | 0.0 | Counter, no noise on accumulation |
-| env.ambient_temp | 0.1 C | IOLink sensor resolution |
-| env.ambient_humidity | 0.5 %RH | IOLink sensor resolution |
-| energy.line_power | 0.2 kW | Power meter resolution |
-| vibration.main_drive_* | 0.3 mm/s | Accelerometer noise floor |
+| Signal | Noise Sigma | Distribution | Rationale |
+|--------|-------------|-------------|-----------|
+| press.line_speed | 0.5 m/min | Gaussian | Encoder resolution + motor controller jitter |
+| press.web_tension | 5.0 N | Gaussian | Load cell noise, typical for web handling |
+| press.registration_error_x/y | 0.01 mm | Gaussian | Camera resolution limit |
+| press.ink_viscosity | 0.5 s | Gaussian | Measurement method variability |
+| press.ink_temperature | 0.2 C | Gaussian | Thermocouple noise |
+| press.dryer_temp_zone_* | 0.3 C | AR(1), phi=0.7 | PID control loop autocorrelation |
+| press.main_drive_current | 0.5 A | Student-t, df=8 | CT clamp resolution + load spikes |
+| press.main_drive_speed | 2.0 RPM | Gaussian | Encoder resolution |
+| press.nip_pressure | 0.05 bar | Gaussian | Pressure transducer noise |
+| laminator.nip_temp | similar to press | AR(1), phi=0.7 | PID-controlled temperature |
+| laminator.* (other) | similar to press | Gaussian | Same sensor types |
+| coder.printhead_temp | 0.5 C | AR(1), phi=0.7 | PID-controlled, ref sigma=2.8C |
+| coder.ink_pump_speed | 0.5 RPM | Gaussian | Pump motor encoder noise |
+| coder.ink_pressure | 60 mbar | Student-t, df=6 | Pneumatic transient outliers |
+| coder.ink_viscosity_actual | 0.3 cP | Gaussian | Viscosity sensor measurement noise |
+| coder.supply_voltage | 0.1 V | Gaussian | PSU ripple and measurement noise |
+| coder.ink_consumption_ml | 0.0 | n/a | Counter, no noise on accumulation |
+| env.ambient_temp | 0.1 C | Gaussian | IOLink sensor resolution |
+| env.ambient_humidity | 0.5 %RH | Gaussian | IOLink sensor resolution |
+| energy.line_power | 0.2 kW | Gaussian | Power meter resolution |
+| vibration.main_drive_* | 0.3 mm/s | Student-t, df=5 | Mechanical impulse outliers |
 
 ## 10.4 Counter Rollovers
 

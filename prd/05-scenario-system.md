@@ -346,3 +346,51 @@ Sequence:
 **Key distinction from unplanned stops.** Micro-stops do not trigger a state change. No fault code is written. No coil is set. The press is still "Running" from the PLC's perspective. This is the behaviour that OEE systems struggle to capture: production is nominally running but throughput drops. Detecting and quantifying micro-stops is a high-value analytics use case.
 
 **Scheduling.** Micro-stops are independent of other scenarios. They can occur during any Running period. They do not interact with job changeovers, web breaks, or other scenario events. If a micro-stop coincides with a scenario start, the scenario takes priority.
+
+## 5.16 Contextual Anomalies
+
+Contextual anomalies test whether CollatrEdge can distinguish between values that are normal in one state and anomalous in another. A signal value may fall within the normal operating range for one machine state but indicate a fault when it appears during a different state. This is the hardest class of anomaly for detection algorithms because threshold-based methods cannot catch it.
+
+The scenario engine injects contextual anomalies by holding a signal at its normal operating value during a state where that value should not appear.
+
+**Types of contextual anomaly:**
+
+1. **Heater stuck on.** `coder.printhead_temp` stays at printing temperature (40-42C) during Off or Standby state. Normal during Printing. Anomalous when the coder should be cooling down. Indicates a stuck relay or failed controller.
+
+2. **Pressure bleed.** `coder.ink_pressure` stays at operating pressure (800-850 mbar) during Off state. Normal during Printing and Ready. Anomalous during Off. Indicates a valve not closing properly.
+
+3. **Counter incrementing during idle.** `press.impression_count` increments while `press.machine_state` is Idle (3). Normal during Running. Anomalous during Idle. Indicates a sensor counting false triggers or a wiring fault.
+
+4. **Temperature during maintenance.** `press.dryer_temp_zone_1` at 100C while `press.machine_state` is Maintenance (5). Normal during Running and Setup. Anomalous during Maintenance because dryers should be off for safe access.
+
+5. **Vibration during off.** `vibration.main_drive_x` at 3-5 mm/s while `press.machine_state` is Off (0). Normal during Running. Anomalous during Off. Indicates external vibration source or sensor fault.
+
+**Scheduling.** The engine selects 2-5 contextual anomaly events per simulated week (configurable). Each event type has a probability weight. The engine picks a type, waits for the required machine state, then injects the anomalous signal value for the configured duration. If the machine state changes before the duration expires, the anomaly ends early.
+
+**Ground truth.** The ground truth event log (Section 4.7) records each contextual anomaly with: event type, affected signal, injected value, expected state (where the value would be normal), and actual state (where it is anomalous). This enables evaluation of context-aware anomaly detection.
+
+## 5.17 Intermittent Faults
+
+Intermittent faults appear, disappear, and reappear over days or weeks before becoming permanent. They are the hardest faults to diagnose in real factories because they do not persist long enough for simple threshold alarms to catch reliably.
+
+The intermittent fault model has three phases.
+
+**Phase 1: Sporadic.** The fault appears briefly (seconds to minutes), then disappears. Occurrences are rare at first (1-2 per day) and increase in frequency over time. The signal returns to normal between occurrences. This phase lasts days to weeks.
+
+**Phase 2: Frequent.** The fault appears more often (5-20 per day) and lasts longer (minutes to hours). The signal still returns to normal between occurrences, but the "normal" baseline may begin to shift. This phase lasts days.
+
+**Phase 3: Permanent.** The fault becomes continuous. The signal no longer returns to normal. This may trigger a state machine transition to Fault.
+
+**Applicable signals and fault patterns:**
+
+1. **Bearing vibration intermittent.** `vibration.main_drive_x/y/z` spikes to 15-25 mm/s for 10-60 seconds, then returns to normal baseline. Over 2-4 weeks (simulated), frequency increases from 1-2 per day to 10-20 per day. Finally becomes continuous elevation. This precedes the existing bearing wear degradation scenario (Section 5.5). The intermittent phase comes first. Configure `bearing_wear.start_after_hours` to begin after the intermittent fault reaches phase 3.
+
+2. **Electrical intermittent.** `press.main_drive_current` spikes by 20-50% for 1-10 seconds. Returns to normal. Frequency increases over 1-2 weeks. Caused by loose connection, degrading contactor, or inverter fault. May culminate in motor overload fault (code 101).
+
+3. **Sensor intermittent.** Any analog signal briefly reports the sentinel value (Section 10.9) for 1-5 seconds, then resumes normal reading. Frequency increases over days. Caused by intermittent wire break, corroded terminal, or failing sensor. Eventually becomes a permanent disconnect.
+
+4. **Pneumatic intermittent.** `coder.ink_pressure` drops to 0 for 2-30 seconds, then recovers. Caused by sticking solenoid valve or air leak that opens under vibration. Frequency increases. May culminate in coder Fault state.
+
+**Timescale.** Intermittent faults operate on long timescales. At 1x speed, the full sporadic-to-permanent progression takes weeks. At 100x, it takes hours. The bearing intermittent scenario should precede and connect to the existing bearing wear scenario (Section 5.5).
+
+**Ground truth.** The ground truth event log (Section 4.7) records each intermittent fault occurrence with: phase (1, 2, or 3), affected signal, spike magnitude, duration, and whether it transitions to permanent.

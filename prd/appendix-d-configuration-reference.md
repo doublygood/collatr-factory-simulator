@@ -16,6 +16,38 @@ ground_truth_log: "output/ground_truth.jsonl"  # Path for ground truth event log
 
 ## Signal Model Parameters
 
+### Noise Distribution Parameters
+
+Every signal model that includes noise accepts optional distribution parameters. Omitting these parameters produces the default Gaussian white noise. See Section 4.2.11 for distribution definitions.
+
+**Gaussian (default).** No additional parameters required. Omit `noise_distribution` or set it to `"gaussian"`.
+
+```yaml
+# Gaussian noise (default, explicit)
+noise_distribution: "gaussian"
+sigma: 0.3
+```
+
+**Student-t (heavy tails).** Set `noise_distribution` to `"student_t"` and specify degrees of freedom.
+
+```yaml
+# Student-t noise for vibration signals
+noise_distribution: "student_t"
+noise_df: 5              # Degrees of freedom (lower = heavier tails)
+sigma: 0.3               # Scale parameter (same role as Gaussian sigma)
+```
+
+**AR(1) autocorrelated noise.** Set `noise_distribution` to `"ar1"` and specify the autocorrelation coefficient.
+
+```yaml
+# AR(1) noise for PID-controlled temperatures
+noise_distribution: "ar1"
+noise_phi: 0.7            # Autocorrelation coefficient (0 to 0.99)
+sigma: 0.3                # Marginal standard deviation
+```
+
+These parameters appear inside the `params` block of any signal model. The examples below show the default Gaussian noise. Override with the parameters above as needed per signal.
+
 ### steady_state
 
 ```yaml
@@ -49,9 +81,12 @@ params:
 model: "first_order_lag"
 params:
   tau_seconds: 60.0     # Time constant in seconds
-  sigma: 0.3            # Gaussian noise
+  sigma: 0.3            # Noise magnitude
   overshoot: 0.05       # Overshoot factor (0 = no overshoot)
   setpoint_signal: "press.dryer_setpoint_zone_1"  # Signal to track
+  # AR(1) noise for PID-controlled temperatures
+  noise_distribution: "ar1"
+  noise_phi: 0.7        # Autocorrelation coefficient
 ```
 
 ### ramp
@@ -113,8 +148,11 @@ params:
   transform: "linear"       # linear, quadratic, or custom
   base: 15.0                # Output when parent = 0
   factor: 0.5               # Output = base + factor * parent
-  sigma: 0.5                # Additional Gaussian noise
+  sigma: 0.5                # Additional noise (Gaussian default)
   lag_seconds: 0            # Delay following parent changes
+  # Example: Student-t noise for motor current
+  # noise_distribution: "student_t"
+  # noise_df: 8
 ```
 
 ### state_machine
@@ -304,6 +342,77 @@ scenarios:
     ramp_down_seconds: [2, 5]
     ramp_up_seconds: [5, 15]
     mean_interval_minutes: [10, 50]       # Poisson process mean
+
+  # Contextual anomalies: normal values in wrong machine state
+  contextual_anomaly:
+    enabled: true
+    frequency_per_week: [2, 5]
+    types:
+      heater_stuck:
+        probability: 0.3
+        duration_seconds: [300, 3600]
+      pressure_bleed:
+        probability: 0.2
+        duration_seconds: [600, 7200]
+      counter_false_trigger:
+        probability: 0.2
+        duration_seconds: [60, 600]
+        increment_rate: 0.1              # increments per second
+      hot_during_maintenance:
+        probability: 0.15
+        duration_seconds: [1800, 7200]
+      vibration_during_off:
+        probability: 0.15
+        duration_seconds: [300, 1800]
+
+  # Intermittent faults: appear, disappear, reappear before becoming permanent
+  intermittent_fault:
+    enabled: true
+    faults:
+      bearing_intermittent:
+        enabled: true
+        start_after_hours: 24
+        phase1_duration_hours: [168, 336]      # 1-2 weeks sporadic
+        phase1_frequency_per_day: [1, 3]
+        phase1_spike_duration_s: [10, 60]
+        phase2_duration_hours: [48, 168]       # 2-7 days frequent
+        phase2_frequency_per_day: [5, 20]
+        phase2_spike_duration_s: [30, 300]
+        phase3_transition: true                # become permanent
+        affected_signals: ["vibration.main_drive_x", "vibration.main_drive_y", "vibration.main_drive_z"]
+        spike_magnitude: [15, 25]              # mm/s during spike
+      electrical_intermittent:
+        enabled: true
+        start_after_hours: 48
+        phase1_duration_hours: [72, 168]
+        phase1_frequency_per_day: [1, 2]
+        phase1_spike_duration_s: [1, 10]
+        phase2_duration_hours: [24, 72]
+        phase2_frequency_per_day: [5, 15]
+        phase2_spike_duration_s: [2, 30]
+        phase3_transition: true
+        affected_signals: ["press.main_drive_current"]
+        spike_magnitude_pct: [20, 50]
+      sensor_intermittent:
+        enabled: false                         # enable per signal
+        phase1_duration_hours: [48, 168]
+        phase1_frequency_per_day: [1, 3]
+        phase1_spike_duration_s: [1, 5]
+        phase2_duration_hours: [24, 72]
+        phase2_frequency_per_day: [5, 15]
+        phase2_spike_duration_s: [2, 10]
+        phase3_transition: true                # permanent disconnect
+      pneumatic_intermittent:
+        enabled: true
+        start_after_hours: 72
+        phase1_duration_hours: [168, 504]
+        phase1_frequency_per_day: [1, 2]
+        phase1_spike_duration_s: [2, 30]
+        phase2_duration_hours: [48, 168]
+        phase2_frequency_per_day: [3, 10]
+        phase2_spike_duration_s: [5, 60]
+        phase3_transition: false               # valve replaced before permanent failure
+        affected_signals: ["coder.ink_pressure"]
 
   # --- F&B Profile Scenarios ---
 

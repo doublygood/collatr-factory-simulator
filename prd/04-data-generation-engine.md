@@ -10,7 +10,7 @@ Key principles:
 
 2. **State drives everything.** The machine state (Off, Setup, Running, Idle, Fault, Maintenance) determines the behaviour of all signals. A signal generator does not produce values in isolation. It asks "what state is the machine in?" and generates accordingly.
 
-3. **Noise is not optional.** Every analog signal includes Gaussian noise at a configurable magnitude. Real sensors are noisy. Clean signals look fake. The noise magnitude is calibrated from studying the reference data. Print head temperature had 2.8C standard deviation. Lung pressure had 60 mbar standard deviation. We tune noise per signal.
+3. **Noise is not optional.** Every analog signal includes noise at a configurable magnitude and distribution. Real sensors are noisy. Clean signals look fake. The noise magnitude is calibrated from the reference data. Print head temperature had 2.8C standard deviation. Lung pressure had 60 mbar standard deviation. We tune noise per signal. The noise distribution is also configurable per signal. Gaussian is the default. Signals with heavy-tailed behaviour (vibration, pressure) use Student-t. Signals with autocorrelated residuals (PID-controlled temperatures) use AR(1). See Section 4.2.11 for supported distributions.
 
 4. **Time is the independent variable.** The engine maintains a simulation clock. At each tick, it advances the clock, evaluates active scenarios, updates the machine state, and generates new values for all signals. The tick rate matches the fastest signal (500ms for web tension and registration error). Slower signals update only on their configured interval.
 
@@ -177,6 +177,55 @@ Parameters: `T_initial` (product entry temperature, typically 2-8C from chiller)
 Used for: `oven.product_core_temp` in the F&B profile.
 
 This model is simplified. Real products have non-uniform geometry, variable moisture content, and phase changes (ice melting, protein denaturation). The simplified model produces the characteristic S-curve that food manufacturing engineers expect to see. It is sufficient for demo and integration testing purposes.
+
+### 4.2.11 Noise Distribution Models
+
+The preceding signal models all reference `noise(0, sigma)`. By default this is Gaussian white noise. Real industrial sensors do not all produce Gaussian noise. Vibration sensors exhibit heavy tails from mechanical impulses. PID-controlled temperatures exhibit autocorrelated residuals from the control loop. The noise distribution is configurable per signal. Three distributions are supported.
+
+**Gaussian (default).** Standard normal distribution scaled by sigma. Independent samples. No autocorrelation.
+
+```
+noise = sigma * N(0, 1)
+```
+
+Suitable for environmental sensors, energy meters, fill weight, and any signal where measurement noise dominates. This is the correct choice when the sensor noise is independent sample to sample and has no significant outlier mechanism.
+
+**Student-t (heavy tails).** Produces occasional large outliers that Gaussian cannot. Configurable degrees of freedom (df). Lower df produces heavier tails. At df=3, roughly 1 in 50 samples exceeds 3 sigma. For comparison, Gaussian produces 1 in 370. At df=5, tails are moderately heavy. At df=30 or above, the distribution approaches Gaussian.
+
+```
+noise = sigma * T(df)
+```
+
+Suitable for vibration signals (`vibration.main_drive_x/y/z`), pressure signals (`coder.ink_pressure`), and motor current (`press.main_drive_current`). These sensors experience occasional mechanical impulses that produce genuine outlier readings even during normal operation. The IMS/NASA and Paderborn bearing datasets both show kurtosis well above 3 in vibration channels.
+
+Parameters: `noise_distribution: "student_t"`, `noise_df: 5` (degrees of freedom).
+
+**AR(1) autocorrelated noise.** First-order autoregressive noise. Each sample depends on the previous sample. Produces the smooth, correlated residuals that real PID-controlled temperatures exhibit.
+
+```
+noise_t = phi * noise_(t-1) + sigma * sqrt(1 - phi^2) * N(0, 1)
+```
+
+The autocorrelation coefficient (phi) controls how strongly consecutive samples correlate. At phi=0, this reduces to white noise. At phi=0.9, consecutive samples are strongly correlated. The `sqrt(1 - phi^2)` scaling ensures the marginal variance stays at sigma^2 regardless of phi.
+
+Suitable for temperature signals controlled by PID loops (`press.dryer_temp_zone_*`, `oven.zone_*_temp`, `laminator.nip_temp`, `coder.printhead_temp`). These signals have correlated noise because the controller continuously adjusts the output. The result is smooth oscillations around the setpoint rather than independent jumps.
+
+Parameters: `noise_distribution: "ar1"`, `noise_phi: 0.7` (autocorrelation coefficient, range 0 to 0.99).
+
+**Default noise distribution assignments:**
+
+| Signal Category | Distribution | Parameters | Rationale |
+|---|---|---|---|
+| Vibration (all axes) | Student-t | df=5 | Mechanical impulse outliers |
+| Motor current | Student-t | df=8 | Occasional load spikes |
+| Ink/lung pressure | Student-t | df=6 | Pneumatic transient outliers |
+| PID-controlled temperatures | AR(1) | phi=0.7 | Control loop autocorrelation |
+| Environmental sensors | Gaussian | (default) | Measurement noise dominates |
+| Fill weight | Gaussian | (default) | CLT applies to multi-head weigher |
+| Energy/power | Gaussian | (default) | Power meter averaging |
+| Counters | n/a | n/a | Integer increment, no continuous noise |
+
+Each signal inherits the default for its category. Per-signal overrides are supported in the configuration (Appendix D). Setting `noise_distribution` to `"gaussian"` or omitting it produces the default Gaussian behaviour.
 
 ## 4.3 Correlation Model
 
