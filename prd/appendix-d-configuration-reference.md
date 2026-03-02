@@ -46,6 +46,20 @@ noise_phi: 0.7            # Autocorrelation coefficient (0 to 0.99)
 sigma: 0.3                # Marginal standard deviation
 ```
 
+**Speed-dependent sigma.** Any noise distribution supports optional speed-dependent sigma. See Section 4.2.11 for the formula and default assignments.
+
+```yaml
+# Speed-dependent noise for vibration signal
+noise_distribution: "student_t"
+noise_df: 5
+sigma: 0.3                # Used when sigma_scale = 0 (fallback)
+sigma_parent: "press.line_speed"   # Parent signal driving noise magnitude
+sigma_base: 0.2                     # Minimum noise floor (mm/s)
+sigma_scale: 0.015                  # Proportional component (mm/s per m/min)
+```
+
+When `sigma_parent` is set and `sigma_scale` > 0, the effective sigma is `sigma_base + sigma_scale * abs(parent_value)`. When `sigma_parent` is omitted or `sigma_scale` = 0, the static `sigma` parameter applies.
+
 These parameters appear inside the `params` block of any signal model. The examples below show the default Gaussian noise. Override with the parameters above as needed per signal.
 
 ### steady_state
@@ -83,6 +97,11 @@ params:
   tau_seconds: 60.0     # Time constant in seconds
   sigma: 0.3            # Noise magnitude
   overshoot: 0.05       # Overshoot factor (0 = no overshoot)
+  damping_ratio: 0.7    # Second-order response (0.1-2.0, default 1.0 = no oscillation)
+                         # < 1.0: underdamped, produces overshoot and ringing
+                         # = 1.0: critically damped, reduces to first-order lag
+                         # > 1.0: overdamped, slower approach with no oscillation
+                         # Typical industrial PID: 0.5-0.8
   setpoint_signal: "press.dryer_setpoint_zone_1"  # Signal to track
   # AR(1) noise for PID-controlled temperatures
   noise_distribution: "ar1"
@@ -124,6 +143,8 @@ params:
   speed_signal: "press.line_speed"  # Signal that drives increment rate
   rollover_value: 4294967295  # Counter wrap value (uint32 max)
   reset_on_job_change: true   # Reset to 0 on job changeover
+  max_before_reset: null      # Optional: reset to 0 at this value (default null = disabled)
+                              # Useful under time compression to simulate operator resets
 ```
 
 ### depletion
@@ -149,10 +170,30 @@ params:
   base: 15.0                # Output when parent = 0
   factor: 0.5               # Output = base + factor * parent
   sigma: 0.5                # Additional noise (Gaussian default)
-  lag_seconds: 0            # Delay following parent changes
+  lag_seconds: 0            # Fixed delay (used when lag.mode is omitted or "fixed")
   # Example: Student-t noise for motor current
   # noise_distribution: "student_t"
   # noise_df: 8
+```
+
+**Transport lag example.** For signals that follow material flow between machines, use dynamic transport lag instead of a fixed delay. The lag recalculates each tick based on line speed. See Section 4.2.8 for the formula and distance table.
+
+```yaml
+# Laminator web speed follows press speed with transport lag
+model: "correlated_follower"
+params:
+  parent_signal: "press.line_speed"
+  transform: "linear"
+  base: 0.0
+  factor: 1.0
+  sigma: 0.3
+  lag:
+    mode: "transport"                # "fixed" or "transport"
+    distance_m: 4.0                  # meters between press and laminator
+    speed_signal: "press.line_speed" # signal providing current line speed
+  # At 200 m/min: lag = 4.0 / (200/60) = 1.2 seconds
+  # At 120 m/min: lag = 4.0 / (120/60) = 2.0 seconds
+  # At 0 m/min: downstream freezes at last value
 ```
 
 ### state_machine
@@ -204,6 +245,20 @@ params:
   alpha: 1.4e-7             # Thermal diffusivity (m^2/s)
   L: 0.025                  # Product half-thickness (m)
   sigma: 0.3                # Measurement noise
+```
+
+### bang_bang_hysteresis
+
+```yaml
+model: "bang_bang_hysteresis"
+params:
+  setpoint: 2.0              # Target temperature (C)
+  dead_band_high: 1.0        # Offset above setpoint to turn ON (C)
+  dead_band_low: 1.0         # Offset below setpoint to turn OFF (C)
+  cooling_rate: 0.5          # C per minute when compressor ON
+  heat_gain_rate: 0.2        # C per minute when compressor OFF
+  sigma: 0.1                 # Noise on process variable
+  initial_state: "OFF"       # Starting state: "ON" or "OFF"
 ```
 
 ## Protocol Mapping Reference
@@ -267,14 +322,15 @@ scenarios:
     duration_seconds: [1800, 7200]
     waste_rate_increase_percent: [20, 50]
 
-  # Bearing wear: long-term degradation
+  # Bearing wear: long-term exponential degradation (Section 5.5)
   bearing_wear:
     enabled: true
     start_after_hours: 48
-    vibration_increase_per_hour: [0.01, 0.05]  # mm/s per hour
+    base_rate: [0.001, 0.005]         # Initial mm/s increase per hour
+    acceleration_k: [0.005, 0.01]     # Exponential acceleration constant
     warning_threshold: 15.0           # mm/s
     alarm_threshold: 25.0             # mm/s
-    current_increase_percent: [1, 5]  # Motor current increase
+    current_increase_percent: [1, 5]  # Motor current increase (follows same exponential curve)
     culminate_in_failure: false
     failure_vibration: [40, 50]       # mm/s at failure
 
@@ -536,6 +592,14 @@ data_quality:
     per_signal_overrides:                  # Override sentinel per signal
       # press.dryer_temp_zone_1: 9999.0    # Eurotherm convention
       # coder.ink_pressure: 0.0            # 4-20mA transmitter
+
+  # Stuck sensor (frozen value) events (Section 10.10)
+  stuck_sensor:
+    enabled: true
+    frequency_per_week_per_signal: [0, 2]  # Range for random frequency
+    duration_seconds: [300, 14400]          # 5 minutes to 4 hours
+    # Value freezes at last valid reading. Status codes remain Good.
+    # Ground truth log records frozen value, start time, and duration.
 
   # Timezone offset (for MQTT timestamps)
   mqtt_timestamp_offset_hours: 0      # 0 = UTC, 1 = BST, -5 = US Eastern

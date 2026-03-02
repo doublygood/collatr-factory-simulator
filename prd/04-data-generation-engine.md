@@ -54,9 +54,27 @@ The signal follows a sine wave with noise. Models signals with periodic behaviou
 value = center + amplitude * sin(2 * pi * t / period + phase) + noise(0, sigma)
 ```
 
-Used for: `env.ambient_temp` (daily cycle, period=24h), `env.ambient_humidity` (daily cycle, inverted phase).
+Used for: `env.ambient_humidity` (daily cycle, inverted phase). Also used as the base layer for `env.ambient_temp` (see composite environmental model below).
 
 Parameters: `center`, `amplitude`, `period`, `phase`, `sigma`.
+
+**Composite environmental model.** A pure sine wave for ambient temperature is immediately identifiable as synthetic. Real ambient temperature has weather-driven irregularity, HVAC cycling, and door-open step changes. The `env.ambient_temp` signal combines three layers built from existing model primitives:
+
+1. **Daily cycle.** Sinusoidal with 24-hour period. Center 20-22 C, amplitude 3-5 C. Peak in mid-afternoon, trough at dawn.
+
+2. **HVAC cycling.** A secondary oscillation with 15-30 minute period and 0.5-1.5 C amplitude. This represents the factory HVAC system cycling on and off. It uses the bang-bang hysteresis model (Section 4.2.12) with a fast time constant. The HVAC cycle is superimposed on the daily cycle.
+
+3. **Random perturbations.** Occasional step changes of 1-3 C lasting 5-30 minutes. These represent factory doors opening, nearby process heat sources, or HVAC mode changes. Modelled as a Poisson process with 3-8 events per shift. Each event adds a temporary offset that decays back to zero via first-order lag (tau = 5-10 minutes).
+
+The combined model:
+
+```
+value = daily_sine(t) + hvac_cycle(t) + perturbation(t) + noise(0, sigma)
+```
+
+Ambient humidity follows the same layered pattern but inverted. Humidity drops when temperature rises (HVAC dehumidifies). Humidity spikes when doors open to a humid environment.
+
+Additional parameters for composite environmental model: `hvac_period_minutes` (15-30, default 20), `hvac_amplitude_c` (0.5-1.5, default 1.0), `perturbation_rate_per_shift` (3-8, default 5), `perturbation_magnitude_c` (1-3, default 2.0), `perturbation_decay_tau_minutes` (5-10, default 7).
 
 ### 4.2.3 First-Order Lag (Setpoint Tracking)
 
@@ -68,9 +86,32 @@ value = value + (setpoint - value) * (1 - exp(-dt / tau)) + noise(0, sigma)
 
 Used for: `press.dryer_temp_zone_1/2/3` tracking their setpoints, `laminator.nip_temp`, `laminator.oven_temp`.
 
-Parameters: `tau` (time constant, seconds), `sigma`, `overshoot_factor` (optional, for initial response).
+Parameters: `tau` (time constant, seconds), `sigma`, `overshoot_factor` (optional, for initial response), `damping_ratio` (optional, for second-order response).
 
 This model directly reflects the Eurotherm controller pattern documented in the customer profiles research: process variable (PV) tracks setpoint (SP) with first-order dynamics. The time constant tau models the thermal mass of the dryer. Typical tau for an industrial dryer: 30-120 seconds.
+
+**Optional second-order response.** Real PID controllers produce overshoot on setpoint changes. Underdamped loops produce decaying oscillation. Anyone who has tuned a Eurotherm knows the ringing after a step change. The first-order lag alone cannot reproduce this.
+
+When `damping_ratio` is specified with a value less than 1.0, the model adds a second-order response on setpoint changes:
+
+```
+value = setpoint + A * exp(-zeta * omega_n * t) * sin(omega_d * t + phase) + noise(0, sigma)
+```
+
+Where:
+
+- `omega_n` = natural frequency = `1 / tau` (derived from the existing time constant).
+- `omega_d` = damped frequency = `omega_n * sqrt(1 - zeta^2)`.
+- `A` = initial amplitude, derived from step size and damping ratio.
+- `t` = time since the last setpoint change.
+
+Default `damping_ratio` = 1.0 (critically damped). At this value, the model reduces to the existing first-order lag with no oscillation. Typical industrial PID tuning produces a damping ratio of 0.5 to 0.8. Lower values produce more overshoot and longer ringing.
+
+When `damping_ratio` >= 1.0, the model behaves exactly as the first-order lag described above. When `damping_ratio` < 1.0, the model produces the characteristic overshoot and ringing that real temperature controllers exhibit.
+
+Used for: `press.dryer_temp_zone_*` (damping_ratio ~0.6), `oven.zone_*_temp` (damping_ratio ~0.5), `laminator.nip_temp` (damping_ratio ~0.7), `laminator.oven_temp` (damping_ratio ~0.7).
+
+Second-order parameters: `damping_ratio` (float, default 1.0, range 0.1 to 2.0).
 
 ### 4.2.4 Ramp Up / Ramp Down
 
@@ -120,6 +161,12 @@ Parameters: `rate` (increments per m/min per second), `rollover_value` (for coun
 
 The reference data showed `FPGA_Head_PrintedTotal` wrapping at 999. The press counters use uint32 (max 4,294,967,295) so wrapping is rare but the simulator supports configurable rollover for testing.
 
+**Rollover and reset behaviour.** Counters that reach their configured maximum (`rollover_value` or range maximum) wrap to zero. Counters configured with `reset_on_job_change: true` reset to zero at each job changeover (Section 5.2).
+
+Under time compression, counters increment faster but the rollover and reset logic is unchanged. At 100x speed, a counter incrementing at 200/minute in simulated time reaches 99,999 in approximately 8 real minutes. This is expected behaviour. CollatrEdge must handle counter rollovers at any speed.
+
+To prevent counters from dominating the value range during compressed runs, the simulator supports an optional `max_before_reset` parameter. When set, the counter resets to zero after reaching this value. This simulates the real-world practice of operators resetting counters at shift changes or job starts. Default: disabled (counter wraps at `rollover_value`).
+
 ### 4.2.7 Depletion Curve
 
 The signal decreases over time proportional to usage. Models consumable levels.
@@ -142,9 +189,36 @@ The signal derives from another signal with a transformation.
 value = f(parent_value) + noise(0, sigma)
 ```
 
-Used for: `press.main_drive_current` follows `press.line_speed` (linear relationship: current = base_current + k * speed). `press.main_drive_speed` follows `press.line_speed` (gear ratio). `laminator.web_speed` follows `press.line_speed` with offset and lag. `press.rewind_diameter` inversely derives from `press.unwind_diameter`. `coder.ink_pump_speed` follows `coder.state` (steady RPM during Printing, 0 during idle states).
+Used for: `press.main_drive_current` follows `press.line_speed` (linear relationship: current = base_current + k * speed). `press.main_drive_speed` follows `press.line_speed` (gear ratio). `laminator.web_speed` follows `press.line_speed` with transport lag (see below). `press.rewind_diameter` inversely derives from `press.unwind_diameter`. `coder.ink_pump_speed` follows `coder.state` (steady RPM during Printing, 0 during idle states).
 
-Parameters: `parent_signal`, `transform_function`, `sigma`, `lag` (optional delay).
+Parameters: `parent_signal`, `transform_function`, `sigma`, `lag` (optional delay, fixed or transport mode).
+
+**Speed-dependent transport lag.** When material moves between two points on the line, the correlation lag depends on distance and current line speed:
+
+```
+lag_seconds = distance_meters / (line_speed_m_per_min / 60)
+```
+
+The `lag` parameter accepts either a fixed value in seconds or a dynamic transport configuration:
+
+```yaml
+lag:
+  mode: "transport"          # "fixed" or "transport"
+  distance_m: 4.0            # meters between equipment
+  speed_signal: "press.line_speed"
+```
+
+When mode is "transport", the lag recalculates each tick based on the current speed. At zero speed, no material transport occurs. The model freezes the downstream signal at its last value until the upstream speed resumes.
+
+Key transport distances for the packaging line:
+
+| Path | Distance | Lag at 120 m/min | Lag at 250 m/min |
+|---|---|---|---|
+| Press to laminator | 3-5 m | 1.5-2.5 s | 0.7-1.2 s |
+| Laminator to slitter | 2-3 m | 1.0-1.5 s | 0.5-0.7 s |
+| Press to coder (if inline) | 1-2 m | 0.5-1.0 s | 0.2-0.5 s |
+
+See Appendix D for transport lag configuration examples.
 
 ### 4.2.9 State Machine
 
@@ -227,6 +301,46 @@ Parameters: `noise_distribution: "ar1"`, `noise_phi: 0.7` (autocorrelation coeff
 
 Each signal inherits the default for its category. Per-signal overrides are supported in the configuration (Appendix D). Setting `noise_distribution` to `"gaussian"` or omitting it produces the default Gaussian behaviour.
 
+**Speed-dependent sigma.** All three noise distributions support an optional speed-dependent sigma. Constant sigma produces an unnaturally uniform noise envelope. Real noise characteristics change with operating conditions. Vibration noise is lower at low speed and higher at high speed. Tension noise increases with speed. Registration error noise scales with both speed and substrate properties.
+
+When enabled, the effective sigma scales with a parent signal:
+
+```
+effective_sigma = sigma_base + sigma_scale * abs(parent_value)
+```
+
+`sigma_base` is the minimum noise floor. `sigma_scale` is the proportional component. When `sigma_scale` = 0 (the default), noise sigma is constant and equals the per-signal `sigma` parameter.
+
+Default assignments for speed-dependent noise:
+
+| Signal | Parent | sigma_base | sigma_scale | Effect |
+|---|---|---|---|---|
+| vibration.main_drive_x/y/z | press.line_speed | 0.2 mm/s | 0.015 mm/s per m/min | Vibration increases with speed |
+| press.web_tension | press.line_speed | 2.0 N | 0.02 N per m/min | Tension noise increases at speed |
+| press.registration_error_x/y | press.line_speed | 0.005 mm | 0.00005 mm per m/min | Registration harder at speed |
+| press.main_drive_current | press.line_speed | 0.3 A | 0.002 A per m/min | Current ripple scales with load |
+
+Parameters: `sigma_parent` (signal ID, optional), `sigma_base` (float), `sigma_scale` (float, default 0.0). These parameters appear inside any signal's `params` block alongside the existing `sigma`, `noise_distribution`, and distribution-specific parameters. See Appendix D for a configuration example.
+
+### 4.2.12 Bang-Bang with Hysteresis
+
+Models an on/off controller with dead band. The output oscillates between two states based on a process variable crossing upper and lower thresholds.
+
+```
+if state == OFF and process_variable > setpoint + dead_band_high:
+    state = ON
+if state == ON and process_variable < setpoint - dead_band_low:
+    state = OFF
+```
+
+When ON, the process variable decreases at a configurable cooling rate. When OFF, the process variable increases at a configurable heat gain rate (from the environment and door openings). This produces the characteristic sawtooth temperature pattern in cold rooms.
+
+Used for: `chiller.compressor_state` driving `chiller.room_temp`. The compressor coil (FC01) reflects the ON/OFF state. Room temperature follows a sawtooth pattern between setpoint +/- dead band.
+
+Parameters: `setpoint` (target temperature), `dead_band_high` (offset above setpoint to turn ON, default 1.0 C), `dead_band_low` (offset below setpoint to turn OFF, default 1.0 C), `cooling_rate` (C per minute when ON, default 0.5), `heat_gain_rate` (C per minute when OFF, default 0.2), `sigma` (noise on the process variable).
+
+Typical chiller configuration: setpoint 2 C, dead band +/- 1 C. Temperature oscillates between 1 C and 3 C with a cycle time of about 8-12 minutes. The Danfoss controller turns the compressor on when room temperature exceeds setpoint + dead_band_high, and off when it drops below setpoint - dead_band_low.
+
 ## 4.3 Correlation Model
 
 The correlation model defines how signals interact. The machine state is the root driver. All other signals respond to state transitions.
@@ -253,7 +367,7 @@ press.machine_state changes to Running
     -> coder.ink_pressure stabilizes at ~835 mbar
     -> coder.ink_consumption_ml starts accumulating
     -> vibration.main_drive_x/y/z increases from idle (0.5-1 mm/s) to running (3-8 mm/s)
-    -> laminator.web_speed follows press speed with lag
+    -> laminator.web_speed follows press speed with transport lag (3-5 m distance, Section 4.2.8)
     -> press.unwind_diameter decreases
     -> press.rewind_diameter increases
 ```
@@ -326,6 +440,14 @@ The F&B profile (65 signals) uses the same signal model types as the packaging p
 
 **CIP wash cycles.** Clean-in-place runs between production batches. Wash temperature, flow rate, and conductivity follow a recipe curve over 30-60 minutes. The `ramp` and `first_order_lag` models combine to produce the CIP profile: rinse, caustic wash, rinse, acid wash, final rinse.
 
+The `cip.conductivity` signal follows a specific profile through each CIP cycle:
+
+1. Pre-rinse: conductivity near 0 mS/cm (fresh water).
+2. Caustic dose: conductivity ramps up to 80-150 mS/cm over 1-2 minutes as chemical is dosed into the circulation loop. This uses a first-order lag with setpoint = target concentration.
+3. Caustic hold: conductivity holds steady at target for 10-20 minutes.
+4. Rinse: conductivity follows a first-order lag with setpoint = 0 mS/cm and tau = 30-60 seconds. This produces the exponential decay from caustic concentration toward zero that real CIP rinse cycles exhibit. Water dilutes chemical residue in a first-order process, not a linear ramp.
+5. Final rinse: conductivity below 5 mS/cm for 2+ minutes confirms the system is clean.
+
 **F&B correlation model.** The correlation engine extends for F&B equipment:
 - `mixer.torque` correlates with `mixer.speed` and `mixer.batch_temp` (viscosity changes with temperature).
 - Oven zones have thermal coupling (zone 1 drift affects zone 2).
@@ -362,5 +484,20 @@ The simulator emits a JSONL sidecar file alongside the data stream. Every scenar
 | `shift_change` | Shift transition. Includes old shift, new shift, time. |
 | `consumable` | Ink refill, material splice. Includes signal and new value. |
 | `sensor_disconnect` | Sensor disconnect injection. Includes signal and sentinel value. |
+| `stuck_sensor` | Stuck sensor (frozen value) injection. Includes signal, frozen value, and duration. |
+
+**Connection drop events.** The log also records controller connection drops with controller ID, protocol, start time, duration, and affected signals. See Section 4.8 for signal behaviour during drops.
 
 **Purpose.** The log enables post-hoc evaluation. Compare CollatrEdge alerts against ground truth to compute detection rates, false positive rates, and detection latency. The primary use case remains demos and integration testing. The ground truth log adds benchmarking capability at minimal implementation cost.
+
+## 4.8 Signal Behaviour During Controller Connection Drops
+
+When a simulated controller drops its connection (Section 3a.5), the data generation engine continues generating values internally. The signals do not freeze. The machine does not stop. A real factory keeps running even when a PLC loses its network connection. The PLC continues executing its control program. It just stops responding to external queries.
+
+When the connection recovers, the protocol adapter serves the current generated value. This creates a gap in the collected data followed by a step change. CollatrEdge sees the last value it received before the drop, then a jump to the current value when the connection resumes.
+
+The gap size depends on the drop duration and polling rate. A 5-second Modbus drop at 1-second polling produces 5 missing samples. A 30-second OPC-UA stale period produces values marked `UncertainLastUsableValue` for 30 seconds.
+
+**MQTT behaviour.** A broker-side drop means messages are not published during the drop. The behaviour depends on QoS level. QoS 0 messages are lost. The simulator silently discards them. QoS 1 messages queue and deliver when the connection resumes, if the broker session persists. The simulator models this: during an MQTT drop, QoS 1 messages accumulate in a buffer (configurable limit, default 1000 messages). On recovery, buffered messages publish in a burst. QoS 0 messages are silently discarded.
+
+**Ground truth.** The ground truth event log (Section 4.7) records each connection drop with: controller ID, protocol, start time, duration, and list of affected signals.

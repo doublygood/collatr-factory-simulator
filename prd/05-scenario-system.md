@@ -62,14 +62,30 @@ The drift is subtle. It does not trigger a fault state. It causes increased wast
 **Frequency:** One event over 2-6 weeks (configurable).
 **Duration:** Gradual degradation.
 
+Real bearing degradation follows an exponential curve, not a linear one. The IMS/NASA bearing run-to-failure dataset shows slow, near-linear increase for most of the bearing life, then rapid acceleration in the final days before failure. This produces the characteristic hockey-stick shape.
+
+The vibration increase uses an exponential model:
+
+```
+vibration_increase = base_rate * exp(k * elapsed_hours)
+```
+
+`base_rate` is the initial hourly increase (0.001-0.005 mm/s per hour). `k` is the acceleration constant (0.005-0.01). Together they produce the hockey-stick curve.
+
+In practical terms:
+- Week 1-2: vibration increases by 0.5-1.0 mm/s total. Barely perceptible.
+- Week 3: vibration increases by 2-3 mm/s. Noticeable trend on a chart.
+- Week 4: vibration increases by 5-10 mm/s. Warning threshold reached.
+- Final days: rapid acceleration to alarm threshold and failure.
+
 Sequence:
-1. `vibration.main_drive_x/y/z` baseline increases by 0.01-0.05 mm/s per hour.
+1. `vibration.main_drive_x/y/z` baseline increases following the exponential model above.
 2. After 1-2 weeks, vibration reaches 15-20 mm/s (warning threshold).
 3. After 3-5 weeks, vibration reaches 25-40 mm/s (alarm threshold).
-4. `press.main_drive_current` increases by 1-5% at constant speed (bearing friction).
+4. `press.main_drive_current` increases by 1-5% at constant speed (bearing friction). The current increase follows the same exponential curve at smaller magnitude. Most of the current rise occurs in the final days alongside the vibration spike.
 5. If the scenario is configured to culminate in failure: `press.machine_state` transitions to Fault (4) with vibration spike to 40-50 mm/s.
 
-The IMS/NASA bearing run-to-failure dataset (from the datasets research) showed exactly this pattern over 35 days. The Paderborn bearing dataset added motor current increase as a correlated signal. Our simulator reproduces both.
+The IMS/NASA bearing run-to-failure dataset showed this pattern over 35 days. The Paderborn bearing dataset added motor current increase as a correlated signal. Our simulator reproduces both with the exponential degradation model.
 
 This scenario operates at a different timescale than other scenarios. At 1x speed, the full degradation plays out over weeks. At 100x speed, it plays out over hours. The bearing wear scenario is the primary test for CollatrEdge's ability to detect slow trends.
 

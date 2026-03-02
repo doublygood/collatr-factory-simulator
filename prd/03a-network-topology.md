@@ -236,7 +236,7 @@ Each simulated controller has independent connection behaviour:
 
 **Poll rate limits.** Polling a Siemens S7-1200 at 100ms intervals while it is also running a control program can cause the communication module to fall behind. The simulator models this: if the client polls faster than the controller's minimum response interval, responses are delayed or dropped. This tests CollatrEdge's adaptive polling logic.
 
-**Connection drops.** Each controller endpoint can independently drop connections. The press PLC might stay connected for days. The oven gateway might drop every few hours (serial gateways are less reliable than direct TCP). The energy meter might drop during high-load periods. Each controller has its own mean time between failures (MTBF) and reconnection delay.
+**Connection drops.** Each controller endpoint can independently drop connections. The press PLC might stay connected for days. The oven gateway might drop every few hours (serial gateways are less reliable than direct TCP). The energy meter might drop during high-load periods. Each controller has its own mean time between failures (MTBF) and reconnection delay. For what happens to signal generation during a drop, see Section 4.8 (Signal Behaviour During Controller Connection Drops).
 
 | Controller | Connection MTBF | Reconnection Delay |
 |---|---|---|

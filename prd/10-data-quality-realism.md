@@ -121,3 +121,24 @@ Default frequency: 0-1 per 24 hours per signal (configurable). Default duration:
 Each signal specifies which sentinel value to use. Temperature signals default to 6553.5 (Siemens convention). Pressure signals default to 0.0 (open-circuit 4-20 mA). The sentinel value is configurable per signal to match the PLC hardware in the simulated factory.
 
 The ground truth event log (Section 4.7) records every sensor disconnect with signal name, sentinel value, start time, and duration.
+
+## 10.10 Stuck Sensor (Frozen Value)
+
+A stuck sensor is different from a sensor disconnect (Section 10.9). A disconnected sensor reports a sentinel value. A stuck sensor reports a plausible value that simply stops changing. The value freezes at whatever it was when the sensor stuck. The signal stops responding to state changes, setpoint changes, and noise. It holds one number.
+
+Causes: failed ADC, frozen I/O module, software bug in PLC program, broken feedback loop.
+
+Detection challenge: A frozen value within the normal range does not trigger threshold alarms. The value looks normal in isolation. Only the lack of variation gives it away. Statistical tests detect it: variance drops to zero and autocorrelation goes to 1.0. This tests CollatrEdge's ability to identify signals that should be changing but are not.
+
+The simulator injects stuck sensor events as follows:
+
+1. The engine records the current signal value at injection start.
+2. The engine holds that value for the configured duration.
+3. The OPC-UA status code remains `Good`. The sensor thinks it is working.
+4. The MQTT quality field remains `"good"`.
+5. The Modbus register holds the frozen value.
+6. After the configured duration, the signal resumes normal generation. There may be a step change as the signal jumps from the frozen value to the current generated value.
+
+Default frequency: 0 to 2 per week per signal (configurable). Default duration: 5 minutes to 4 hours.
+
+The ground truth event log (Section 4.7) records stuck sensor events with the frozen value, start time, and duration.
