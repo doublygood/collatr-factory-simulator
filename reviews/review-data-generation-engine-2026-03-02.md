@@ -302,17 +302,17 @@ Section 3a describes a realistic multi-controller architecture. The data generat
 
 ### Phase 2 (Lower Priority)
 
-| # | Issue | Reviewer |
-|---|---|---|
-| 21 | Sensor quantisation step after noise generation | Both |
-| 22 | Long-term sensor calibration drift | Both |
-| 23 | Per-controller clock drift offsets | Automation |
-| 24 | Batch ID string generator | Automation |
-| 25 | Atomic setpoint batch writes for recipe changes | Automation |
-| 26 | Peer correlation mixing matrices (vibration axes, dryer zones) | Data Sci |
-| 27 | Time-varying covariance on correlated followers | Data Sci |
-| 28 | Evaluation protocol document | Data Sci |
-| 29 | Clean/impaired dataset pairing for ablation studies | Data Sci |
-| 30 | Allergen changeover triggering mandatory CIP | Automation |
-| 31 | Partial Modbus responses (fewer registers than requested) | Data Sci |
-| 32 | PLC scan cycle artefacts and phase jitter | Automation |
+| # | Issue | Reviewer | Status | Commit |
+|---|---|---|---|---|
+| 21 | Sensor quantisation step after noise generation | Both | **RESOLVED** | `80e4c55` |
+| 22 | Long-term sensor calibration drift | Both | **RESOLVED** | `80e4c55` |
+| 23 | Per-controller clock drift offsets | Automation | **RESOLVED** | `80e4c55` |
+| 24 | Batch ID string generator | Automation | **RESOLVED** | `80e4c55` |
+| 25 | Atomic setpoint batch writes for recipe changes | Automation | **RESOLVED** | `80e4c55` |
+| 26 | Peer correlation mixing matrices (vibration axes, dryer zones) | Data Sci | **RESOLVED** | `80e4c55` |
+| 27 | Time-varying covariance on correlated followers | Data Sci | **RESOLVED** | `b3f11c7` |
+| 28 | Evaluation protocol document | Data Sci | **RESOLVED** | `b3f11c7` |
+| 29 | Clean/impaired dataset pairing for ablation studies | Data Sci | **RESOLVED** | `b3f11c7` |
+| 30 | Allergen changeover triggering mandatory CIP | Automation | **RESOLVED** | `b3f11c7` |
+| 31 | Partial Modbus responses (fewer registers than requested) | Data Sci | **RESOLVED** | `b3f11c7` |
+| 32 | PLC scan cycle artefacts and phase jitter | Automation | **RESOLVED** | `b3f11c7` |

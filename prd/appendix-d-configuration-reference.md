@@ -179,6 +179,14 @@ params:
   factor: 0.5               # Output = base + factor * parent
   sigma: 0.5                # Additional noise (Gaussian default)
   lag_seconds: 0            # Fixed delay (used when lag.mode is omitted or "fixed")
+  # Time-varying covariance (Section 4.3.2)
+  gain_drift_volatility: 0.0     # Multiplicative drift on gain parameter (default 0 = fixed gain)
+                                  # Typical: 0.001-0.004. Higher = faster gain wander.
+  gain_drift_reversion: 0.02     # Mean-reversion rate pulling gain back to nominal
+                                  # Typical: 0.01-0.05. Higher = tighter reversion.
+  # Example: motor current vs line speed with 8-12% gain variation over 24h
+  # gain_drift_volatility: 0.003
+  # gain_drift_reversion: 0.02
   # Example: Student-t noise for motor current
   # noise_distribution: "student_t"
   # noise_df: 8
@@ -341,6 +349,50 @@ network:
 ```
 
 Set `drift_rate_s_per_day` to 0 for a controller with perfect time sync. The initial offset is applied at simulation start. The drift accumulates linearly from there.
+
+### Scan Cycle Artefacts
+
+Per-controller scan cycle times and phase jitter. See Section 3a.8 for behaviour description.
+
+```yaml
+network:
+  scan_cycle:
+    press_plc:
+      cycle_ms: 10               # Siemens S7-1500
+      jitter_pct: 0.05           # 0-5% variation per cycle
+    laminator_plc:
+      cycle_ms: 20               # Siemens S7-1200
+      jitter_pct: 0.08
+    slitter_plc:
+      cycle_ms: 20               # Siemens S7-1200
+      jitter_pct: 0.08
+    mixer_plc:
+      cycle_ms: 15               # Allen-Bradley CompactLogix
+      jitter_pct: 0.06
+    oven_zone_1:
+      cycle_ms: 100              # Eurotherm 3504
+      jitter_pct: 0.10
+    oven_zone_2:
+      cycle_ms: 100              # Eurotherm 3504
+      jitter_pct: 0.10
+    oven_zone_3:
+      cycle_ms: 100              # Eurotherm 3504
+      jitter_pct: 0.10
+    filler_plc:
+      cycle_ms: 20               # Siemens S7-1200
+      jitter_pct: 0.08
+    sealer_plc:
+      cycle_ms: 20               # Siemens S7-1200
+      jitter_pct: 0.08
+    chiller:
+      cycle_ms: 100              # Danfoss AK-CC 550
+      jitter_pct: 0.10
+    cip_controller:
+      cycle_ms: 20               # Siemens S7-1200
+      jitter_pct: 0.08
+```
+
+Set `jitter_pct` to 0 for a perfectly periodic scan cycle (useful for debugging). The jitter is drawn from a uniform distribution on each cycle: `actual_cycle = cycle_ms * (1.0 + uniform(0, jitter_pct))`.
 
 ## Protocol Mapping Reference
 
@@ -681,6 +733,14 @@ data_quality:
     duration_seconds: [300, 14400]          # 5 minutes to 4 hours
     # Value freezes at last valid reading. Status codes remain Good.
     # Ground truth log records frozen value, start time, and duration.
+
+  # Partial Modbus responses (Section 10.11)
+  partial_modbus_response:
+    enabled: true
+    probability: 0.0001              # Per multi-register read (default 0.01%)
+    # Only applies to requests for 2+ registers.
+    # Returns first N registers (N random, 1 to requested-1).
+    # Single-register reads are never partial.
 
   # Timezone offset (for MQTT timestamps)
   mqtt_timestamp_offset_hours: 0      # 0 = UTC, 1 = BST, -5 = US Eastern

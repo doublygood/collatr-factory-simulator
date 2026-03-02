@@ -297,3 +297,44 @@ These numbers represent a single production line. A real factory with 3-5 lines 
 - Packaging equipment signals: [Section 2](02-simulated-factory-layout.md)
 - F&B equipment signals: [Section 2b](02b-factory-layout-food-and-beverage.md)
 - Protocol server configuration: [Section 3](03-protocol-endpoints.md)
+
+## 3a.8 Scan Cycle Artefacts
+
+Every PLC executes its control program in a fixed scan cycle. The cycle reads inputs, runs logic, and writes outputs. Register values update once per scan cycle. Between scans, the register values are stale.
+
+**Scan cycle times by controller type:**
+
+| Controller | Model | Scan Cycle | Notes |
+|---|---|---|---|
+| Press PLC | Siemens S7-1500 | 10 ms | Fast CPU, short cycle |
+| Laminator PLC | Siemens S7-1200 | 20 ms | Smaller CPU, longer cycle |
+| Slitter PLC | Siemens S7-1200 | 20 ms | Same hardware as laminator |
+| Mixer PLC | Allen-Bradley CompactLogix | 15 ms | Typical for continuous task |
+| Oven Zone 1-3 | Eurotherm 3504 | 100 ms | Standalone instrument, slow cycle |
+| Filler PLC | Siemens S7-1200 | 20 ms | Standard S7-1200 cycle |
+| Sealer PLC | Siemens S7-1200 | 20 ms | Standard S7-1200 cycle |
+| Chiller | Danfoss AK-CC 550 | 100 ms | Refrigeration controller |
+| CIP Controller | Siemens S7-1200 | 20 ms | Standard S7-1200 cycle |
+
+**Stale reads.** When CollatrEdge polls faster than the scan cycle, consecutive reads return the same value. The PLC has not updated the register yet. This is correct behaviour, not a fault. A Modbus client polling an S7-1200 every 10 ms sees identical values on roughly half its reads. The simulator models this by quantising value updates to the scan cycle boundary. The underlying signal model generates continuously, but the register value snaps to the most recent scan cycle output.
+
+```
+register_value = last_scan_output
+if sim_time >= next_scan_boundary:
+    register_value = current_generated_value
+    next_scan_boundary += scan_cycle_time
+```
+
+**Phase jitter.** Real scan cycles are not perfectly periodic. Interrupt handling, communication load, and program branching cause small variations. The simulator adds a phase jitter of 0-10% on each scan cycle. A 10 ms scan cycle varies between 10.0 ms and 11.0 ms per cycle. The jitter is drawn from a uniform distribution each cycle.
+
+```
+actual_cycle = scan_cycle * (1.0 + uniform(0, jitter_pct))
+```
+
+**Inter-signal skew.** Two signals on the same PLC that change at the same logical instant may appear 1-2 scan cycles apart from the client's perspective. The client polls registers sequentially. If the scan boundary falls between two register reads within the same Modbus transaction, the first register reflects the old scan and the second reflects the new scan. This is a real effect in Siemens S7 when reading large register blocks that span the scan boundary.
+
+The simulator models this by assigning each register read within a multi-register request an independent chance of hitting the scan boundary. For signals on different PLCs, there is no phase relationship at all. The scan cycles of different controllers are free-running and unsynchronised.
+
+**Impact on analytics.** Scan cycle artefacts affect sub-second correlation analysis. Two signals that change simultaneously in the physical process appear offset by up to one scan cycle in the collected data. At 100 ms scan cycles (Eurotherm), this offset is significant. At 10 ms scan cycles (S7-1500), it is negligible for most analytics. Detectors that compute cross-correlations at fine time resolution must account for scan cycle quantisation.
+
+See Appendix D for scan cycle configuration parameters.

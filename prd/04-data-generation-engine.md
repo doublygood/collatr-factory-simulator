@@ -510,6 +510,40 @@ Same structure as dryer zones but with higher coupling coefficients. The oven is
 
 The mixing matrix is configurable per group. Set all off-diagonal entries to 0 to disable peer correlation. See Appendix D for configuration examples.
 
+### 4.3.2 Time-Varying Covariance
+
+The gain parameter `k` in a correlated follower (`child = base + k * parent + noise`) is not constant in the real world. Load changes. Bearings warm up. Mechanical wear shifts friction coefficients. The relationship between motor current and line speed drifts over hours and days. A fixed linear transform produces scatter plots that are too tight and too stable.
+
+The simulator models this by applying a multiplicative random walk to the gain parameter:
+
+```
+k_effective = k_nominal * gain_drift_factor
+```
+
+The drift factor evolves each tick:
+
+```
+log_drift += drift_volatility * noise(0, 1) * sqrt(dt) - reversion_rate * log_drift * dt
+gain_drift_factor = exp(log_drift)
+```
+
+The multiplicative form ensures `k_effective` stays positive. The logarithmic mean-reversion pulls the drift factor back toward 1.0 over time. The `drift_volatility` parameter controls how fast the gain wanders. The `reversion_rate` parameter controls how strongly it snaps back.
+
+Typical behaviour: over 24 simulated hours, the gain varies by 5-15% from its nominal value. Over a week, excursions of 20-25% are possible before mean-reversion pulls back. The drift is slow enough that minute-to-minute correlations look stable. Only hour-over-hour or shift-over-shift analysis reveals the changing relationship.
+
+This matters for anomaly detection. A fixed-gain model trains a detector to expect a tight linear band. Real data has a wider, shifting band. Detectors trained on fixed-gain synthetic data produce false positives on real data where the gain has drifted. Time-varying covariance closes this realism gap.
+
+**Default assignments:**
+
+| Signal Pair | k_nominal | drift_volatility | reversion_rate | Typical 24h Variation |
+|---|---|---|---|---|
+| main_drive_current vs line_speed | 0.5 A per m/min | 0.003 | 0.02 | 8-12% |
+| main_drive_speed vs line_speed | gear ratio | 0.001 | 0.05 | 3-5% |
+| web_tension vs line_speed | varies | 0.004 | 0.015 | 10-15% |
+| ink_viscosity vs ink_temperature | varies | 0.002 | 0.03 | 5-8% |
+
+Enable per signal by setting `gain_drift_volatility` > 0 in the correlated follower configuration. Set to 0 (the default) for a fixed gain. See Appendix D for configuration parameters.
+
 ## 4.4 Time Compression
 
 The simulation clock advances at a configurable multiple of real time:

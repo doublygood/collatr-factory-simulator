@@ -342,6 +342,51 @@ Sequence:
 4. Product in the chiller is at risk. The duration above threshold determines spoilage.
 5. After repair, compressor restarts. Room temperature recovers via first_order_lag.
 
+### 5.14.8 Allergen Changeover
+
+**Frequency:** Triggered by recipe change when allergen status differs.
+**Duration:** 30-60 minutes (full CIP cycle).
+
+Food production lines handle recipes with and without allergens. Each recipe carries a flag:
+
+```yaml
+recipe:
+  name: "Chicken Tikka 400g"
+  contains_allergen: true    # contains mustard, celery
+```
+
+```yaml
+recipe:
+  name: "Vegetable Lasagne 400g"
+  contains_allergen: false
+```
+
+When a recipe change transitions from `contains_allergen: true` to `contains_allergen: false`, a mandatory CIP cycle fires between batches. This is a regulatory requirement under BRC Global Standards (BRCGS). The CIP cycle cannot be skipped or shortened. Cross-contamination of allergens is a food safety incident.
+
+The transition from `false` to `true` does not require a mandatory CIP. The transition from `true` to `true` (different allergens) also triggers the mandatory CIP. Only `false` to `false` transitions skip it.
+
+**Transition detection logic:**
+
+| Previous Recipe | New Recipe | Mandatory CIP? |
+|---|---|---|
+| allergen: false | allergen: false | No |
+| allergen: false | allergen: true | No |
+| allergen: true | allergen: false | Yes |
+| allergen: true | allergen: true | Yes (different allergen set) |
+
+**Sequence:**
+
+1. Production stops at the end of the current batch.
+2. The scenario engine detects the allergen transition.
+3. A mandatory CIP cycle begins. The cycle follows the same phases as Section 5.14.6: pre-rinse, caustic wash, rinse, acid wash, final rinse.
+4. CIP duration and parameters match Section 5.14.6. The cycle is identical in execution.
+5. The CIP cycle completes. Final rinse conductivity must drop below the acceptance threshold.
+6. Production resumes with the new recipe.
+
+The difference from a normal CIP cycle (Section 5.14.6) is that this one cannot be deferred or omitted. Normal CIP cycles are scheduled between batches at operator discretion. Allergen changeover CIP cycles are mandatory. The simulator enforces this: if an allergen transition is configured, the CIP cycle always runs.
+
+**Ground truth.** The ground truth event log (Section 4.7) records allergen changeover events with: previous recipe name, new recipe name, allergen transition type, and CIP cycle start/end times. The event type is `allergen_changeover`.
+
 ## 5.15 Micro-Stops
 
 Micro-stops are brief interruptions lasting 5-30 seconds. They occur 10-50 times per 8-hour shift (configurable). They do not change the machine state register. The `press.machine_state` stays Running (2). Only the line speed dips.

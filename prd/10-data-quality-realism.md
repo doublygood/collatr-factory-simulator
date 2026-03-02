@@ -142,3 +142,25 @@ The simulator injects stuck sensor events as follows:
 Default frequency: 0 to 2 per week per signal (configurable). Default duration: 5 minutes to 4 hours.
 
 The ground truth event log (Section 4.7) records stuck sensor events with the frozen value, start time, and duration.
+
+## 10.11 Partial Modbus Responses
+
+Real Modbus devices occasionally return fewer registers than requested. A client asks for 10 registers starting at address 100. The device returns 6. The remaining 4 are missing. This is not an exception response. The function code is correct. The byte count is simply shorter than expected.
+
+**Causes:**
+
+1. **Register map gap.** The requested block spans implemented and unimplemented addresses. The device returns registers up to the gap and stops.
+2. **Device under heavy load.** The PLC scan cycle runs long. The communication module truncates the response to meet its timeout.
+3. **TCP packet truncation.** A network device or serial gateway truncates the TCP payload. The CRC or TCP checksum may still be valid for the truncated frame.
+
+The simulator injects partial responses at configurable probability (default: 0.01% of multi-register reads). Single-register reads are never partial. The injection only applies to requests for two or more registers.
+
+When triggered, the response contains the first N registers of the requested block. N is drawn uniformly from 1 to (requested count minus 1). The response byte count field reflects the actual number of returned registers. The Modbus function code and starting address are correct.
+
+**Example.** Client requests FC03, address 100, quantity 10. Partial response returns quantity 6 (addresses 100-105). Addresses 106-109 are missing. The client must detect the short response and re-request the missing registers in a follow-up read.
+
+CollatrEdge must handle this gracefully. It should detect that the response is shorter than requested, log the partial response, and issue a new request for the missing range. It must not treat the partial data as a complete read. It must not discard the partial data entirely.
+
+The ground truth event log (Section 4.7) records partial response injections with: controller ID, requested address range, returned count, and timestamp. The event type is `partial_modbus_response`.
+
+See Appendix D for configuration parameters.
