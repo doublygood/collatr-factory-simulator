@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from factory_simulator.clock import SimulationClock
+from factory_simulator.engine.ground_truth import GroundTruthLogger
 from factory_simulator.engine.scenario_engine import ScenarioEngine
 from factory_simulator.generators.base import EquipmentGenerator
 from factory_simulator.generators.coder import CoderGenerator
@@ -95,6 +96,7 @@ class DataEngine:
         config: FactoryConfig,
         store: SignalStore,
         clock: SimulationClock | None = None,
+        ground_truth: GroundTruthLogger | None = None,
     ) -> None:
         self._config = config
         self._store = store
@@ -103,6 +105,7 @@ class DataEngine:
             else SimulationClock.from_config(config.simulation)
         )
         self._running = False
+        self._ground_truth = ground_truth
 
         # Master RNG -- child rngs are spawned per generator (Rule 13)
         seed = config.simulation.random_seed
@@ -122,6 +125,7 @@ class DataEngine:
             scenarios_config=config.scenarios,
             shifts_config=config.shifts,
             rng=np.random.default_rng(self._root_rng.integers(0, 2**63)),
+            ground_truth=ground_truth,
         )
 
     # -- Properties -----------------------------------------------------------
@@ -145,6 +149,11 @@ class DataEngine:
     def scenario_engine(self) -> ScenarioEngine:
         """The scenario engine."""
         return self._scenario_engine
+
+    @property
+    def ground_truth(self) -> GroundTruthLogger | None:
+        """The ground truth event logger, if configured."""
+        return self._ground_truth
 
     @property
     def running(self) -> bool:

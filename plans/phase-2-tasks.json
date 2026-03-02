@@ -140,7 +140,7 @@
       "test_files": ["tests/unit/test_ground_truth.py"],
       "prd_refs": ["prd/04-data-generation-engine.md (4.7)"],
       "depends_on": ["2.7"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "2.15",

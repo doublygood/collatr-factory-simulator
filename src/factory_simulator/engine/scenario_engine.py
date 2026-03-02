@@ -31,6 +31,7 @@ from factory_simulator.scenarios.unplanned_stop import UnplannedStop
 if TYPE_CHECKING:
     from factory_simulator.config import ScenariosConfig, ShiftsConfig
     from factory_simulator.engine.data_engine import DataEngine
+    from factory_simulator.engine.ground_truth import GroundTruthLogger
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +61,13 @@ class ScenarioEngine:
         shifts_config: ShiftsConfig,
         rng: np.random.Generator,
         sim_duration_s: float = _SHIFT_SECONDS,
+        ground_truth: GroundTruthLogger | None = None,
     ) -> None:
         self._config = scenarios_config
         self._shifts = shifts_config
         self._rng = rng
         self._sim_duration_s = sim_duration_s
+        self._ground_truth = ground_truth
 
         self._scenarios: list[Scenario] = []
         self._generate_timeline()
@@ -97,11 +100,42 @@ class ScenarioEngine:
         """Evaluate all scenarios for the current tick.
 
         Called by the DataEngine before running generators.
+        Logs scenario_start and scenario_end events to ground truth.
         """
         for scenario in self._scenarios:
             if scenario.phase == ScenarioPhase.COMPLETED:
                 continue
+
+            phase_before = scenario.phase
             scenario.evaluate(sim_time, dt, engine)
+            # evaluate() may mutate phase; re-read and annotate to
+            # prevent mypy from narrowing based on the COMPLETED guard.
+            phase_after: ScenarioPhase = scenario.phase
+
+            # Detect PENDING -> ACTIVE transition (scenario_start)
+            if (
+                phase_before == ScenarioPhase.PENDING
+                and phase_after in (ScenarioPhase.ACTIVE, ScenarioPhase.COMPLETED)
+                and self._ground_truth is not None
+            ):
+                self._ground_truth.log_scenario_start(
+                    sim_time=sim_time,
+                    scenario_name=type(scenario).__name__,
+                    affected_signals=_get_affected_signals(scenario),
+                    parameters=_get_scenario_params(scenario),
+                )
+
+            # Detect -> COMPLETED transition (scenario_end).
+            # phase_before is always PENDING or ACTIVE here (COMPLETED
+            # scenarios are skipped by the ``continue`` guard above).
+            if (
+                phase_after == ScenarioPhase.COMPLETED
+                and self._ground_truth is not None
+            ):
+                self._ground_truth.log_scenario_end(
+                    sim_time=sim_time,
+                    scenario_name=type(scenario).__name__,
+                )
 
     # -- Timeline generation ---------------------------------------------------
 
@@ -228,3 +262,77 @@ class ScenarioEngine:
     def _spawn_rng(self) -> np.random.Generator:
         """Create a child RNG from the parent (Rule 13)."""
         return np.random.default_rng(self._rng.integers(0, 2**63))
+
+
+# ---------------------------------------------------------------------------
+# Ground truth helpers -- extract metadata from scenario instances
+# ---------------------------------------------------------------------------
+
+# Scenario class name -> list of affected signal IDs.
+# These are the signals the PRD says each scenario type modifies.
+_AFFECTED_SIGNALS: dict[str, list[str]] = {
+    "WebBreak": [
+        "press.web_tension", "press.line_speed",
+        "press.machine_state", "press.web_break", "press.fault_active",
+    ],
+    "DryerDrift": [
+        "press.dryer_zone1_temp", "press.dryer_zone2_temp",
+        "press.dryer_zone3_temp", "press.waste_count",
+    ],
+    "InkExcursion": [
+        "press.ink_viscosity", "press.registration_error_x",
+        "press.registration_error_y", "press.waste_count",
+    ],
+    "RegistrationDrift": [
+        "press.registration_error_x", "press.registration_error_y",
+        "press.waste_count",
+    ],
+    "ColdStartSpike": [
+        "energy.line_power", "press.main_drive_current",
+    ],
+    "CoderDepletion": [
+        "coder.ink_level", "coder.state",
+    ],
+    "MaterialSplice": [
+        "press.web_tension", "press.registration_error_x",
+        "press.registration_error_y", "press.unwind_diameter",
+        "press.line_speed", "press.waste_count",
+    ],
+    "UnplannedStop": [
+        "press.machine_state", "press.line_speed",
+    ],
+    "JobChangeover": [
+        "press.machine_state", "press.line_speed",
+        "press.prints_total",
+    ],
+    "ShiftChange": [
+        "press.machine_state", "press.line_speed",
+    ],
+}
+
+
+def _get_affected_signals(scenario: Scenario) -> list[str]:
+    """Return the list of signals affected by *scenario*."""
+    name = type(scenario).__name__
+    return list(_AFFECTED_SIGNALS.get(name, []))
+
+
+def _get_scenario_params(scenario: Scenario) -> dict[str, object]:
+    """Extract loggable parameters from *scenario*.
+
+    Returns a flat dict of key numeric/string parameters suitable for
+    JSON serialisation.  Uses duck-typing to pull common attributes.
+    """
+    params: dict[str, object] = {}
+    params["duration"] = scenario.duration()
+
+    # Scenario-specific attributes (best-effort extraction)
+    for attr in (
+        "recovery_duration", "spike_tension", "spike_duration",
+        "decel_duration", "shift_name",
+    ):
+        val = getattr(scenario, attr, None)
+        if val is not None:
+            params[attr] = val
+
+    return params

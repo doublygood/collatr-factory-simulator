@@ -1,6 +1,6 @@
 # Phase 2: OPC-UA, MQTT, and Packaging Scenarios - Progress
 
-## Status: In Progress (13/16 tasks complete)
+## Status: In Progress (14/16 tasks complete)
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
@@ -16,7 +16,7 @@
 - [x] 2.11: Cold Start Energy Spike Scenario
 - [x] 2.12: Coder Consumable Depletion Scenario
 - [x] 2.13: Material Splice Scenario
-- [ ] 2.14: Ground Truth Event Log
+- [x] 2.14: Ground Truth Event Log
 - [ ] 2.15: Environment Composite Model
 - [ ] 2.16: Cross-Protocol Consistency Tests
 
@@ -391,3 +391,31 @@ Test classes:
 - `_uniform_param` helper function extracted for DRY parameter sampling.
 
 **Test results:** 28/28 unit tests pass. No regressions (1336 total unit tests pass).
+
+### Task 2.14 (Complete)
+
+**Files created/modified:**
+- `src/factory_simulator/engine/ground_truth.py` — GroundTruthLogger class, ~320 lines
+- `tests/unit/test_ground_truth.py` — 25 unit tests, all pass
+- `src/factory_simulator/engine/scenario_engine.py` — Added `ground_truth` parameter, auto-logging of scenario_start/scenario_end events, affected signals registry, parameter extraction helpers
+- `src/factory_simulator/engine/data_engine.py` — Added `ground_truth` parameter pass-through to ScenarioEngine
+- `src/factory_simulator/engine/__init__.py` — Exported `GroundTruthLogger`
+
+**What was built:**
+- `GroundTruthLogger` class: append-only JSONL writer with open/close lifecycle. Writes to configurable path (default `output/ground_truth.jsonl`). Creates parent directories on open.
+- `write_header(config)`: first-line config record per PRD 4.7 — `event_type: "config"`, sim_version, seed, profile name, per-signal noise parameters (type, sigma, df, phi, speed-dependent params), enabled scenarios list.
+- Event methods for all 10 PRD event types: `log_scenario_start`, `log_scenario_end`, `log_state_change`, `log_signal_anomaly`, `log_data_quality`, `log_micro_stop`, `log_shift_change`, `log_consumable`, `log_sensor_disconnect`, `log_stuck_sensor`. Plus `log_connection_drop` for PRD 4.8.
+- `sim_time` formatted as ISO 8601 UTC string (relative to 2026-01-01T00:00:00Z reference epoch).
+- ScenarioEngine integration: detects PENDING→ACTIVE and →COMPLETED phase transitions, auto-logs `scenario_start` (with affected signals and parameters) and `scenario_end`.
+- `_AFFECTED_SIGNALS` registry: maps each scenario class name to its PRD-defined affected signal list (WebBreak, DryerDrift, InkExcursion, etc.).
+- `_get_scenario_params()`: extracts loggable numeric/string parameters via duck-typing (duration, recovery_duration, spike_tension, shift_name, etc.).
+- Graceful degradation: writes are no-ops when logger is not opened; ScenarioEngine works normally when `ground_truth=None`.
+
+**Key design decisions:**
+- Logger is write-only, append-only, with `flush()` after every line — no buffering, no reads. Simple and crash-safe.
+- Phase transition detection in ScenarioEngine `tick()`: checks `phase_before`/`phase_after` around each `scenario.evaluate()` call. This avoids modifying the Scenario base class or any individual scenario implementations.
+- `ScenarioPhase` type annotation on `phase_after` to prevent mypy from incorrectly narrowing through the COMPLETED `continue` guard.
+- Affected signals are declared statically in a module-level dict rather than queried from scenario instances. This is simpler and matches the PRD (each scenario type has a fixed set of affected signals).
+- JSON output uses `separators=(",",":")` (compact, no spaces) for minimal file size.
+
+**Test results:** 25/25 unit tests pass. No regressions (1361 total unit tests pass).
