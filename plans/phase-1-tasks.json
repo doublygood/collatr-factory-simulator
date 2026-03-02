@@ -144,7 +144,7 @@
       "test_files": ["tests/unit/test_models/test_thermal_diffusion.py"],
       "prd_refs": ["prd/04-data-generation-engine.md (4.2.10)"],
       "depends_on": ["1.4"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "1.15",

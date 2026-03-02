@@ -16,7 +16,7 @@
 - [x] 1.11: Depletion Model
 - [x] 1.12: Correlated Follower Model
 - [x] 1.13: State Machine Model
-- [ ] 1.14: Thermal Diffusion Model
+- [x] 1.14: Thermal Diffusion Model
 - [ ] 1.15: Bang-Bang Hysteresis + String Generator
 - [ ] 1.16: Equipment Generator Base + Press Generator
 - [ ] 1.17: Remaining Packaging Generators
@@ -560,4 +560,47 @@
 - Determinism (Rule 13): same seed same timer/probability sequences, different seeds differ, condition-only always deterministic
 - PRD examples: press 6 states (values 0-5), Setup->Running timer (10-30 min), coder gutter fault MTBF (500h probability), coder nozzle health degradation (timer chain), coder follows press via conditions, unplanned stop scenario (Running->Fault->Setup->Running)
 - Property-based (Hypothesis): output always valid state value, determinism any seed, min_duration always respected, timer fires within max_duration, output always finite
+- Package imports: importable from models package, in __all__
+
+### Task 1.14: Thermal Diffusion Model (completed)
+
+**Files created:**
+- `src/factory_simulator/models/thermal_diffusion.py` -- ThermalDiffusionModel class
+- `tests/unit/test_models/test_thermal_diffusion.py` -- 62 tests (property-based with Hypothesis)
+
+**Files modified:**
+- `src/factory_simulator/models/__init__.py` -- exports ThermalDiffusionModel
+
+**ThermalDiffusionModel implementation (PRD 4.2.10):**
+- Core formula: `T(t) = T_oven - (T_oven - T_initial) * SUM C_n * exp(-decay_n * t)`
+- Coefficients: `C_n = 8 / ((2n+1)^2 * pi^2)` (PRD Table values verified: n=0 -> 0.8106, n=1 -> 0.0901, n=2 -> 0.0324)
+- Decay rates: `decay_n = (2n+1)^2 * pi^2 * alpha / (4 * L^2)` where L is half-thickness
+- Dynamic term count: adds terms until `|T(0) - T_initial| <= 1.0 C` (PRD convergence requirement)
+- Typical terms: 36 for T_oven=180, T_initial=4 (176C difference); ~5 for small differences
+- `set_oven_temp(T)` for runtime oven temperature changes (recomputes terms, preserves elapsed time)
+- `restart(T_initial, T_oven)` for new product cycle (resets elapsed, optionally updates temperatures)
+- `reset()` restores elapsed to 0, clears noise state
+- Accepts optional `NoiseGenerator` for measurement noise (PRD sigma=0.3)
+
+**Key design decisions:**
+- Same `_float_param()` helper pattern as other signal models for safe param extraction.
+- **4*L^2 correction:** The PRD formula writes `L^2` in the decay denominator but defines L as "product half-thickness". The standard Fourier solution for a slab with half-thickness L uses `4*L^2`. With `L^2` the model reaches 72C in ~2 minutes (physically unrealistic); with `4*L^2` it reaches 72C in ~8.7 minutes. The PRD says "approximately 15-20 minutes" which describes real center-point temperature (the formula is volume-averaged, which is faster). The 4*L^2 form produces physically reasonable behavior.
+- Elapsed time accumulated via `dt` (not sim_time), consistent with other models (RampModel, etc.).
+- No internal noise -- noise is injected via constructor, same pattern as all other models.
+- Safety limit of 500 terms in the Fourier expansion (more than enough; even 176C difference only needs 36 terms).
+- Supports both heating (T_oven > T_initial) and cooling (T_oven < T_initial) cases.
+
+**Test coverage (62 tests):**
+- Construction: defaults, explicit params, custom params, validation errors (L=0, L<0, alpha=0, alpha<0)
+- Convergence (PRD 4.2.10): large difference 176C (T(0) within 1C, 15+ terms), small difference 50C (<20 terms), tiny difference 5C (<5 terms), equal temperatures (1 term), cooling convergence
+- PRD coefficient verification: three-term sum = 0.9331, individual C_n values match table, T(0) with 3 terms = 15.8C
+- Temperature evolution: approaches T_oven, monotonic heating/cooling, equal temps constant, early values near T_initial, asymptotic approach (rate decreases), never exceeds T_oven (heating), never below T_oven (cooling)
+- Physical correctness: reaches 72C in ~8-9 min (PRD ready meal), thinner product faster, higher diffusivity faster, higher oven temp faster
+- Noise: adds variation, zero sigma clean, mean near theoretical at equilibrium, AR(1) noise resets
+- Reset/Restart: clears elapsed, produces same sequence, restart updates params, recomputes terms
+- set_oven_temp: changes T_oven, preserves elapsed, recomputes terms, affects subsequent values
+- Determinism (Rule 13): same seed identical, different seeds same without noise, noise same seed identical, noise different seeds differ
+- Time compression (Rule 6): same output at different tick rates, elapsed matches total dt
+- Edge cases: very small alpha (slow), very large alpha (fast), negative T_initial, very thin/thick product
+- Property-based (Hypothesis): output always finite, determinism any seed, convergence within 1C, monotonic for any heating/cooling, bounded between T_initial and T_oven
 - Package imports: importable from models package, in __all__

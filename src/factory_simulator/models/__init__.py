@@ -20,6 +20,7 @@ from factory_simulator.models.random_walk import RandomWalkModel
 from factory_simulator.models.sinusoidal import SinusoidalModel
 from factory_simulator.models.state import StateMachineModel
 from factory_simulator.models.steady_state import SteadyStateModel
+from factory_simulator.models.thermal_diffusion import ThermalDiffusionModel
 
 __all__ = [
     "CholeskyCorrelator",
@@ -34,6 +35,7 @@ __all__ = [
     "SinusoidalModel",
     "StateMachineModel",
     "SteadyStateModel",
+    "ThermalDiffusionModel",
     "clamp",
     "quantise",
 ]
