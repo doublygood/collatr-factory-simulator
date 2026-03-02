@@ -47,3 +47,14 @@
 | L10 | Data | Ground truth log should include noise parameters in header record | `04-data-generation-engine.md` | RESOLVED |
 | L11 | Data | No random baseline defined in evaluation protocol | `12-evaluation-protocol.md` | RESOLVED |
 | L12 | Data | 1/f noise absent (spectral analysis tell, Phase 2) | `04-data-generation-engine.md` | RESOLVED |
+
+## Round 3 Issues (4)
+
+| # | Source | Issue | File(s) | Status |
+|---|--------|-------|---------|--------|
+| R3-N1a | Auto | Chiller suction/discharge register addresses (Section 3 HR 1410 vs Appendix A HR 1404) | `03-protocol-endpoints.md` | RESOLVED |
+| R3-N2a | Auto | F&B MQTT subscription filter wrong (`collatr/foodbev/#` vs `collatr/factory/demo/foodbev1/#`) | `11-success-criteria.md` | RESOLVED |
+| R3-N1b | Data | Fourier term count estimate optimistic (5-10 should be 10-30 for large temp differences) | `04-data-generation-engine.md` | RESOLVED |
+| R3-N2b | Data | Shift change times need +/-10 min uniform jitter | `05-scenario-system.md` | RESOLVED |
+
+All Round 3 issues resolved in commit `cff04ca`.
