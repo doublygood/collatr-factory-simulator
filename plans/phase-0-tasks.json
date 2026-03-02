@@ -7,7 +7,7 @@
       "name": "Project scaffolding",
       "description": "Create pyproject.toml, requirements.txt (dev + prod), pytest.ini or pyproject.toml pytest config, ruff config, mypy config, .gitignore, src/ directory structure (src/factory_simulator/__init__.py), tests/ directory structure (tests/unit/, tests/integration/, tests/spikes/), and a minimal conftest.py. Verify: ruff check passes, mypy src passes (on empty package), pytest discovers test directories.",
       "prd_refs": ["prd/appendix-e-project-structure.md", "prd/07-technology-stack.md"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "0.2",

@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "collatr-factory-simulator"
+version = "0.1.0"
+description = "Manufacturing factory simulator over industrial protocols (Modbus TCP, OPC-UA, MQTT)"
+requires-python = ">=3.12"
+license = {text = "Proprietary"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# ── pytest ──────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "integration: requires external services (Docker Compose)",
+]
+
+# ── ruff ────────────────────────────────────────────────────────────
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["factory_simulator"]
+
+# ── mypy ────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = [
+    "pymodbus.*",
+    "asyncua.*",
+    "paho.*",
+    "uvloop",
+]
+ignore_missing_imports = true

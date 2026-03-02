@@ -1,0 +1,7 @@
+pymodbus>=3.6,<4.0
+asyncua>=1.1.5
+paho-mqtt>=2.0
+numpy>=1.26
+pydantic>=2.0
+pyyaml>=6.0
+uvloop>=0.19; sys_platform == "linux"
