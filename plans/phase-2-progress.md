@@ -1,11 +1,11 @@
 # Phase 2: OPC-UA, MQTT, and Packaging Scenarios - Progress
 
-## Status: In Progress (1/16 tasks complete)
+## Status: In Progress (3/16 tasks complete)
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
 - [x] 2.2: OPC-UA Server Adapter — Value Sync + Subscriptions
-- [ ] 2.3: OPC-UA Integration Tests
+- [x] 2.3: OPC-UA Integration Tests
 - [ ] 2.4: MQTT Publisher Adapter
 - [ ] 2.5: MQTT Batch Vibration Topic
 - [ ] 2.6: MQTT Integration Tests
@@ -67,3 +67,28 @@
 - Only `quality="bad"` maps to `BadSensorFailure`; "uncertain" maps to Good (PRD: "Phase 4 will add more")
 
 **Test results:** 38/38 unit tests pass. No regressions (1058 total unit tests pass).
+
+### Task 2.3 (Complete)
+
+**Files created:**
+- `tests/integration/test_opcua_integration.py` — 19 integration tests, all pass
+
+**What was built:**
+Two fixtures:
+- `opcua_static`: engine ticked 5× synchronously, known values injected into store, OpcuaServer started, engine NOT running async. Used for node structure, value range, and setpoint write tests.
+- `opcua_live`: engine running as an asyncio task (100ms ticks), OpcuaServer syncing every 500ms. Used for subscription delivery tests.
+
+Test classes:
+- `TestHierarchicalBrowse` (5 tests): traverses the OPC-UA folder hierarchy from `client.nodes.objects` down through PackagingLine → equipment folders → sub-folders. Verifies Press1 sub-folders (Registration, Ink, Dryer, MainDrive, Unwind, Rewind) and Dryer zones (Zone1-3) exist.
+- `TestAllNodesAccessible` (7 tests): all 32 Appendix B nodes readable by NodeId, node count=32, Double nodes finite and within EURange, UInt16 nodes within clamp range, UInt32 counters non-negative, key injected values match OPC-UA readback (validates full sync path), StatusCode.Good for good-quality signals.
+- `TestSetpointWrite` (3 tests): single zone setpoint write propagates to store, all three zone setpoints independent, read-only node write rejected.
+- `TestSubscriptionsWithLiveEngine` (3 tests): initial subscription notification fires, store-injected change appears in subscription events, three-node subscription all deliver notifications.
+- `TestNamespaceConfiguration` (1 test): NAMESPACE_URI registered at ns=2.
+
+**Decisions:**
+- Two fixtures instead of one: `opcua_static` isolates value-specific assertions from engine interference; `opcua_live` provides live value changes for subscription tests.
+- `_base_config()` helper DRY-ups fixture setup (config, store, clock, engine).
+- Read-only write test uses bare `except Exception` with `pytest.fail` rather than `pytest.raises` to avoid importing asyncua exception classes (which have `ignore_missing_imports` in mypy config).
+- `await asyncio.sleep(0.6)` in `opcua_static` ensures at least one full 500ms sync cycle completes before client connects.
+
+**Test results:** 19/19 integration tests pass. No regressions (1139 total tests pass).

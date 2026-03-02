@@ -30,7 +30,7 @@
       "test_files": ["tests/integration/test_opcua_integration.py"],
       "prd_refs": ["prd/appendix-b-opcua-node-tree.md", "prd/13-test-strategy.md"],
       "depends_on": ["2.2"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "2.4",
