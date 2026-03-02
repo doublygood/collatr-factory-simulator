@@ -92,3 +92,31 @@ Stale values occur when:
 - A counter stops incrementing during idle periods (legitimately unchanged, not stale, but can look stale to a system that expects change).
 
 The press counters are the primary example. When `press.machine_state` is Idle (3), `press.impression_count`, `press.good_count`, and `press.waste_count` do not increment. They report the same value every second. This is correct behaviour. CollatrEdge must distinguish between "counter is stale" and "counter is not incrementing because the machine is idle."
+
+## 10.9 Sensor Disconnect Events
+
+Real sensors fail. When a thermocouple disconnects from a PLC analog input, the PLC does not report zero. It reports a specific sentinel value determined by the input module configuration. The reference data from the CIJ vendor trial showed `Temperatur1` reporting 6553.5 when the sensor was disconnected. This is the most common pattern in Siemens installations.
+
+Common sentinel patterns:
+
+| Sentinel | Meaning | Source |
+|---|---|---|
+| 6553.5 | uint16 max / 10 | Siemens AI module, wire break on int16 x10 channel |
+| -32768 | int16 min | Some PLCs report negative rail on open circuit |
+| 9999.0 | Out-of-range high | Eurotherm convention for sensor break |
+| 0.0 | Zero | 4-20 mA transmitter with broken wire (0 mA = open circuit) |
+| 3.6 mA equivalent | NAMUR NE 43 low | NAMUR-compliant transmitters signal under-range |
+
+The simulator injects sensor disconnect events at configurable probability and duration. During a disconnect:
+
+1. The affected signal's value jumps to the configured sentinel value.
+2. The OPC-UA status code changes to `BadSensorFailure`.
+3. The MQTT quality field changes to `"bad"`.
+4. The Modbus register holds the sentinel value (no exception, just the wrong number).
+5. After the configured duration, the signal resumes normal generation.
+
+Default frequency: 0-1 per 24 hours per signal (configurable). Default duration: 30 seconds to 5 minutes.
+
+Each signal specifies which sentinel value to use. Temperature signals default to 6553.5 (Siemens convention). Pressure signals default to 0.0 (open-circuit 4-20 mA). The sentinel value is configurable per signal to match the PLC hardware in the simulated factory.
+
+The ground truth event log (Section 4.7) records every sensor disconnect with signal name, sentinel value, start time, and duration.

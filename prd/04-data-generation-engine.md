@@ -14,6 +14,8 @@ Key principles:
 
 4. **Time is the independent variable.** The engine maintains a simulation clock. At each tick, it advances the clock, evaluates active scenarios, updates the machine state, and generates new values for all signals. The tick rate matches the fastest signal (500ms for web tension and registration error). Slower signals update only on their configured interval.
 
+5. **All signal models use simulated time.** The time variable `t` and time delta `dt` in every generator formula refer to the simulation clock, not wall-clock time. This invariant ensures that compressed runs (10x, 100x) produce statistically identical output to real-time runs, just faster. Implementers must never substitute wall-clock time for simulated time in any signal model. This matters most for the random walk model (Section 4.2.5), where using wall-clock `dt` at 100x compression would inflate drift rates by a factor of 10 due to `sqrt(dt)` scaling.
+
 ## 4.2 Signal Models
 
 Each signal uses one of the following generator models:
@@ -26,9 +28,23 @@ The simplest model. The signal stays near a target value with Gaussian noise.
 value = target + noise(0, sigma)
 ```
 
-Used for: `press.nip_pressure`, `laminator.nip_pressure`, `laminator.adhesive_weight`, `env.ambient_temp` (within each hour), `coder.printhead_temp` (during printing), `coder.ink_pressure` (lung pressure, target ~1500 mbar, sigma ~60 mbar), `coder.supply_voltage` (target 24V, sigma 0.1V).
+Used for: `press.nip_pressure`, `laminator.nip_pressure`, `laminator.adhesive_weight`, `env.ambient_temp` (within each hour), `coder.printhead_temp` (during printing), `coder.ink_pressure` (lung pressure, target ~835 mbar, sigma ~60 mbar, range 0-900 mbar), `coder.supply_voltage` (target 24V, sigma 0.1V).
 
 Parameters: `target`, `sigma`, `min_clamp`, `max_clamp`.
+
+**Optional within-regime drift.** During long production runs (8-12 hours of continuous Running state), some signals drift slowly. This is normal operational behaviour, not a scenario or anomaly. Bearings warm up. Ink properties change. Mechanical components settle. The drift is modelled as a slow random walk layered onto the steady-state target:
+
+```
+effective_target = target + drift_offset
+drift_offset += drift_rate * noise(0, 1) * sqrt(dt) - reversion_rate * drift_offset * dt
+value = effective_target + noise(0, sigma)
+```
+
+The drift is imperceptible over minutes. Over hours, it shifts the signal baseline by 1-3% of the nominal value. This prevents the "too-clean" appearance that steady-state signals exhibit during long simulated production runs. The `reversion_rate` pulls the drift back toward zero with a time constant of several hours, preventing unbounded wander.
+
+Drift parameters: `drift_rate` (magnitude of slow walk, default 0.001), `reversion_rate` (pull back toward zero, default 0.0001), `max_drift` (clamp on drift_offset, default 3% of target).
+
+Used for: `press.nip_pressure`, `press.web_tension` (baseline), `press.ink_temperature`, `press.main_drive_current`. NOT used for: `press.line_speed` (operator-controlled), counters, setpoints, or state signals. Enable per signal by setting `drift_rate` > 0.
 
 ### 4.2.2 Sinusoidal with Noise
 
@@ -58,15 +74,24 @@ This model directly reflects the Eurotherm controller pattern documented in the 
 
 ### 4.2.4 Ramp Up / Ramp Down
 
-The signal moves linearly from one value to another over a specified duration.
+The base ramp produces a smooth linear trajectory from one value to another over a specified duration:
 
 ```
 value = start + (end - start) * (elapsed / duration) + noise(0, sigma)
 ```
 
-Used for: `press.line_speed` during startup (0 to target over 2-5 minutes), `press.line_speed` during shutdown (target to 0 over 30-60 seconds).
+An optional step quantisation layer simulates operator behaviour during manual speed-up. Real press startups are not smooth. The operator adjusts speed in discrete steps. The drive controller overshoots slightly at each step. The quantisation layer:
 
-Parameters: `start`, `end`, `duration`, `sigma`.
+1. Divides the ramp range into N steps (configurable, default 4).
+2. At each step boundary, the output jumps to the next step value.
+3. Each jump triggers a small overshoot (configurable, default 3% of step size) that decays exponentially over 5-10 seconds.
+4. The dwell time at each step is drawn from a uniform distribution (configurable, default 15-45 seconds).
+
+This produces the jerky, stepped acceleration that a real press operator creates when manually ramping speed. The step count, overshoot magnitude, and dwell time are configurable per equipment type. Set `steps=1` to disable quantisation and produce a smooth ramp.
+
+Used for: `press.line_speed` during startup (0 to target over 2-5 minutes, stepped). `press.line_speed` during shutdown uses a smooth ramp (target to 0 over 30-60 seconds) because emergency stops and controlled shutdowns do not have operator stepping.
+
+Parameters: `start`, `end`, `duration`, `sigma`, `steps` (integer, default 4), `step_overshoot_pct` (float, default 0.03), `step_overshoot_decay_s` (float, default 7.0), `step_dwell_range` (tuple, default [15, 45]).
 
 ### 4.2.5 Random Walk with Mean Reversion
 
@@ -133,6 +158,26 @@ Used for: `press.machine_state`, `coder.state`, `coder.nozzle_health` (states: G
 
 Parameters: `states[]`, `transitions[]` (each with `from`, `to`, `trigger`, `probability`, `min_duration`, `max_duration`).
 
+### 4.2.10 Thermal Diffusion (Sigmoid)
+
+This model simulates heat penetration into a solid food product. The temperature profile follows an S-curve: slow start as the surface heats, rapid middle as heat conducts inward, slow asymptotic approach to equilibrium. A first-order lag would produce a pure exponential approach with no slow-start phase, which looks wrong to anyone familiar with food thermal processing.
+
+The model uses the first term of the Fourier series solution for 1D heat conduction in a slab:
+
+```
+T(t) = T_oven - (T_oven - T_initial) * (8 / pi^2) * exp(-pi^2 * alpha * t / L^2)
+```
+
+Where `alpha` is thermal diffusivity (m^2/s) and `L` is the product half-thickness (m). The factor `8/pi^2` (approximately 0.81) ensures the initial temperature starts near `T_initial`. As `t` increases, the exponential term decays and `T(t)` approaches `T_oven`.
+
+Typical values for a chilled ready meal: half-thickness ~25 mm, thermal diffusivity ~1.4e-7 m^2/s (meat-based product). At 180C oven temperature, the core reaches 72C from 4C in approximately 15-20 minutes. BRC requires that product core temperature reaches 72C for 2 minutes, so the model must produce this profile accurately.
+
+Parameters: `T_initial` (product entry temperature, typically 2-8C from chiller), `T_oven` (oven zone temperature), `alpha` (thermal diffusivity, m^2/s), `L` (product half-thickness, m), `sigma` (measurement noise).
+
+Used for: `oven.product_core_temp` in the F&B profile.
+
+This model is simplified. Real products have non-uniform geometry, variable moisture content, and phase changes (ice melting, protein denaturation). The simplified model produces the characteristic S-curve that food manufacturing engineers expect to see. It is sufficient for demo and integration testing purposes.
+
 ## 4.3 Correlation Model
 
 The correlation model defines how signals interact. The machine state is the root driver. All other signals respond to state transitions.
@@ -156,7 +201,7 @@ press.machine_state changes to Running
     -> coder.prints_total starts incrementing
     -> coder.ink_level starts depleting
     -> coder.ink_pump_speed ramps to operating RPM
-    -> coder.ink_pressure stabilizes at ~1500 mbar
+    -> coder.ink_pressure stabilizes at ~835 mbar
     -> coder.ink_consumption_ml starts accumulating
     -> vibration.main_drive_x/y/z increases from idle (0.5-1 mm/s) to running (3-8 mm/s)
     -> laminator.web_speed follows press speed with lag
@@ -226,6 +271,8 @@ The F&B profile (65 signals) uses the same signal model types as the packaging p
 
 **Multi-zone thermal control.** The oven uses three independent temperature zones. Each zone tracks its setpoint via `first_order_lag` with a time constant of 120-300 seconds. Adjacent zones have thermal coupling: a drift in zone 1 nudges zone 2. The coupling factor is configurable (default 0.05).
 
+**Product core temperature.** The `oven.product_core_temp` signal uses the `thermal_diffusion` model (Section 4.2.10) rather than `first_order_lag`. Product core temperature follows an S-curve as heat penetrates from the surface inward. The model resets to `T_initial` each time a new product enters the oven (driven by belt speed and oven length). This is the single most important signal on a food production line. BRC auditors check it first.
+
 **Fill weight distribution.** The filler produces a Gaussian distribution of fill weights around the target (e.g. 350g +/- 3g). The `steady_state` model drives each fill event. When the mean drifts from target, reject rate increases. This is a new application of the steady_state model at the event level rather than the continuous level.
 
 **CIP wash cycles.** Clean-in-place runs between production batches. Wash temperature, flow rate, and conductivity follow a recipe curve over 30-60 minutes. The `ramp` and `first_order_lag` models combine to produce the CIP profile: rinse, caustic wash, rinse, acid wash, final rinse.
@@ -237,3 +284,34 @@ The F&B profile (65 signals) uses the same signal model types as the packaging p
 - `chiller.compressor_power` correlates inversely with `chiller.room_temp` delta from setpoint.
 
 Full F&B signal definitions, register maps, and protocol mappings are in `02b-factory-layout-food-and-beverage.md`.
+
+## 4.7 Ground Truth Event Log
+
+The simulator emits a JSONL sidecar file alongside the data stream. Every scenario event, state transition, and data quality injection is logged with its simulated timestamp and metadata. The scenario engine already tracks all this state internally. The ground truth log writes it out.
+
+**File path:** configurable, default `output/ground_truth.jsonl`.
+
+**Format:** one JSON object per line.
+
+```json
+{"sim_time": "2026-03-01T14:30:00.000Z", "event": "scenario_start", "scenario": "web_break", "affected_signals": ["press.web_tension", "press.line_speed", "press.machine_state"], "parameters": {"tension_spike_n": 720, "recovery_seconds": 1200}}
+{"sim_time": "2026-03-01T14:30:00.100Z", "event": "signal_anomaly", "signal": "press.web_tension", "anomaly_type": "spike", "value": 720.3, "normal_range": [60, 400]}
+{"sim_time": "2026-03-01T14:30:01.000Z", "event": "state_change", "signal": "press.machine_state", "from": 2, "to": 4}
+{"sim_time": "2026-03-01T14:50:00.000Z", "event": "scenario_end", "scenario": "web_break"}
+```
+
+**Event types:**
+
+| Event | Description |
+|---|---|
+| `scenario_start` | Scenario begins. Includes scenario name, affected signals, and parameters. |
+| `scenario_end` | Scenario completes. Includes scenario name. |
+| `state_change` | Equipment state transition. Includes signal name, previous state, new state. |
+| `signal_anomaly` | Individual signal anomaly: spike, drift, or excursion. Includes signal, type, value, normal range. |
+| `data_quality` | Communication drop, stale value, duplicate, exception injection. Includes protocol and duration. |
+| `micro_stop` | Brief speed dip. Includes duration and speed reduction percentage. |
+| `shift_change` | Shift transition. Includes old shift, new shift, time. |
+| `consumable` | Ink refill, material splice. Includes signal and new value. |
+| `sensor_disconnect` | Sensor disconnect injection. Includes signal and sentinel value. |
+
+**Purpose.** The log enables post-hoc evaluation. Compare CollatrEdge alerts against ground truth to compute detection rates, false positive rates, and detection latency. The primary use case remains demos and integration testing. The ground truth log adds benchmarking capability at minimal implementation cost.

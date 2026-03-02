@@ -10,6 +10,10 @@ profile: "packaging"          # "packaging" or "food_bev"
 
 The packaging profile activates press, laminator, slitter, coder, environment, energy, and vibration generators (47 signals). The food_bev profile activates mixer, oven, filler, sealer, chiller, CIP, coder, environment, and energy generators (65 signals). Only one profile runs at a time.
 
+```yaml
+ground_truth_log: "output/ground_truth.jsonl"  # Path for ground truth event log (Section 4.7)
+```
+
 ## Signal Model Parameters
 
 ### steady_state
@@ -21,6 +25,10 @@ params:
   sigma: 0.3            # Gaussian noise standard deviation
   min_clamp: 40.0       # Minimum allowed value
   max_clamp: 120.0      # Maximum allowed value
+  # Optional within-regime drift (set drift_rate > 0 to enable)
+  drift_rate: 0.0       # Slow walk magnitude (default 0 = disabled)
+  reversion_rate: 0.0001  # Pull back toward zero (time constant of hours)
+  max_drift: 2.55       # Clamp on drift_offset (default 3% of target)
 ```
 
 ### sinusoidal
@@ -51,9 +59,13 @@ params:
 ```yaml
 model: "ramp"
 params:
-  ramp_up_seconds: 180  # Seconds to ramp from 0 to target
-  ramp_down_seconds: 30 # Seconds to ramp from target to 0
-  sigma: 0.5            # Gaussian noise during ramp and steady state
+  ramp_up_seconds: 180    # Seconds to ramp from 0 to target
+  ramp_down_seconds: 30   # Seconds to ramp from target to 0
+  sigma: 0.5              # Gaussian noise during ramp and steady state
+  steps: 4                # Step quantisation count (1 = smooth ramp)
+  step_overshoot_pct: 0.03      # Overshoot as fraction of step size
+  step_overshoot_decay_s: 7.0   # Overshoot decay time constant (seconds)
+  step_dwell_range: [15, 45]    # Dwell time per step (seconds, uniform random)
 ```
 
 ### random_walk
@@ -142,6 +154,18 @@ params:
       trigger: "new_shift_start"
       min_duration_seconds: 300
       max_duration_seconds: 900
+```
+
+### thermal_diffusion
+
+```yaml
+model: "thermal_diffusion"
+params:
+  T_initial: 4.0            # Product entry temperature (C)
+  T_oven: 180.0             # Oven zone temperature (C)
+  alpha: 1.4e-7             # Thermal diffusivity (m^2/s)
+  L: 0.025                  # Product half-thickness (m)
+  sigma: 0.3                # Measurement noise
 ```
 
 ## Protocol Mapping Reference
@@ -271,6 +295,16 @@ scenarios:
     empty_fault_percent: 2.0
     refill_delay_seconds: [60, 300]
 
+  # Micro-stops (brief speed dips, no state change)
+  micro_stop:
+    enabled: true
+    frequency_per_shift: [10, 50]
+    duration_seconds: [5, 30]
+    speed_drop_percent: [30, 80]          # Percentage of current speed
+    ramp_down_seconds: [2, 5]
+    ramp_up_seconds: [5, 15]
+    mean_interval_minutes: [10, 50]       # Poisson process mean
+
   # --- F&B Profile Scenarios ---
 
   # Batch cycle (mixer)
@@ -381,6 +415,19 @@ data_quality:
     coder.prints_total: 4294967295
     energy.cumulative_kwh: 999999.0
   
+  # Sensor disconnect events
+  sensor_disconnect:
+    enabled: true
+    frequency_per_24h_per_signal: [0, 1]   # Range for random frequency
+    duration_seconds: [30, 300]             # 30 seconds to 5 minutes
+    sentinel_defaults:
+      temperature: 6553.5                  # Siemens wire break convention
+      pressure: 0.0                        # 4-20mA open circuit
+      voltage: -32768                      # int16 min, open circuit
+    per_signal_overrides:                  # Override sentinel per signal
+      # press.dryer_temp_zone_1: 9999.0    # Eurotherm convention
+      # coder.ink_pressure: 0.0            # 4-20mA transmitter
+
   # Timezone offset (for MQTT timestamps)
   mqtt_timestamp_offset_hours: 0      # 0 = UTC, 1 = BST, -5 = US Eastern
 ```

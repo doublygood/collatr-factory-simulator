@@ -222,6 +222,14 @@ scenarios:
   unplanned_stop:
     frequency: "1-2 per 8h shift"
     duration_range: [300, 3600]  # 5-60 minutes
+
+  micro_stop:
+    frequency: "10-50 per 8h shift"
+    duration_range: [5, 30]             # seconds
+    speed_drop_percent: [30, 80]
+    ramp_down_seconds: [2, 5]
+    ramp_up_seconds: [5, 15]
+    mean_interval_minutes: [10, 50]     # Poisson process
 ```
 
 ## 5.14 F&B Profile Scenarios
@@ -317,3 +325,24 @@ Sequence:
 3. `chiller.room_temp` crosses the alarm threshold (8 C). Alarm activates.
 4. Product in the chiller is at risk. The duration above threshold determines spoilage.
 5. After repair, compressor restarts. Room temperature recovers via first_order_lag.
+
+## 5.15 Micro-Stops
+
+Micro-stops are brief interruptions lasting 5-30 seconds. They occur 10-50 times per 8-hour shift (configurable). They do not change the machine state register. The `press.machine_state` stays Running (2). Only the line speed dips.
+
+**Frequency:** 10-50 per 8-hour shift (configurable). Inter-arrival time follows an exponential distribution with a configurable mean of 10-50 minutes (Poisson process).
+**Duration:** 5-30 seconds per event.
+
+**Causes:** operator inspecting a print, splice passing through, sensor false-trigger, brief material jam that clears itself.
+
+Sequence:
+1. `press.line_speed` drops by 30-80% over 2-5 seconds.
+2. `press.web_tension` fluctuates during deceleration.
+3. `press.waste_count` increment rate increases briefly (prints during deceleration are waste).
+4. After 5-30 seconds, `press.line_speed` ramps back to the previous target over 5-15 seconds.
+5. `press.registration_error_x/y` may increase briefly during recovery.
+6. All other signals respond through existing correlations: motor current follows speed, energy follows speed, vibration tracks speed.
+
+**Key distinction from unplanned stops.** Micro-stops do not trigger a state change. No fault code is written. No coil is set. The press is still "Running" from the PLC's perspective. This is the behaviour that OEE systems struggle to capture: production is nominally running but throughput drops. Detecting and quantifying micro-stops is a high-value analytics use case.
+
+**Scheduling.** Micro-stops are independent of other scenarios. They can occur during any Running period. They do not interact with job changeovers, web breaks, or other scenario events. If a micro-stop coincides with a scenario start, the scenario takes priority.
