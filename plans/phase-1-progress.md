@@ -6,7 +6,7 @@
 - [x] 1.1: Configuration Models
 - [x] 1.2: Simulation Clock
 - [x] 1.3: Signal Value Store
-- [ ] 1.4: Signal Model Base + Noise Pipeline
+- [x] 1.4: Signal Model Base + Noise Pipeline
 - [ ] 1.5: Steady State Model
 - [ ] 1.6: Sinusoidal Model
 - [ ] 1.7: First-Order Lag Model
@@ -124,3 +124,55 @@
 - Container protocol: len, contains, iter
 - clear empties store and allows reuse
 - Realistic scale: 47 packaging signals, 68 F&B signals, 1000 rapid update ticks
+
+### Task 1.4: Signal Model Base + Noise Pipeline (completed)
+
+**Files created:**
+- `src/factory_simulator/models/__init__.py` -- package init, exports SignalModel, NoiseGenerator, CholeskyCorrelator
+- `src/factory_simulator/models/base.py` -- SignalModel ABC
+- `src/factory_simulator/models/noise.py` -- NoiseGenerator + CholeskyCorrelator
+- `tests/unit/test_noise.py` -- 59 tests (property-based with Hypothesis)
+
+**SignalModel ABC:**
+- `__init__(params, rng)` -- stores model-specific params dict and numpy Generator
+- `generate(sim_time, dt) -> float` -- abstract method, produces raw signal value
+- `reset()` -- optional override for stateful models (no-op by default)
+
+**NoiseGenerator implementation (PRD 4.2.11):**
+- Three distributions: Gaussian, Student-t, AR(1)
+- Gaussian: `sigma * rng.standard_normal()`
+- Student-t: `sigma * rng.standard_t(df)` -- intentionally higher RMS per PRD variance note
+- AR(1): `phi * prev + sigma * sqrt(1 - phi^2) * N(0,1)` -- maintains internal state, `sqrt(1-phi^2)` scaling preserves marginal variance at sigma^2
+- Speed-dependent sigma: `effective_sigma = sigma_base + sigma_scale * |parent_value|`
+- `sample(parent_value=None) -> float` -- draws one noise sample
+- `effective_sigma(parent_value=None) -> float` -- computes sigma
+- `reset()` -- clears AR(1) state
+- `from_config()` factory maps config field names to constructor params
+
+**CholeskyCorrelator implementation (PRD 4.3.1):**
+- Validates correlation matrix: square, symmetric, unit diagonal, positive definite
+- Computes lower-triangular Cholesky factor L at construction via `np.linalg.cholesky`
+- `correlate(independent)` -- applies L to N independent N(0,1) samples
+- `generate_correlated(rng, sigmas=None)` -- full pipeline: generate N(0,1), apply L, scale by sigma
+- Pipeline order enforced: generate -> correlate -> scale (PRD 4.3.1 step order)
+
+**Key design decisions:**
+- NoiseGenerator is per-signal; distribution selection is at config level, not hardcoded in models
+- CholeskyCorrelator is per-group (vibration axes, dryer zones, etc.)
+- Speed-dependent sigma falls back to base sigma when no parent_value is provided or sigma_base is not configured
+- AR(1) innovation scaling sqrt(1-phi^2) ensures marginal variance stays at sigma^2 regardless of phi
+- No scipy dependency -- kurtosis computed with numpy in tests
+
+**Test coverage (59 tests, property-based with Hypothesis):**
+- Construction validation: sigma >= 0, valid distribution, Student-t df >= 3, AR(1) phi in (-1,1)
+- Gaussian: mean ~0 over 10k samples, stddev ~sigma, scales with sigma (Hypothesis), excess kurtosis ~0
+- Student-t: mean ~0, heavier tails (excess kurtosis > 1), df=3 extreme tails (kurtosis > 2), 29% higher RMS at df=5
+- AR(1): mean ~0, marginal variance matches sigma, lag-1 autocorrelation matches phi (tested at 0.1, 0.7, 0.95), reset clears state
+- Speed-dependent sigma: formula correctness, affects sample variance, non-negative (Hypothesis), fallback behaviour
+- Determinism: same seed produces identical sequences for all three distributions
+- from_config factory: maps noise_type/noise_df/noise_phi/sigma_base/sigma_scale correctly
+- Cholesky construction: identity, valid R, rejects non-square/non-symmetric/non-unit-diagonal/non-positive-definite
+- Cholesky correlation: vibration R matches empirically, dryer zone R matches, identity produces uncorrelated, unit variance preserved
+- generate_correlated: with/without sigmas, sigma scaling preserves correlation but changes variance, deterministic
+- SignalModel ABC: cannot instantiate, concrete subclass works, reset is no-op
+- Package imports: all exports available
