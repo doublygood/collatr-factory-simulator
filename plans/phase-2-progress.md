@@ -1,6 +1,6 @@
 # Phase 2: OPC-UA, MQTT, and Packaging Scenarios - Progress
 
-## Status: In Progress (9/16 tasks complete)
+## Status: In Progress (10/16 tasks complete)
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
@@ -12,7 +12,7 @@
 - [x] 2.7: Web Break Scenario
 - [x] 2.8: Dryer Temperature Drift Scenario
 - [x] 2.9: Ink Viscosity Excursion Scenario
-- [ ] 2.10: Registration Drift Scenario
+- [x] 2.10: Registration Drift Scenario
 - [ ] 2.11: Cold Start Energy Spike Scenario
 - [ ] 2.12: Coder Consumable Depletion Scenario
 - [ ] 2.13: Material Splice Scenario
@@ -278,3 +278,27 @@ Test classes:
 - Noise sigma=1.5 on ink_viscosity. Tests use extreme excursion targets (15 or 48) with enough ticks for the drifted value to be clearly separated from baseline (28.0).
 
 **Test results:** 23/23 unit tests pass. No regressions (1231 total unit tests pass).
+
+### Task 2.10 (Complete)
+
+**Files created:**
+- `src/factory_simulator/scenarios/registration_drift.py` — RegistrationDrift scenario class, 210 lines
+- `tests/unit/test_scenarios/test_registration_drift.py` — 27 unit tests, all pass
+
+**What was built:**
+- `RegistrationDrift` class inheriting from `Scenario` base
+- Configurable params: `duration_range` (default [120, 600] = 2-10 min), `drift_rate_range` (default [0.01, 0.05] mm/s), `axis` (x/y/random), `direction` (+1/-1/random), `waste_increase_range` (default [1.2, 1.5] = 20-50%), `waste_threshold` (default 0.2 mm)
+
+**Sequence (PRD 5.7):**
+1. On activate: save `_reversion_rate` on affected axis's `RandomWalkModel`, set to 0 (suppress mean-reversion). Save waste rate and center.
+2. Each tick: override `_value = center + direction * drift_rate * elapsed`. Linear drift from center. When `abs(value - center) > 0.2 mm`, increase waste rate by configured multiplier.
+3. On complete: restore `_reversion_rate` (model naturally reverts to center via mean-reversion), restore waste rate.
+
+**Key design decisions:**
+- Reversion suppression: Setting `_reversion_rate = 0` during the drift prevents the RandomWalkModel's mean-reversion term from pulling the value back to center. This lets the scenario control the drift precisely.
+- Direct `_value` override: Same pattern as DryerDrift (FirstOrderLagModel._value) and InkExcursion (SteadyStateModel._target). The scenario runs before generators, so the override is in effect when the generator fires.
+- Conditional waste increase: PRD 5.7 step 4 says waste increases "while error exceeds 0.2 mm", not from the start. The scenario tracks a `_waste_increased` flag and only modifies the waste rate once drift crosses the threshold.
+- Natural recovery: After completion, restoring `_reversion_rate` lets the RandomWalkModel's mean-reversion term pull the value back to center naturally. No explicit recovery phase needed.
+- Single-axis drift: PRD says "x or y", not both. The scenario picks one axis (random or explicit).
+
+**Test results:** 27/27 unit tests pass. No regressions (1349 total tests pass).
