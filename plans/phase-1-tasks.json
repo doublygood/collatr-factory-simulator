@@ -124,7 +124,7 @@
       "test_files": ["tests/unit/test_models/test_correlated.py"],
       "prd_refs": ["prd/04-data-generation-engine.md (4.2.8, 4.3.2)"],
       "depends_on": ["1.4"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "1.13",

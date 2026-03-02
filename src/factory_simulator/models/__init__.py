@@ -7,6 +7,7 @@ PRD Reference: Section 4.2 (Signal Models), Section 4.3 (Correlation Model)
 """
 
 from factory_simulator.models.base import SignalModel, clamp, quantise
+from factory_simulator.models.correlated import CorrelatedFollowerModel
 from factory_simulator.models.counter import CounterModel
 from factory_simulator.models.depletion import DepletionModel
 from factory_simulator.models.first_order_lag import FirstOrderLagModel
@@ -21,6 +22,7 @@ from factory_simulator.models.steady_state import SteadyStateModel
 
 __all__ = [
     "CholeskyCorrelator",
+    "CorrelatedFollowerModel",
     "CounterModel",
     "DepletionModel",
     "FirstOrderLagModel",

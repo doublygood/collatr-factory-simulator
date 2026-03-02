@@ -14,7 +14,7 @@
 - [x] 1.9: Random Walk Model
 - [x] 1.10: Counter Model
 - [x] 1.11: Depletion Model
-- [ ] 1.12: Correlated Follower Model
+- [x] 1.12: Correlated Follower Model
 - [ ] 1.13: State Machine Model
 - [ ] 1.14: Thermal Diffusion Model
 - [ ] 1.15: Bang-Bang Hysteresis + String Generator
@@ -455,3 +455,53 @@
 - PRD examples: ink_level (refill cycle), ink_level multiple refills, unwind_diameter (no refill), nozzle_health (slow degradation)
 - Property-based (Hypothesis): output finite, monotonically decreasing without refill, determinism any seed, depletion formula exact, refill keeps value above threshold
 - Package imports: DepletionModel importable from models package, in __all__
+
+### Task 1.12: Correlated Follower Model (completed)
+
+**Files created:**
+- `src/factory_simulator/models/correlated.py` -- CorrelatedFollowerModel class
+- `tests/unit/test_models/test_correlated.py` -- 57 tests (property-based with Hypothesis)
+
+**Files modified:**
+- `src/factory_simulator/models/__init__.py` -- exports CorrelatedFollowerModel
+
+**CorrelatedFollowerModel implementation (PRD 4.2.8, 4.3.2):**
+- Core formula: `value = base + gain_effective * lagged_parent + noise`
+- Linear transform: `base` (intercept) + `gain` (slope) * parent_value
+- Three lag modes:
+  - `"none"` (default): no delay
+  - `"fixed"`: constant delay via ring buffer. `lag_ticks = ceil(lag_seconds / tick_interval)`. Buffer sized at `lag_ticks + 1`.
+  - `"transport"`: speed-dependent delay. `lag = distance_m / (speed_m_per_min / 60)`. Ring buffer sized at `2 * max_lag_at_min_speed + 1` (PRD 4.2.8). Zero speed freezes output.
+- Time-varying covariance (PRD 4.3.2): gain drifts via multiplicative random walk on log scale.
+  `log_drift += volatility * N(0,1) * sqrt(dt) - reversion * log_drift * dt`
+  `gain_effective = gain_nominal * exp(log_drift)`
+  Ensures gain stays positive. Mean-reversion pulls toward nominal.
+- `set_parent_value(value)` called by equipment generator before generate()
+- `set_speed(speed)` for transport lag speed reference
+- `reset()` clears drift, buffer, parent, speed, and noise state
+
+**Ring buffer design:**
+- Write-at-head, read-from-behind pattern: write current parent at `_buffer_pos`, read from `(_buffer_pos - lag_ticks) % buffer_size`.
+- Buffer size is always `lag_ticks + 1` (fixed) or `2 * max_lag_ticks + 1` (transport) to avoid read/write collision.
+- For transport lag: lag_ticks computed each tick from current speed. Clamped to [0, buffer_size-1].
+
+**Key design decisions:**
+- Same `_float_param()` helper pattern as other signal models.
+- `set_parent_value()` follows the same external-input pattern as `CounterModel.set_speed()` and `FirstOrderLagModel.set_setpoint()`.
+- Transport lag at zero speed: output freezes at its last computed value (PRD 4.2.8 requirement). The buffer still advances but reads return the frozen parent contribution.
+- Gain drift uses the log-normal form from PRD 4.3.2: `exp(log_drift)` ensures the effective gain is always positive. Mean reversion operates in log space.
+- `gain_drift_volatility` defaults to 0.0 (disabled) per PRD: "Set to 0 (the default) for a fixed gain."
+- Noise injection via constructor, consistent with all other models.
+
+**Test coverage (57 tests):**
+- Construction: defaults, explicit params, fixed lag sizing, transport lag sizing, gain drift params, validation errors (invalid lag_mode, negative lag_seconds, zero distance, zero min_speed, zero tick_interval, negative volatility, negative reversion)
+- Linear transform: identity, gain scaling, base offset, full transform, negative gain (inverse), zero parent, tracking parent changes, PRD motor current example, PRD gear ratio example
+- Noise: adds variation, zero sigma clean, mean near transform over 10k samples
+- Fixed lag: delays output by lag_seconds, preserves signal shape (ramp), buffer size, minimum buffer
+- Transport lag: varies with speed, zero speed freezes output, buffer sizing (2x max), PRD press-to-laminator example
+- Gain drift: no drift by default, causes variation, starts at 1.0, mean reverts, stays positive (exp form), PRD motor current drift example
+- Reset: clears drift, parent, speed, buffer, AR(1) noise state
+- Determinism (Rule 13): same seed identical, different seeds differ, no drift deterministic any seed, noise same seed identical, drift same seed identical, fixed lag deterministic
+- Time compression (Rule 6): same output at different tick rates
+- Property-based (Hypothesis): output always finite, linear transform exact without noise/drift, determinism any seed, gain drift stays positive, positive gain/parent produces positive output
+- Package imports: CorrelatedFollowerModel importable from models package, in __all__
