@@ -15,7 +15,7 @@
 - [x] 1.10: Counter Model
 - [x] 1.11: Depletion Model
 - [x] 1.12: Correlated Follower Model
-- [ ] 1.13: State Machine Model
+- [x] 1.13: State Machine Model
 - [ ] 1.14: Thermal Diffusion Model
 - [ ] 1.15: Bang-Bang Hysteresis + String Generator
 - [ ] 1.16: Equipment Generator Base + Press Generator
@@ -505,3 +505,59 @@
 - Time compression (Rule 6): same output at different tick rates
 - Property-based (Hypothesis): output always finite, linear transform exact without noise/drift, determinism any seed, gain drift stays positive, positive gain/parent produces positive output
 - Package imports: CorrelatedFollowerModel importable from models package, in __all__
+
+### Task 1.13: State Machine Model (completed)
+
+**Files created:**
+- `src/factory_simulator/models/state.py` -- StateMachineModel class
+- `tests/unit/test_models/test_state.py` -- 74 tests (property-based with Hypothesis)
+
+**Files modified:**
+- `src/factory_simulator/models/__init__.py` -- exports StateMachineModel
+
+**StateMachineModel implementation (PRD 4.2.9):**
+- Discrete state transitions between named states with numeric values
+- Three trigger types:
+  - **timer**: Draws duration from `uniform(min_duration, max_duration)` on state entry. Fires when `time_in_state >= drawn_duration`.
+  - **probability**: Per-second rate. Each tick: `p_tick = min(probability * dt, 1.0)`. Forced at `max_duration` if set.
+  - **condition**: Fires when named external condition is `True`. Forced at `max_duration` if set.
+- `min_duration` gate on all trigger types -- no transition before min_duration elapsed
+- `max_duration` forced transition on probability and condition triggers
+- Priority: first matching transition in list order wins (one transition per tick)
+- `set_condition(name, value)` for external condition-based triggers (e.g., coder follows press state)
+- `get_condition(name)` returns current condition value (False if unset)
+- `force_state(state_name)` for scenario-driven transitions (bypasses all checks)
+- `state_changed` property indicates whether state changed on last `generate()` call
+- `reset()` restores initial state, clears conditions and time_in_state
+
+**Internal data structures:**
+- `_StateDefinition(name, value)` dataclass with slots for memory efficiency
+- `_TransitionDefinition(from_state, to_state, trigger, probability, min_duration, max_duration, condition)` dataclass
+- `_timer_durations: dict[int, float]` -- maps transition index to drawn duration, redrawn on state entry
+
+**Key design decisions:**
+- `probability` is a per-second rate, making the model time-scale invariant (Rule 6). Per-tick probability = `probability * dt`.
+- Timer durations redrawn from RNG on each state entry -- supports competing timers from same state (first to expire wins).
+- No noise -- state machine is a discrete model. The generate() return value is the numeric state value (float).
+- Conditions are externally managed by the equipment generator, not by the state machine itself. This keeps the model decoupled from the signal store.
+- Self-transitions are allowed (resets time_in_state and redraws timers).
+- Only one transition fires per tick. Even with immediate transitions (duration 0), cascading through multiple states takes multiple ticks.
+
+**Validation:**
+- States must be a non-empty list; no duplicates allowed
+- Transitions validated: known from/to states, valid trigger type, non-negative probability/durations
+- max_duration >= min_duration when max_duration > 0
+- Condition triggers require a condition name
+
+**Test coverage (74 tests):**
+- Construction: minimal, defaults, explicit initial_state, error cases (empty/non-list states, duplicates, unknown states, invalid trigger, negative probability/durations, max < min, missing condition name, unknown initial_state), no transitions stays, many states, zero probability, self-transition
+- Timer transitions: fixed duration, random duration within range, respects min_duration, competing timers (shorter wins), redrawn on state entry, zero duration fires first tick, state_changed flag, only one transition per tick
+- Probability transitions: fires eventually, respects min_duration, forced at max_duration, zero probability never fires, higher rate fires sooner, time-scale invariant (Rule 6)
+- Condition transitions: fires when true, no fire when false, cleared condition prevents fire, respects min_duration, forced at max_duration, multiple conditions, get_condition default/set
+- Force state: changes state, unknown state error, resets time_in_state, draws new timers, force same state resets timer
+- Properties: current_state/value, time_in_state accumulates, state_names ordered, state_changed initially false, generate returns value
+- Reset: restores initial state, clears conditions, clears time_in_state, clears state_changed, allows replaying
+- Determinism (Rule 13): same seed same timer/probability sequences, different seeds differ, condition-only always deterministic
+- PRD examples: press 6 states (values 0-5), Setup->Running timer (10-30 min), coder gutter fault MTBF (500h probability), coder nozzle health degradation (timer chain), coder follows press via conditions, unplanned stop scenario (Running->Fault->Setup->Running)
+- Property-based (Hypothesis): output always valid state value, determinism any seed, min_duration always respected, timer fires within max_duration, output always finite
+- Package imports: importable from models package, in __all__

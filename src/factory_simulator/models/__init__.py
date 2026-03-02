@@ -18,6 +18,7 @@ from factory_simulator.models.noise import (
 from factory_simulator.models.ramp import RampModel
 from factory_simulator.models.random_walk import RandomWalkModel
 from factory_simulator.models.sinusoidal import SinusoidalModel
+from factory_simulator.models.state import StateMachineModel
 from factory_simulator.models.steady_state import SteadyStateModel
 
 __all__ = [
@@ -31,6 +32,7 @@ __all__ = [
     "RandomWalkModel",
     "SignalModel",
     "SinusoidalModel",
+    "StateMachineModel",
     "SteadyStateModel",
     "clamp",
     "quantise",

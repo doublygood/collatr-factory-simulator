@@ -134,7 +134,7 @@
       "test_files": ["tests/unit/test_models/test_state.py"],
       "prd_refs": ["prd/04-data-generation-engine.md (4.2.9)"],
       "depends_on": ["1.4"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "1.14",
