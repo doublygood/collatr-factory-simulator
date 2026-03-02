@@ -1,6 +1,6 @@
 # Phase 2: OPC-UA, MQTT, and Packaging Scenarios - Progress
 
-## Status: In Progress (10/16 tasks complete)
+## Status: In Progress (11/16 tasks complete)
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
@@ -13,7 +13,7 @@
 - [x] 2.8: Dryer Temperature Drift Scenario
 - [x] 2.9: Ink Viscosity Excursion Scenario
 - [x] 2.10: Registration Drift Scenario
-- [ ] 2.11: Cold Start Energy Spike Scenario
+- [x] 2.11: Cold Start Energy Spike Scenario
 - [ ] 2.12: Coder Consumable Depletion Scenario
 - [ ] 2.13: Material Splice Scenario
 - [ ] 2.14: Ground Truth Event Log
@@ -302,3 +302,31 @@ Test classes:
 - Single-axis drift: PRD says "x or y", not both. The scenario picks one axis (random or explicit).
 
 **Test results:** 27/27 unit tests pass. No regressions (1349 total tests pass).
+
+### Task 2.11 (Complete)
+
+**Files created:**
+- `src/factory_simulator/scenarios/cold_start.py` — ColdStart scenario class, 270 lines
+- `tests/unit/test_scenarios/test_cold_start.py` — 24 unit tests, all pass
+
+**What was built:**
+- `ColdStart` class inheriting from `Scenario` base
+- Internal `_Phase` enum: MONITORING (watching for trigger), SPIKE (inrush active)
+- Configurable params: `spike_duration_range` (default [2.0, 5.0] s), `power_multiplier_range` (default [1.5, 2.0] = 150-200%), `current_multiplier_range` (default [1.5, 3.0] = 150-300%), `idle_threshold_s` (default 1800.0 = 30 min)
+
+**Sequence (PRD 5.10):**
+1. Scenario activates and enters MONITORING phase, watching press state machine.
+2. Tracks idle duration (`_idle_since`) when press is in Off (0) or Idle (3).
+3. When press transitions to Setup (1) or Running (2) AND idle_duration >= idle_threshold: enter SPIKE phase.
+4. SPIKE: override `CorrelatedFollowerModel._base` on both `energy._line_power` and `press._main_drive_current` to produce spike values. Temporarily raise `max_clamp` on both signal configs to allow spike to exceed normal range.
+5. After spike_duration elapsed: complete. Restore all saved model parameters and max_clamp values.
+
+**Key design decisions:**
+- Reactive trigger via state monitoring: Unlike time-scheduled scenarios, ColdStart watches the press state machine each tick. It detects the transition from Off/Idle → Setup/Running with sufficient idle duration.
+- `_base` override on CorrelatedFollowerModel: During cold start, speed is near 0 (press just starting ramp). The spike is produced by setting `_base` to `(base + gain * target_speed) * multiplier`, which makes the output approximately the spiked value regardless of current speed.
+- Max clamp temporarily raised: energy.line_power max_clamp=200 kW, but 200% of 110 kW = 220 kW exceeds it. Same pattern as web_break raising tension max_clamp. Saved and restored on completion.
+- Normal running power calculated from model params: `base + gain * target_speed` gives the expected power at full speed (10 + 0.5 * 200 = 110 kW). The multiplier is applied to this full-speed value.
+- Single-trigger design: Each ColdStart instance monitors for one trigger event, then completes. Multiple instances can be scheduled for multiple cold starts.
+- Idle tracking resets: If the press enters Fault/Maintenance, idle tracking resets. If a short idle doesn't meet the threshold, tracking resets when the press goes to Running. New idle periods restart the timer.
+
+**Test results:** 24/24 unit tests pass. No regressions (1282 total unit tests pass).
