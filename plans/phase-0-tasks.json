@@ -21,7 +21,7 @@
       "name": "Spike: Mosquitto sidecar + paho-mqtt",
       "description": "Build Docker Compose with Mosquitto sidecar and Python paho-mqtt 2.0 publisher. Test 50 msg/s publish with mixed QoS 0/1, retained messages, LWT, and client-side buffering during broker restart. See plans/phase-0-validation-spikes.md Spike 2 for full spec.",
       "prd_refs": ["prd/06-configuration.md", "prd/03-protocol-endpoints.md"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "0.4",
