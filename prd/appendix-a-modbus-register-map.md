@@ -30,7 +30,7 @@
 | 322-323 | press.rewind_diameter | float32 | ABCD | 1.0 | mm | No |
 | 400-401 | laminator.nip_temp | float32 | ABCD | 1.0 | C | No |
 | 402-403 | laminator.nip_pressure | float32 | ABCD | 1.0 | bar | No |
-| 404-405 | laminator.oven_temp | float32 | ABCD | 1.0 | C | No |
+| 404-405 | laminator.tunnel_temp | float32 | ABCD | 1.0 | C | No |
 | 406-407 | laminator.web_speed | float32 | ABCD | 1.0 | m/min | No |
 | 408-409 | laminator.adhesive_weight | float32 | ABCD | 1.0 | g/m2 | No |
 | 500-501 | slitter.speed | float32 | ABCD | 1.0 | m/min | No |
@@ -46,7 +46,7 @@
 | 2 | press.dryer_temp_zone_3 | int16 | x10 | C |
 | 3 | press.ink_temperature | int16 | x10 | C |
 | 4 | laminator.nip_temp | int16 | x10 | C |
-| 5 | laminator.oven_temp | int16 | x10 | C |
+| 5 | laminator.tunnel_temp | int16 | x10 | C |
 | 10-11 | energy.line_power | float32 | 1.0 | kW |
 
 ### Coils (FC01 Read, FC05/FC15 Write)

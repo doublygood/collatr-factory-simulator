@@ -292,25 +292,25 @@ params:
 
 ### peer_correlation
 
-Peer correlation mixing matrices are configured per signal group. See Section 4.3.1 for the mixing formula and default matrices.
+Peer correlation matrices are configured per signal group. Each matrix R is the desired correlation matrix: symmetric, positive definite, unit diagonal. The implementation computes the Cholesky factor L = cholesky(R) at startup and applies it each tick. See Section 4.3.1 for the decomposition formula and signal generation pipeline.
 
 ```yaml
 peer_groups:
   vibration_axes:
     signals: ["vibration.main_drive_x", "vibration.main_drive_y", "vibration.main_drive_z"]
-    mixing_matrix:
+    correlation_matrix:
       - [1.0,  0.2,  0.15]
       - [0.2,  1.0,  0.2 ]
       - [0.15, 0.2,  1.0 ]
   dryer_zones:
     signals: ["press.dryer_temp_zone_1", "press.dryer_temp_zone_2", "press.dryer_temp_zone_3"]
-    mixing_matrix:
+    correlation_matrix:
       - [1.0,  0.1,  0.02]
       - [0.1,  1.0,  0.1 ]
       - [0.02, 0.1,  1.0 ]
   oven_zones:
     signals: ["oven.zone_1_temp", "oven.zone_2_temp", "oven.zone_3_temp"]
-    mixing_matrix:
+    correlation_matrix:
       - [1.0,  0.15, 0.05]
       - [0.15, 1.0,  0.15]
       - [0.05, 0.15, 1.0 ]
@@ -613,7 +613,7 @@ scenarios:
     mixing_seconds: [600, 1500]            # 10-25 minutes
     hold_seconds: [300, 600]               # 5-10 minutes
     target_temp_c: [65, 85]                # Batch temperature range
-    mixer_speed_rpm: [30, 120]             # Mixer speed range
+    mixer_speed_rpm: [1000, 2500]           # Production mixing speed (loading is 50-100 RPM)
 
   # Oven thermal excursion
   oven_excursion:
@@ -660,7 +660,7 @@ scenarios:
     pre_rinse_seconds: [180, 300]
     caustic_temp_c: [70, 80]
     acid_wash_seconds: [300, 600]
-    final_rinse_conductivity_max: 50       # uS/cm acceptance threshold
+    final_rinse_conductivity_max: 5.0       # mS/cm acceptance threshold (must fall below 5 mS/cm)
 
   # Cold chain break
   cold_chain_break:

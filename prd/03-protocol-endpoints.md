@@ -63,7 +63,7 @@ Holding registers contain process values, setpoints, counters, and state variabl
 |---------|--------|-----------|---------|-------|
 | 400-401 | laminator.nip_temp | float32 | 1.0 | C |
 | 402-403 | laminator.nip_pressure | float32 | 1.0 | bar |
-| 404-405 | laminator.oven_temp | float32 | 1.0 | C |
+| 404-405 | laminator.tunnel_temp | float32 | 1.0 | C |
 | 406-407 | laminator.web_speed | float32 | 1.0 | m/min |
 | 408-409 | laminator.adhesive_weight | float32 | 1.0 | g/m2 |
 
@@ -162,7 +162,7 @@ Input registers mirror selected holding register values with different data enco
 | 2 | press.dryer_temp_zone_3 | int16 | x10 | C | |
 | 3 | press.ink_temperature | int16 | x10 | C | |
 | 4 | laminator.nip_temp | int16 | x10 | C | |
-| 5 | laminator.oven_temp | int16 | x10 | C | |
+| 5 | laminator.tunnel_temp | int16 | x10 | C | |
 | 10-11 | energy.line_power | float32 | 1.0 | kW | Duplicate of HR 600-601 |
 
 #### F&B Profile
@@ -294,13 +294,16 @@ Root
       Laminator1 (ns=2;s=PackagingLine.Laminator1)
         NipTemperature         Double, C
         NipPressure            Double, bar
-        OvenTemperature        Double, C
+        TunnelTemperature      Double, C
         WebSpeed               Double, m/min
         AdhesiveWeight         Double, g/m2
       Slitter1 (ns=2;s=PackagingLine.Slitter1)
         Speed                  Double, m/min
         WebTension             Double, N
         ReelCount              UInt32
+      Energy (ns=2;s=PackagingLine.Energy)
+        LinePower              Double, kW
+        CumulativeKwh          Double, kWh
 ```
 
 #### F&B Profile Nodes
@@ -329,17 +332,16 @@ Root
         RejectTotal            UInt32
       CIP1 (ns=2;s=FoodBevLine.CIP1)
         State                  UInt16, enum (0-5)
+      Energy (ns=2;s=FoodBevLine.Energy)
+        LinePower              Double, kW
+        CumulativeKwh          Double, kWh
 ```
 
 #### Shared Nodes (Both Profiles)
 
-```
-    Energy (ns=2;s=Energy)
-      LinePower                Double, kW
-      CumulativeKwh            Double, kWh
-```
+Energy nodes sit under each profile tree, not at the top level. See the packaging and F&B node trees above for their placement (PackagingLine.Energy, FoodBevLine.Energy). Both profiles expose the same two signals: LinePower (Double, kW) and CumulativeKwh (Double, kWh). See Appendix B for the full node paths.
 
-The Energy node sits at the top level (peer to PackagingLine and FoodBevLine) because it is shared. When both profiles are inactive or no factory profile is loaded, only the Energy node is active.
+The Energy node sits under each profile tree (PackagingLine.Energy, FoodBevLine.Energy) because energy meters are per-line in real factories. See Appendix B for the full node paths. When no factory profile is loaded, neither Energy node is active.
 
 ### 3.2.2 Node Data Types
 

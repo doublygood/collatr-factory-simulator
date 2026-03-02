@@ -97,7 +97,7 @@ The signal tracks a setpoint with exponential lag. Models temperature controller
 value = value + (setpoint - value) * (1 - exp(-dt / tau)) + noise(0, sigma)
 ```
 
-Used for: `press.dryer_temp_zone_1/2/3` tracking their setpoints, `laminator.nip_temp`, `laminator.oven_temp`.
+Used for: `press.dryer_temp_zone_1/2/3` tracking their setpoints, `laminator.nip_temp`, `laminator.tunnel_temp`.
 
 Parameters: `tau` (time constant, seconds), `sigma`, `overshoot_factor` (optional, for initial response), `damping_ratio` (optional, for second-order response).
 
@@ -122,7 +122,7 @@ Default `damping_ratio` = 1.0 (critically damped). At this value, the model redu
 
 When `damping_ratio` >= 1.0, the model behaves exactly as the first-order lag described above. When `damping_ratio` < 1.0, the model produces the characteristic overshoot and ringing that real temperature controllers exhibit.
 
-Used for: `press.dryer_temp_zone_*` (damping_ratio ~0.6), `oven.zone_*_temp` (damping_ratio ~0.5), `laminator.nip_temp` (damping_ratio ~0.7), `laminator.oven_temp` (damping_ratio ~0.7).
+Used for: `press.dryer_temp_zone_*` (damping_ratio ~0.6), `oven.zone_*_temp` (damping_ratio ~0.5), `laminator.nip_temp` (damping_ratio ~0.7), `laminator.tunnel_temp` (damping_ratio ~0.7).
 
 Second-order parameters: `damping_ratio` (float, default 1.0, range 0.1 to 2.0).
 
@@ -483,49 +483,63 @@ env.ambient_temp increases (afternoon warming)
   -> press.registration_error increases slightly (lower viscosity affects print transfer)
 ```
 
-### 4.3.1 Peer Correlation Mixing Matrices
+### 4.3.1 Peer Correlation via Cholesky Decomposition
 
 Some signal groups exhibit peer correlations. These are signals that influence each other without a clear parent-child hierarchy. The three vibration axes share mechanical coupling. The three dryer zones share thermal mass. After removing state machine and parent-child effects, these residual correlations remain.
 
-The engine supports peer correlation through a mixing matrix applied after independent noise generation. For a group of N peer signals, each signal generates its noise independently. A mixing matrix then combines the noise vectors:
+The engine supports peer correlation through Cholesky decomposition of a desired correlation matrix. For a group of N peer signals, the configuration specifies a correlation matrix R. R is symmetric, positive definite, and has unit diagonal. The implementation computes the lower-triangular Cholesky factor L at startup:
 
 ```
-noise_mixed = M @ noise_independent
+L = cholesky(R)
 ```
 
-M is an NxN matrix. Diagonal entries are close to 1.0, preserving most of the independent noise. Off-diagonal entries (0.1 to 0.3) introduce correlation between peers.
-
-**Vibration axes (3x3):**
+Each tick, the engine generates N independent samples from N(0, 1) and applies L:
 
 ```
-M = [[1.0,  0.2,  0.15],
+noise_correlated = L @ noise_independent
+```
+
+The covariance of the output is L @ L^T = R. The correlations match the specification exactly. Use `numpy.linalg.cholesky` or `scipy.linalg.cholesky` for the decomposition. Both require R to be positive definite (all eigenvalues > 0). The matrices below satisfy this requirement.
+
+**Vibration axes: correlation matrix R (3x3):**
+
+```
+R = [[1.0,  0.2,  0.15],
      [0.2,  1.0,  0.2 ],
      [0.15, 0.2,  1.0 ]]
 ```
 
 Mechanical coupling between X, Y, Z axes. A bearing defect affects all three axes but with different magnitudes.
 
-**Dryer zones (3x3):**
+**Dryer zones: correlation matrix R (3x3):**
 
 ```
-M = [[1.0,  0.1,  0.02],
+R = [[1.0,  0.1,  0.02],
      [0.1,  1.0,  0.1 ],
      [0.02, 0.1,  1.0 ]]
 ```
 
 Thermal coupling between adjacent zones. Zone 2 correlates with both zone 1 and zone 3. Zones 1 and 3 have minimal direct coupling.
 
-**Oven zones (3x3):**
+**Oven zones: correlation matrix R (3x3):**
 
 ```
-M = [[1.0,  0.15, 0.05],
+R = [[1.0,  0.15, 0.05],
      [0.15, 1.0,  0.15],
      [0.05, 0.15, 1.0 ]]
 ```
 
 Same structure as dryer zones but with higher coupling coefficients. The oven is a more enclosed thermal mass.
 
-The mixing matrix is configurable per group. Set all off-diagonal entries to 0 to disable peer correlation. See Appendix D for configuration examples.
+The correlation matrix R is configurable per group. Set all off-diagonal entries to 0 to disable peer correlation. The implementation derives L from R at startup. See Appendix D for configuration examples.
+
+**Signal generation pipeline.** The order of operations matters for correctness:
+
+1. Generate N independent samples from N(0, 1).
+2. Apply the Cholesky factor: `noise_correlated = L @ noise_independent`. This introduces the desired correlations with unit variance.
+3. Scale each signal by its effective sigma: `noise_final_i = sigma_i * noise_correlated_i`. The effective sigma may be speed-dependent (Section 4.2.11).
+
+This order preserves the correlation structure. Scaling after correlation is correct because scaling is a diagonal transformation. It changes covariance magnitudes but does not change correlation coefficients. Reversing steps 2 and 3 would distort the correlations whenever signals have different sigma values.
 
 ### 4.3.2 Time-Varying Covariance
 

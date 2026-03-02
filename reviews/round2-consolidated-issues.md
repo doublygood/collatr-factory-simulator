@@ -21,15 +21,15 @@
 
 | # | Source | Issue | File(s) | Status |
 |---|--------|-------|---------|--------|
-| M1 | Auto | Blast chiller vs cold room naming inconsistency | `02b-factory-layout-food-and-beverage.md`, `appendix-e-project-structure.md` | OPEN |
-| M2 | Auto | Laminator has drying oven signal but described as solvent-free | `02-simulated-factory-layout.md` | OPEN |
-| M3 | Auto | Mixer speed: equipment says 1000-3000 RPM, scenario config says 30-120 RPM | `02b-factory-layout-food-and-beverage.md`, `appendix-d-configuration-reference.md` | OPEN |
-| M4 | Auto | OPC-UA Energy node: Section 3 says top-level peer, Appendix B says under profile tree | `03-protocol-endpoints.md`, `appendix-b-opcua-node-tree.md` | OPEN |
-| M5 | Auto | CIP conductivity threshold: config says 50 uS/cm (=0.05 mS/cm), text says "below 5 mS/cm" | `appendix-d-configuration-reference.md` | OPEN |
-| M6 | Data | Mixing matrix produces ~2x inflated correlations, need Cholesky decomposition | `04-data-generation-engine.md` | OPEN |
-| M7 | Data | Peer correlation + sigma ordering unspecified (generate, mix, then scale) | `04-data-generation-engine.md` | OPEN |
-| M8 | Data | Severity weighting in evaluation (web break vs micro-stop weighted equally) | `12-evaluation-protocol.md` | OPEN |
-| M9 | Data | Detection latency targets not defined per scenario type | `12-evaluation-protocol.md` | OPEN |
+| M1 | Auto | Blast chiller vs cold room naming inconsistency | `02b-factory-layout-food-and-beverage.md`, `appendix-e-project-structure.md` | RESOLVED |
+| M2 | Auto | Laminator has drying oven signal but described as solvent-free | `02-simulated-factory-layout.md` | RESOLVED |
+| M3 | Auto | Mixer speed: equipment says 1000-3000 RPM, scenario config says 30-120 RPM | `02b-factory-layout-food-and-beverage.md`, `appendix-d-configuration-reference.md` | RESOLVED |
+| M4 | Auto | OPC-UA Energy node: Section 3 says top-level peer, Appendix B says under profile tree | `03-protocol-endpoints.md`, `appendix-b-opcua-node-tree.md` | RESOLVED |
+| M5 | Auto | CIP conductivity threshold: config says 50 uS/cm (=0.05 mS/cm), text says "below 5 mS/cm" | `appendix-d-configuration-reference.md` | RESOLVED |
+| M6 | Data | Mixing matrix produces ~2x inflated correlations, need Cholesky decomposition | `04-data-generation-engine.md` | RESOLVED |
+| M7 | Data | Peer correlation + sigma ordering unspecified (generate, mix, then scale) | `04-data-generation-engine.md` | RESOLVED |
+| M8 | Data | Severity weighting in evaluation (web break vs micro-stop weighted equally) | `12-evaluation-protocol.md` | RESOLVED |
+| M9 | Data | Detection latency targets not defined per scenario type | `12-evaluation-protocol.md` | RESOLVED |
 
 ## Low (12)
 

@@ -119,6 +119,58 @@ F1 = 2 * precision * recall / (precision + recall)
 
 Report metrics per scenario type and overall. A detector may excel at web breaks (sudden, large magnitude) but miss dryer drift (gradual, small magnitude). Per-scenario breakdown reveals these patterns.
 
+### Severity-Weighted Metrics (Supplementary)
+
+Unweighted metrics treat all events equally. A web break (minutes of downtime, thousands of pounds) and a micro-stop (15 seconds, negligible cost) contribute equally to recall. This is adequate for basic evaluation but masks operational impact.
+
+Each scenario type carries an optional severity weight (default 1.0). Weighted recall accounts for the operational cost of missed events:
+
+```
+weighted_recall = sum(weight_i for detected events) / sum(weight_i for all events)
+```
+
+Weighted F1 is the harmonic mean of precision and weighted recall.
+
+Default severity weights:
+
+| Scenario Type | Default Weight |
+|---|---|
+| web_break | 10.0 |
+| unplanned_stop | 5.0 |
+| seal_integrity_failure | 8.0 |
+| cold_chain_break | 10.0 |
+| bearing_wear (phase 3) | 8.0 |
+| dryer_drift / oven_excursion | 3.0 |
+| fill_weight_drift | 3.0 |
+| ink_viscosity_excursion | 2.0 |
+| registration_drift | 2.0 |
+| contextual_anomaly | 5.0 |
+| intermittent_fault | 4.0 |
+| micro_stop | 1.0 |
+| sensor_disconnect | 2.0 |
+| stuck_sensor | 3.0 |
+
+Weights are configurable in the evaluation configuration file. Unweighted metrics (weight = 1.0 for all) remain the primary reported metrics. Weighted metrics are supplementary. Report both.
+
+### Latency Targets
+
+Section 12.4 measures detection latency (median and 90th percentile) but does not define what counts as fast enough. The following per-scenario targets are based on operational consequence:
+
+| Scenario Type | Target Latency | Rationale |
+|---|---|---|
+| web_break | < 2 seconds | Before the press fully stops |
+| unplanned_stop | < 10 seconds | Before operator reaches the machine |
+| seal_integrity_failure | < 60 seconds | Before a batch of defective packs accumulates |
+| cold_chain_break | < 5 minutes | Before product temperature exceeds safe threshold |
+| bearing_wear | < 24 hours before failure | Enough time to schedule maintenance |
+| dryer_drift | < 15 minutes | Before waste accumulates significantly |
+| fill_weight_drift | < 10 minutes | Before regulatory non-compliance |
+| contextual_anomaly | < 5 minutes | Context-dependent, varies |
+| intermittent_fault (phase 1) | < 48 hours of first occurrence | Early warning value |
+| micro_stop | N/A (detection, not prediction) | Counted after the fact |
+
+These are aspirational targets for a mature detection system. A first-generation detector is not expected to meet all targets. Report actual latency alongside targets for gap analysis.
+
 ### Statistical Significance
 
 A single-seed result is not statistically significant. Random scenario placement changes with each seed. A detector scoring 0.85 F1 on one seed might score 0.72 on another.

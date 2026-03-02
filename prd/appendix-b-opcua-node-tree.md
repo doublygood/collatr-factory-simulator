@@ -47,7 +47,7 @@ Root (i=84)
     +-- Laminator1 (ns=2;s=PackagingLine.Laminator1)
     |   +-- NipTemperature        (ns=2;s=PackagingLine.Laminator1.NipTemperature)     Double, C
     |   +-- NipPressure           (ns=2;s=PackagingLine.Laminator1.NipPressure)        Double, bar
-    |   +-- OvenTemperature       (ns=2;s=PackagingLine.Laminator1.OvenTemperature)    Double, C
+    |   +-- TunnelTemperature     (ns=2;s=PackagingLine.Laminator1.TunnelTemperature)  Double, C
     |   +-- WebSpeed              (ns=2;s=PackagingLine.Laminator1.WebSpeed)           Double, m/min
     |   +-- AdhesiveWeight        (ns=2;s=PackagingLine.Laminator1.AdhesiveWeight)     Double, g/m2
     |

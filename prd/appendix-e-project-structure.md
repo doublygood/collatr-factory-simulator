@@ -38,7 +38,7 @@ collatr-factory-simulator/
       oven.py                 # Multi-zone oven signals (F&B)
       filler.py               # Filler/portioner signals (F&B)
       sealer.py               # MAP sealer signals (F&B)
-      chiller.py              # Blast chiller signals (F&B)
+      cold_room.py            # Cold room signals (F&B)
       cip.py                  # Clean-in-place signals (F&B)
     
     models/
