@@ -1,6 +1,6 @@
 # Phase 2: OPC-UA, MQTT, and Packaging Scenarios - Progress
 
-## Status: In Progress (6/16 tasks complete)
+## Status: In Progress (7/16 tasks complete)
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
@@ -9,7 +9,7 @@
 - [x] 2.4: MQTT Publisher Adapter
 - [x] 2.5: MQTT Batch Vibration Topic
 - [x] 2.6: MQTT Integration Tests
-- [ ] 2.7: Web Break Scenario
+- [x] 2.7: Web Break Scenario
 - [ ] 2.8: Dryer Temperature Drift Scenario
 - [ ] 2.9: Ink Viscosity Excursion Scenario
 - [ ] 2.10: Registration Drift Scenario
@@ -188,3 +188,36 @@ Test classes:
 - `@pytest.mark.integration` + skipif broker unreachable: tests skip cleanly when Docker not running.
 
 **Test results:** 10/10 integration tests pass. No regressions (1254 total tests pass).
+
+### Task 2.7 (Complete)
+
+**Files created/modified:**
+- `src/factory_simulator/scenarios/web_break.py` — WebBreak scenario class, 314 lines
+- `tests/unit/test_scenarios/test_web_break.py` — 23 unit tests, all pass
+- `src/factory_simulator/protocols/modbus_server.py` — Coil 3 now derives from `press.web_break` store signal
+
+**What was built:**
+- `WebBreak` class inheriting from `Scenario` base, with 3 internal sub-phases: SPIKE → DECELERATION → RECOVERY → COMPLETED
+- `_Phase` enum for internal phase tracking
+- Configurable params: `spike_tension_range` (default [650,800] N), `spike_duration_range` (default [0.1,0.5] s), `decel_duration_range` (default [5.0,10.0] s), `recovery_seconds` (default [900,3600] s)
+
+**Sequence (PRD 5.3):**
+1. SPIKE: overrides `press._web_tension._base` to spike value, sets `_gain=0` (decouples from speed), raises `sig_cfg.max_clamp` from 500→1000 so spike exceeds normal clamp
+2. DECELERATION: drops tension base to 0, forces Fault state with cascade prevention (`_prev_state = STATE_FAULT` prevents default 30s ramp), starts custom 5-10s emergency decel via `_line_speed_model.start_ramp()`, sets coils (`press.web_break`, `press.fault_active`)
+3. RECOVERY: restores tension gain and max_clamp, waits for configured recovery duration
+4. COMPLETE: restores original tension base/gain/max_clamp, clears coils, forces Setup state
+
+**Key design decisions:**
+- Direct model manipulation (not store writes): scenarios run before generators, so store writes get overwritten. Instead, the scenario modifies `CorrelatedFollowerModel._base` and `._gain` directly on the press generator's internal tension model.
+- State cascade prevention: setting `press._prev_state = STATE_FAULT` after `force_state("Fault")` prevents the press generator from detecting a "new" fault transition and starting its default 30s deceleration ramp. This allows the scenario to control decel timing (5-10s per PRD).
+- `max_clamp` temporarily raised: web_tension config has max_clamp=500 but PRD requires spike >600N. Scenario saves, raises to 1000, and restores on recovery.
+- Modbus coil 3: changed from `CoilDefinition(3, None)` to `CoilDefinition(3, "press.web_break", mode="gt_zero")` so Modbus clients see the web break indicator.
+- Phase transition uses `>` not `>=` for spike duration check: prevents immediate transition when spike_duration equals dt (both are 0.1s).
+
+**Test timing considerations:**
+- Press generator fires every 500ms (min sample_rate_ms), not every 100ms tick. Tests must run enough ticks for the generator to fire during the target phase.
+- RampModel advances `elapsed += dt` (0.1s) per generate() call, so decel ramps appear 5× slower than sim_time when gen fires every 500ms.
+- Spike duration tests use 1.0s spikes (not 0.1s PRD minimum) to ensure generator fires during SPIKE phase.
+- Decel test runs 150 post-scenario ticks to allow decel ramp to complete.
+
+**Test results:** 23/23 unit tests pass. No regressions (1277 total tests pass).

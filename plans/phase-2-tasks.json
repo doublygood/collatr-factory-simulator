@@ -70,7 +70,7 @@
       "test_files": ["tests/unit/test_scenarios/test_web_break.py"],
       "prd_refs": ["prd/05-scenario-system.md (5.3)"],
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "2.8",
