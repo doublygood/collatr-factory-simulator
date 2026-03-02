@@ -246,7 +246,7 @@
         "prd/03-protocol-endpoints.md"
       ],
       "depends_on": ["1.18"],
-      "passes": false
+      "passes": true
     }
   ]
 }

@@ -148,6 +148,7 @@ equipment:
         units: "C"
         modbus_hr: [112, 113]
         modbus_type: "float32"
+        modbus_ir: [3]
         params:
           target: 25.0
 

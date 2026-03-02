@@ -1,6 +1,6 @@
 # Phase 1: Core Engine, Modbus, and Test Infrastructure - Progress
 
-## Status: In Progress
+## Status: Complete
 
 ## Tasks
 - [x] 1.1: Configuration Models
@@ -22,7 +22,7 @@
 - [x] 1.17: Remaining Packaging Generators
 - [x] 1.18: Data Engine
 - [x] 1.19: Basic Scenarios
-- [ ] 1.20: Modbus TCP Server + Integration Tests
+- [x] 1.20: Modbus TCP Server + Integration Tests
 
 ## Notes
 
@@ -760,3 +760,24 @@
 - Tests disable auto-scheduled scenarios in config and manually create/evaluate scenarios for precise control.
 
 **Test results:** 994 tests pass (ruff clean, mypy clean, pytest all green).
+
+### Task 1.20: Modbus TCP Server + Integration Tests (completed)
+
+**Files created:**
+- `src/factory_simulator/protocols/__init__.py` -- Package init, exports ModbusServer.
+- `src/factory_simulator/protocols/modbus_server.py` -- Full Modbus TCP server implementation. Builds register maps from config (HR float32/uint32/uint16, IR int16_x10/float32, coils from machine_state, DIs from state/count). Encodes Float32 ABCD (big-endian), Int16 x10 (Eurotherm), uint32 ABCD. Custom `FactoryDeviceContext` rejects FC06 on multi-register entries (PRD 3.1.3) and enforces 125-register read limit (PRD 3.1.7). Sync methods copy SignalStore → data blocks every tick.
+- `tests/unit/test_protocols/__init__.py` -- Test package init.
+- `tests/unit/test_protocols/test_modbus.py` -- 54 unit tests: encoding (float32, int16_x10, uint32, negative temps, edge values), register map building (HR/IR/coil/DI counts, addresses, data types), sync correctness, coil derivation from machine_state, DI derivation (guard door, material present, cycle complete), FC06 rejection on float32 pairs, 125-register read limit enforcement.
+- `tests/integration/test_modbus_integration.py` -- 30 integration tests with real pymodbus AsyncModbusTcpClient: HR float32 roundtrip (line_speed, web_tension), IR int16_x10 (dryer_temp_zone_1), coil state (running, fault, e-stop), DI state (guard_door, material_present), FC16 multi-register writes to setpoint HRs, FC06 rejection on float32 pairs, register read limit enforcement, full sync cycle after engine ticks.
+
+**Files modified:**
+- `config/factory.yaml` -- Added `modbus_ir: [3]` to `press.ink_temperature` signal (was missing per Appendix A register map).
+
+**Key design decisions:**
+- ModbusTcpServer creation deferred to `start()` (not `__init__`) because pymodbus requires a running asyncio event loop at construction time.
+- ModbusDeviceContext applies +1 address offset: sync methods write to `entry.address + 1` in data blocks so that TCP client reads at the Modbus PDU address resolve correctly through the device context layer.
+- Coils derived from machine_state: running (state==2), fault (state==4), e-stop (state==5), idle (state==3), setup (state==1), warming_up (state==0).
+- DIs derived from state and count signals: guard_door_open (always False), material_present (running), cycle_complete (impression_count parity).
+- Integration tests inject known values into SignalStore after engine ticks to ensure deterministic assertions independent of generator state.
+
+**Test results:** 1078 tests pass (ruff clean, mypy clean, pytest all green). Phase 1 complete.
