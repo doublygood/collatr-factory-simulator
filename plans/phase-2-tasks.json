@@ -40,7 +40,7 @@
       "test_files": ["tests/unit/test_protocols/test_mqtt.py"],
       "prd_refs": ["prd/03-protocol-endpoints.md (3.3)", "prd/appendix-c-mqtt-topic-map.md"],
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "2.5",

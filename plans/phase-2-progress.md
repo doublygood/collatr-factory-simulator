@@ -1,12 +1,12 @@
 # Phase 2: OPC-UA, MQTT, and Packaging Scenarios - Progress
 
-## Status: In Progress (3/16 tasks complete)
+## Status: In Progress (4/16 tasks complete)
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
 - [x] 2.2: OPC-UA Server Adapter — Value Sync + Subscriptions
 - [x] 2.3: OPC-UA Integration Tests
-- [ ] 2.4: MQTT Publisher Adapter
+- [x] 2.4: MQTT Publisher Adapter
 - [ ] 2.5: MQTT Batch Vibration Topic
 - [ ] 2.6: MQTT Integration Tests
 - [ ] 2.7: Web Break Scenario
@@ -92,3 +92,42 @@ Test classes:
 - `await asyncio.sleep(0.6)` in `opcua_static` ensures at least one full 500ms sync cycle completes before client connects.
 
 **Test results:** 19/19 integration tests pass. No regressions (1139 total tests pass).
+
+### Task 2.4 (Complete)
+
+**Files created/modified:**
+- `src/factory_simulator/protocols/mqtt_publisher.py` — MqttPublisher class, 260 lines
+- `tests/unit/test_protocols/test_mqtt.py` — 74 unit tests, all pass
+- `src/factory_simulator/config.py` — Added `line_id: str = "packaging1"` to `MqttProtocolConfig`
+- `config/factory.yaml` — Fixed `mqtt_topic` for environment signals: `"environment/"` → `"env/"` to match PRD Appendix C
+
+**What was built:**
+- `TopicEntry` dataclass: captures signal_id, full topic path, QoS, retain, publish interval, unit, and mutable scheduling state (last_published, last_value)
+- `build_topic_map(config)`: scans all equipment signal configs for `mqtt_topic` field; constructs `{topic_prefix}/{site_id}/{line_id}/{mqtt_topic}` full paths; derives QoS/retain/event-driven from relative topic suffix per PRD 3.3.5 and 3.3.8
+- `make_payload(value, quality, unit)`: returns UTF-8 JSON bytes with `{timestamp, value, unit, quality}` (PRD 3.3.4); timestamp in `YYYY-MM-DDTHH:MM:SS.mmmZ` format
+- `MqttPublisher` class: constructor takes config + store + optional client injection; `start()`/`stop()` lifecycle; `_publish_loop()` async task at 100ms granularity; `_publish_due(now)` dispatches timed and event-driven publishes
+- paho-mqtt 2.0 `CallbackAPIVersion.VERSION2` imported from `paho.mqtt.enums` directly (avoids mypy attr-defined error)
+- LWT configured via `client.will_set()` before `client.connect()` per spike pattern
+- Buffer limit set via `client.max_queued_messages_set(buffer_limit)` per PRD 3.3
+
+**QoS rules implemented (PRD 3.3.5):**
+- QoS 1: `coder/state`, `coder/prints_total`, `coder/nozzle_health`, `coder/gutter_fault`
+- QoS 0: all other coder, env, vibration topics
+
+**Retain rules (PRD 3.3.8):**
+- No retain: all `vibration/*` topics
+- Retain=True: all other topics
+
+**Event-driven vs timed publish:**
+- Event-driven (publish on value change): `coder/state`, `coder/prints_total`, `coder/nozzle_health`, `coder/gutter_fault`
+- Timed: all others, interval from `sample_rate_ms` in signal config
+
+**Topic count:** 16 for packaging profile (11 coder + 2 env + 3 vibration), matching PRD Appendix C
+
+**Decisions:**
+- `CallbackAPIVersion` imported from `paho.mqtt.enums` not re-exported from `paho.mqtt.client` — avoids mypy attr-defined error without type: ignore
+- `mqtt_topic: "environment/..."` in YAML was a config bug (PRD says `env/`); fixed in factory.yaml — PRD is canon (CLAUDE.md Rule 4)
+- Publish scheduling uses `time.monotonic()` (wall clock), not simulated time — MQTT publish rate is wall-clock based per PRD
+- Client injection pattern (`client=None` default) enables unit tests without a real broker
+
+**Test results:** 74/74 unit tests pass. No regressions (1181 total tests pass).

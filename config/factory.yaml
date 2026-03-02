@@ -704,7 +704,7 @@ equipment:
         min_clamp: 15.0
         max_clamp: 35.0
         units: "C"
-        mqtt_topic: "environment/ambient_temp"
+        mqtt_topic: "env/ambient_temp"
         params:
           center: 22.0
           amplitude: 3.0
@@ -717,7 +717,7 @@ equipment:
         min_clamp: 30.0
         max_clamp: 80.0
         units: "%RH"
-        mqtt_topic: "environment/ambient_humidity"
+        mqtt_topic: "env/ambient_humidity"
         params:
           center: 55.0
           amplitude: 10.0

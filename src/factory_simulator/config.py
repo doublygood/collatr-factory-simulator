@@ -159,6 +159,7 @@ class MqttProtocolConfig(BaseModel):
     broker_host: str = "mqtt-broker"
     broker_port: int = 1883
     topic_prefix: str = "collatr/factory"
+    line_id: str = "packaging1"
     sparkplug_b: bool = False
     retain: bool = True
     client_id: str = "factory-simulator"
