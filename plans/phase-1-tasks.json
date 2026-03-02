@@ -1,0 +1,252 @@
+{
+  "phase": 1,
+  "name": "Core Engine, Modbus, and Test Infrastructure",
+  "tasks": [
+    {
+      "id": "1.1",
+      "name": "Configuration Models",
+      "group": "A: Foundation",
+      "source_files": ["src/factory_simulator/config.py", "config/factory.yaml"],
+      "test_files": ["tests/unit/test_config.py"],
+      "prd_refs": ["prd/06-configuration.md"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "1.2",
+      "name": "Simulation Clock",
+      "group": "A: Foundation",
+      "source_files": ["src/factory_simulator/clock.py"],
+      "test_files": ["tests/unit/test_clock.py"],
+      "prd_refs": ["prd/04-data-generation-engine.md (4.1, 4.4)"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "1.3",
+      "name": "Signal Value Store",
+      "group": "A: Foundation",
+      "source_files": ["src/factory_simulator/store.py"],
+      "test_files": ["tests/unit/test_store.py"],
+      "prd_refs": ["prd/08-architecture.md (8.2, 8.3)"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "1.4",
+      "name": "Signal Model Base + Noise Pipeline",
+      "group": "A: Foundation",
+      "source_files": [
+        "src/factory_simulator/models/__init__.py",
+        "src/factory_simulator/models/base.py",
+        "src/factory_simulator/models/noise.py"
+      ],
+      "test_files": ["tests/unit/test_noise.py"],
+      "prd_refs": ["prd/04-data-generation-engine.md (4.2.11, 4.3.1)"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "1.5",
+      "name": "Steady State Model",
+      "group": "B: Signal Models",
+      "source_files": ["src/factory_simulator/models/steady_state.py"],
+      "test_files": ["tests/unit/test_models/test_steady_state.py"],
+      "prd_refs": ["prd/04-data-generation-engine.md (4.2.1, 4.2.13)"],
+      "depends_on": ["1.4"],
+      "passes": false
+    },
+    {
+      "id": "1.6",
+      "name": "Sinusoidal Model",
+      "group": "B: Signal Models",
+      "source_files": ["src/factory_simulator/models/sinusoidal.py"],
+      "test_files": ["tests/unit/test_models/test_sinusoidal.py"],
+      "prd_refs": ["prd/04-data-generation-engine.md (4.2.2)"],
+      "depends_on": ["1.4"],
+      "passes": false
+    },
+    {
+      "id": "1.7",
+      "name": "First-Order Lag Model",
+      "group": "B: Signal Models",
+      "source_files": ["src/factory_simulator/models/first_order_lag.py"],
+      "test_files": ["tests/unit/test_models/test_first_order_lag.py"],
+      "prd_refs": ["prd/04-data-generation-engine.md (4.2.3)"],
+      "depends_on": ["1.4"],
+      "passes": false
+    },
+    {
+      "id": "1.8",
+      "name": "Ramp Model",
+      "group": "B: Signal Models",
+      "source_files": ["src/factory_simulator/models/ramp.py"],
+      "test_files": ["tests/unit/test_models/test_ramp.py"],
+      "prd_refs": ["prd/04-data-generation-engine.md (4.2.4)"],
+      "depends_on": ["1.4"],
+      "passes": false
+    },
+    {
+      "id": "1.9",
+      "name": "Random Walk Model",
+      "group": "B: Signal Models",
+      "source_files": ["src/factory_simulator/models/random_walk.py"],
+      "test_files": ["tests/unit/test_models/test_random_walk.py"],
+      "prd_refs": ["prd/04-data-generation-engine.md (4.2.5)"],
+      "depends_on": ["1.4"],
+      "passes": false
+    },
+    {
+      "id": "1.10",
+      "name": "Counter Model",
+      "group": "B: Signal Models",
+      "source_files": ["src/factory_simulator/models/counter.py"],
+      "test_files": ["tests/unit/test_models/test_counter.py"],
+      "prd_refs": ["prd/04-data-generation-engine.md (4.2.6)"],
+      "depends_on": ["1.4"],
+      "passes": false
+    },
+    {
+      "id": "1.11",
+      "name": "Depletion Model",
+      "group": "B: Signal Models",
+      "source_files": ["src/factory_simulator/models/depletion.py"],
+      "test_files": ["tests/unit/test_models/test_depletion.py"],
+      "prd_refs": ["prd/04-data-generation-engine.md (4.2.7)"],
+      "depends_on": ["1.4"],
+      "passes": false
+    },
+    {
+      "id": "1.12",
+      "name": "Correlated Follower Model",
+      "group": "B: Signal Models",
+      "source_files": ["src/factory_simulator/models/correlated.py"],
+      "test_files": ["tests/unit/test_models/test_correlated.py"],
+      "prd_refs": ["prd/04-data-generation-engine.md (4.2.8, 4.3.2)"],
+      "depends_on": ["1.4"],
+      "passes": false
+    },
+    {
+      "id": "1.13",
+      "name": "State Machine Model",
+      "group": "C: Remaining Models",
+      "source_files": ["src/factory_simulator/models/state.py"],
+      "test_files": ["tests/unit/test_models/test_state.py"],
+      "prd_refs": ["prd/04-data-generation-engine.md (4.2.9)"],
+      "depends_on": ["1.4"],
+      "passes": false
+    },
+    {
+      "id": "1.14",
+      "name": "Thermal Diffusion Model",
+      "group": "C: Remaining Models",
+      "source_files": ["src/factory_simulator/models/thermal_diffusion.py"],
+      "test_files": ["tests/unit/test_models/test_thermal_diffusion.py"],
+      "prd_refs": ["prd/04-data-generation-engine.md (4.2.10)"],
+      "depends_on": ["1.4"],
+      "passes": false
+    },
+    {
+      "id": "1.15",
+      "name": "Bang-Bang Hysteresis + String Generator",
+      "group": "C: Remaining Models",
+      "source_files": [
+        "src/factory_simulator/models/bang_bang.py",
+        "src/factory_simulator/models/string_generator.py"
+      ],
+      "test_files": [
+        "tests/unit/test_models/test_bang_bang.py",
+        "tests/unit/test_models/test_string_generator.py"
+      ],
+      "prd_refs": ["prd/04-data-generation-engine.md (4.2.12, 4.2.14)"],
+      "depends_on": ["1.4"],
+      "passes": false
+    },
+    {
+      "id": "1.16",
+      "name": "Equipment Generator Base + Press Generator",
+      "group": "D: Equipment + Engine",
+      "source_files": [
+        "src/factory_simulator/generators/__init__.py",
+        "src/factory_simulator/generators/base.py",
+        "src/factory_simulator/generators/press.py"
+      ],
+      "test_files": ["tests/unit/test_generators/test_press.py"],
+      "prd_refs": [
+        "prd/02-simulated-factory-layout.md (2.2)",
+        "prd/08-architecture.md (8.4)",
+        "prd/04-data-generation-engine.md (4.3)"
+      ],
+      "depends_on": ["1.1", "1.3", "1.5", "1.7", "1.8", "1.9", "1.10", "1.11", "1.12", "1.13"],
+      "passes": false
+    },
+    {
+      "id": "1.17",
+      "name": "Remaining Packaging Generators",
+      "group": "D: Equipment + Engine",
+      "source_files": [
+        "src/factory_simulator/generators/laminator.py",
+        "src/factory_simulator/generators/slitter.py",
+        "src/factory_simulator/generators/coder.py",
+        "src/factory_simulator/generators/environment.py",
+        "src/factory_simulator/generators/energy.py",
+        "src/factory_simulator/generators/vibration.py"
+      ],
+      "test_files": ["tests/unit/test_generators/test_packaging.py"],
+      "prd_refs": [
+        "prd/02-simulated-factory-layout.md (2.3-2.9)",
+        "prd/04-data-generation-engine.md (4.2.2, 4.2.12 for env)"
+      ],
+      "depends_on": ["1.16"],
+      "passes": false
+    },
+    {
+      "id": "1.18",
+      "name": "Data Engine",
+      "group": "D: Equipment + Engine",
+      "source_files": [
+        "src/factory_simulator/engine/__init__.py",
+        "src/factory_simulator/engine/data_engine.py"
+      ],
+      "test_files": ["tests/unit/test_engine.py"],
+      "prd_refs": ["prd/08-architecture.md (8.2, 8.3)"],
+      "depends_on": ["1.2", "1.3", "1.16", "1.17"],
+      "passes": false
+    },
+    {
+      "id": "1.19",
+      "name": "Basic Scenarios",
+      "group": "D: Equipment + Engine",
+      "source_files": [
+        "src/factory_simulator/engine/scenario_engine.py",
+        "src/factory_simulator/scenarios/__init__.py",
+        "src/factory_simulator/scenarios/job_changeover.py",
+        "src/factory_simulator/scenarios/shift_change.py",
+        "src/factory_simulator/scenarios/unplanned_stop.py"
+      ],
+      "test_files": ["tests/unit/test_scenarios/test_basic_scenarios.py"],
+      "prd_refs": ["prd/05-scenario-system.md (5.2, 5.8, 5.9)"],
+      "depends_on": ["1.18"],
+      "passes": false
+    },
+    {
+      "id": "1.20",
+      "name": "Modbus TCP Server + Integration Tests",
+      "group": "E: Modbus + Integration",
+      "source_files": [
+        "src/factory_simulator/protocols/__init__.py",
+        "src/factory_simulator/protocols/modbus_server.py"
+      ],
+      "test_files": [
+        "tests/unit/test_protocols/test_modbus.py",
+        "tests/integration/test_modbus_integration.py"
+      ],
+      "prd_refs": [
+        "prd/appendix-a-modbus-register-map.md",
+        "prd/03-protocol-endpoints.md"
+      ],
+      "depends_on": ["1.18"],
+      "passes": false
+    }
+  ]
+}
