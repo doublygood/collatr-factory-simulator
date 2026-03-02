@@ -10,7 +10,7 @@
       "test_files": ["tests/unit/test_protocols/test_opcua.py"],
       "prd_refs": ["prd/03-protocol-endpoints.md (3.2)", "prd/appendix-b-opcua-node-tree.md"],
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "2.2",

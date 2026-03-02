@@ -145,6 +145,8 @@ equipment:
         units: "seconds"
         modbus_hr: [110, 111]
         modbus_type: "float32"
+        opcua_node: "PackagingLine.Press1.Ink.Viscosity"
+        opcua_type: "Double"
         params:
           target: 28.0
 
@@ -158,6 +160,8 @@ equipment:
         modbus_hr: [112, 113]
         modbus_type: "float32"
         modbus_ir: [3]
+        opcua_node: "PackagingLine.Press1.Ink.Temperature"
+        opcua_type: "Double"
         params:
           target: 25.0
 
