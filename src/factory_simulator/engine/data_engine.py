@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from factory_simulator.clock import SimulationClock
+from factory_simulator.engine.scenario_engine import ScenarioEngine
 from factory_simulator.generators.base import EquipmentGenerator
 from factory_simulator.generators.coder import CoderGenerator
 from factory_simulator.generators.energy import EnergyGenerator
@@ -116,6 +117,13 @@ class DataEngine:
 
         self._build_generators()
 
+        # Scenario engine (PRD 8.2 step 3: evaluated before generators)
+        self._scenario_engine = ScenarioEngine(
+            scenarios_config=config.scenarios,
+            shifts_config=config.shifts,
+            rng=np.random.default_rng(self._root_rng.integers(0, 2**63)),
+        )
+
     # -- Properties -----------------------------------------------------------
 
     @property
@@ -132,6 +140,11 @@ class DataEngine:
     def generators(self) -> list[EquipmentGenerator]:
         """Ordered list of equipment generators."""
         return list(self._generators)
+
+    @property
+    def scenario_engine(self) -> ScenarioEngine:
+        """The scenario engine."""
+        return self._scenario_engine
 
     @property
     def running(self) -> bool:
@@ -199,6 +212,9 @@ class DataEngine:
         """
         sim_time = self._clock.tick()
         dt = self._clock.dt
+
+        # PRD 8.2 step 3: evaluate scenarios before generators
+        self._scenario_engine.tick(sim_time, dt, self)
 
         for i, gen in enumerate(self._generators):
             interval = self._gen_intervals[i]

@@ -227,7 +227,7 @@
       "test_files": ["tests/unit/test_scenarios/test_basic_scenarios.py"],
       "prd_refs": ["prd/05-scenario-system.md (5.2, 5.8, 5.9)"],
       "depends_on": ["1.18"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "1.20",

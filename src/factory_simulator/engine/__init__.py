@@ -7,5 +7,6 @@ PRD Reference: Section 8.2 (Data Flow), Section 8.3 (Concurrency Model)
 """
 
 from factory_simulator.engine.data_engine import DataEngine
+from factory_simulator.engine.scenario_engine import ScenarioEngine
 
-__all__ = ["DataEngine"]
+__all__ = ["DataEngine", "ScenarioEngine"]

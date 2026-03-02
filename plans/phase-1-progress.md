@@ -21,7 +21,7 @@
 - [x] 1.16: Equipment Generator Base + Press Generator
 - [x] 1.17: Remaining Packaging Generators
 - [x] 1.18: Data Engine
-- [ ] 1.19: Basic Scenarios
+- [x] 1.19: Basic Scenarios
 - [ ] 1.20: Modbus TCP Server + Integration Tests
 
 ## Notes
@@ -736,3 +736,27 @@
 - No scenario engine hook yet (Task 1.19 will add it).
 
 **Test results:** 962 tests pass (ruff clean, mypy clean, pytest all green).
+
+### Task 1.19: Basic Scenarios (completed)
+
+**Files created:**
+- `src/factory_simulator/scenarios/__init__.py` -- Package init, exports Scenario and ScenarioPhase.
+- `src/factory_simulator/scenarios/base.py` -- Scenario ABC with lifecycle management (PENDING → ACTIVE → COMPLETED). Provides `evaluate()` dispatch, `complete()` helper, and abstract hooks `_on_activate`, `_on_tick`, `_on_complete`, `duration()`.
+- `src/factory_simulator/scenarios/job_changeover.py` -- PRD 5.2: 4-phase changeover (RAMP_DOWN, SETUP, RAMP_UP, WASTE_SPIKE). Draws random ramp timings, optionally changes target speed (±20%), resets counters by probability, temporarily boosts waste rate.
+- `src/factory_simulator/scenarios/unplanned_stop.py` -- PRD 5.8: immediate fault with random fault code from PRD table (101-502), timed recovery. Sets fault_active coil and fault_code in store, clears on completion.
+- `src/factory_simulator/scenarios/shift_change.py` -- PRD 5.9: brief idle pause, resume at biased speed. Applies operator speed_bias and waste_rate_bias from shift config. Biases are persistent (no restore).
+- `src/factory_simulator/engine/scenario_engine.py` -- ScenarioEngine: generates random timeline from config (frequency × shifts), schedules shift changes at configured times with ±10 min jitter. Evaluates all scenarios per tick before generators (PRD 8.2 step 3).
+- `tests/unit/test_scenarios/__init__.py` -- Test package init.
+- `tests/unit/test_scenarios/test_basic_scenarios.py` -- 32 tests: lifecycle transitions, unplanned stop fault/recovery, job changeover phases/speed/counters, shift change idle/resume/bias, scenario engine timeline/sorting/integration, data engine integration, shift scheduling jitter, determinism.
+
+**Files modified:**
+- `src/factory_simulator/engine/data_engine.py` -- Added ScenarioEngine construction (with child RNG per Rule 13) and `scenario_engine.tick()` call before generator loop (PRD 8.2 step 3). Added `scenario_engine` property.
+- `src/factory_simulator/engine/__init__.py` -- Added ScenarioEngine to exports.
+
+**Design decisions:**
+- Scenarios use `press.state_machine.force_state()` to drive machine state changes (Setup, Fault, Idle, Running).
+- Job changeover directly modifies `press._target_speed` and waste counter `_rate` for waste spike. Uses TYPE_CHECKING imports and runtime imports inside `_find_press()` to avoid circular imports.
+- ScenarioEngine generates timeline at construction. Number of scenarios = `uniform(min_freq, max_freq) × n_shifts`. Shift changes scheduled at configured times with uniform(-600, 600) jitter.
+- Tests disable auto-scheduled scenarios in config and manually create/evaluate scenarios for precise control.
+
+**Test results:** 994 tests pass (ruff clean, mypy clean, pytest all green).
