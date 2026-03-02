@@ -4,7 +4,7 @@
 
 ## Tasks
 - [x] 1.1: Configuration Models
-- [ ] 1.2: Simulation Clock
+- [x] 1.2: Simulation Clock
 - [ ] 1.3: Signal Value Store
 - [ ] 1.4: Signal Model Base + Noise Pipeline
 - [ ] 1.5: Steady State Model
@@ -56,3 +56,32 @@
 - Probability fields in [0, 1]
 - Range pair min <= max for all scenario configs
 - All 47 signals present with correct register addresses per Appendix A
+
+### Task 1.2: Simulation Clock (completed)
+
+**Files created:**
+- `src/factory_simulator/clock.py` -- SimulationClock class
+- `tests/unit/test_clock.py` -- 30 tests
+
+**SimulationClock implementation:**
+- `tick()` advances sim_time by `(tick_interval_ms / 1000) * time_scale` seconds
+- `dt` property returns the per-tick delta in seconds (used by all signal models)
+- `elapsed_seconds()`, `sim_datetime()`, `sim_time_iso()` helpers
+- `reset()` zeroes sim_time and tick_count
+- `from_config(SimulationConfig)` factory method (duck-typed to avoid circular imports)
+
+**Key design decisions:**
+- Clock is purely deterministic: no asyncio, no wall-clock references. It ticks when told to tick (Rule 6).
+- `dt` is constant across all ticks (function of config only), ensuring signal models produce identical output regardless of wall-clock speed.
+- Start time defaults to `2024-01-15T06:00:00+00:00` (Monday morning shift start) if not configured.
+- `from_config()` uses duck-typing (getattr) to accept SimulationConfig without importing it, avoiding circular dependency with config.py.
+
+**Test coverage:**
+- Construction and validation (positive tick_interval_ms, positive time_scale)
+- Tick mechanics at 1x, 10x, 100x (single tick and multi-tick)
+- Simulated time invariant: two clocks with same config produce identical sim_time after same ticks
+- Time helpers: elapsed_seconds, sim_datetime, ISO format, timezone preservation
+- Reset behaviour
+- from_config factory with SimulationConfig
+- Large runs: 1 hour at 100x (360 ticks), 1 day at 1000x (864 ticks)
+- Floating-point accumulation over 100k ticks (< 1e-9 relative error)
