@@ -139,7 +139,7 @@ scenarios:
   dryer_drift:
     enabled: true
     frequency_per_shift: [1, 2]
-    drift_degrees: [5, 15]
+    max_drift_c: [5, 15]
     duration_seconds: [1800, 7200]
 
   bearing_wear:

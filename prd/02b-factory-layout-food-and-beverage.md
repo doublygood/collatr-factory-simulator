@@ -188,6 +188,8 @@ The checkweigher verifies every pack is within weight tolerance. The metal detec
 
 Pack weight follows a normal distribution that mirrors the fill weight distribution with a small offset (tray weight + lid weight added). The checkweigher enforces legal metrology requirements: the average weight must meet the nominal weight, and no individual pack may be more than twice the tolerable negative error below nominal (Weights and Measures Act 1985, the "e" mark rules).
 
+The Three Packers Rules (TN/28) define tolerable negative error (TNE) by nominal weight. For a 400g ready meal, TNE is 15g (3.75%). The checkweigher rejects packs below nominal minus 2xTNE (370g for a 400g product). The fill weight drift scenario (Section 5.14.3) uses these thresholds to determine reject rates.
+
 Overweight packs are giveaway. Underweight packs are illegal. The ratio between them indicates filler calibration quality. A well-calibrated line has an overweight:underweight ratio of roughly 20:1 (biased high for safety). If the ratio drops toward 5:1, the filler needs recalibration.
 
 Metal detector trips should be rare (less than 1 per 1000 packs). A sudden increase indicates contamination in the ingredient supply, equipment wear introducing metal particles, or a false-positive issue with the detector sensitivity.

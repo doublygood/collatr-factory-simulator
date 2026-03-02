@@ -118,6 +118,8 @@ Where:
 - `A` = initial amplitude, derived from step size and damping ratio.
 - `t` = time since the last setpoint change.
 
+The implementation resets `t` to zero on each setpoint change. The amplitude `A` is recomputed as the difference between the new setpoint and the current value at the moment of change.
+
 Default `damping_ratio` = 1.0 (critically damped). At this value, the model reduces to the existing first-order lag with no oscillation. Typical industrial PID tuning produces a damping ratio of 0.5 to 0.8. Lower values produce more overshoot and longer ringing.
 
 When `damping_ratio` >= 1.0, the model behaves exactly as the first-order lag described above. When `damping_ratio` < 1.0, the model produces the characteristic overshoot and ringing that real temperature controllers exhibit.
@@ -304,6 +306,8 @@ Suitable for vibration signals (`vibration.main_drive_x/y/z`), pressure signals 
 
 Parameters: `noise_distribution: "student_t"`, `noise_df: 5` (degrees of freedom).
 
+**Variance note.** The Student-t distribution with df degrees of freedom has variance `sigma^2 * df / (df - 2)`. At df=5, the effective standard deviation is 1.29 times sigma. Student-t signals have 29% higher RMS noise than Gaussian signals with the same sigma parameter. This is intentional. The heavier tails and higher variance together model the real behaviour of vibration and pressure sensors, where both outlier frequency and baseline variability exceed Gaussian predictions. To match RMS noise exactly between distributions, scale the Student-t sigma by `sqrt((df - 2) / df)`. The default configuration does not apply this correction.
+
 **AR(1) autocorrelated noise.** First-order autoregressive noise. Each sample depends on the previous sample. Produces the smooth, correlated residuals that real PID-controlled temperatures exhibit.
 
 ```
@@ -315,6 +319,8 @@ The autocorrelation coefficient (phi) controls how strongly consecutive samples 
 Suitable for temperature signals controlled by PID loops (`press.dryer_temp_zone_*`, `oven.zone_*_temp`, `laminator.nip_temp`, `coder.printhead_temp`). These signals have correlated noise because the controller continuously adjusts the output. The result is smooth oscillations around the setpoint rather than independent jumps.
 
 Parameters: `noise_distribution: "ar1"`, `noise_phi: 0.7` (autocorrelation coefficient, range 0 to 0.99).
+
+During a controller connection drop (Section 4.8), the AR(1) noise process continues generating internally. The autocorrelation state is maintained across the gap. When the connection resumes, the noise sequence is continuous from the engine's perspective even though the client saw no updates during the drop.
 
 **Default noise distribution assignments:**
 
@@ -351,6 +357,8 @@ Default assignments for speed-dependent noise:
 | press.main_drive_current | press.line_speed | 0.3 A | 0.002 A per m/min | Current ripple scales with load |
 
 Parameters: `sigma_parent` (signal ID, optional), `sigma_base` (float), `sigma_scale` (float, default 0.0). These parameters appear inside any signal's `params` block alongside the existing `sigma`, `noise_distribution`, and distribution-specific parameters. See Appendix D for a configuration example.
+
+**Known limitation: no 1/f (pink) noise.** The noise models do not include a 1/f component. Real industrial environments exhibit 1/f spectral characteristics from building vibrations, electrical interference, and thermal fluctuations. At the 1-second to 60-second sampling rates used by this simulator, the 1/f component is weak but detectable in multi-day power spectral density analysis. An analyst computing the PSD of 7 days of ambient temperature data will see a flat spectrum instead of the expected 1/f slope. This limitation does not affect time-domain visual inspection or short-duration evaluation runs. A fractional Gaussian noise generator can be added in a future phase for research benchmarking use cases.
 
 ### 4.2.12 Bang-Bang with Hysteresis
 
@@ -647,7 +655,15 @@ The simulator emits a JSONL sidecar file alongside the data stream. Every scenar
 
 **File path:** configurable, default `output/ground_truth.jsonl`.
 
-**Format:** one JSON object per line.
+**Format:** one JSON object per line. The first line is a configuration header record. All subsequent lines are event records.
+
+**Header record.** The first line of the file has `event_type: "config"`. It contains the simulator version, random seed, profile name, per-signal noise parameters (distribution type, sigma, df, phi, speed-dependent parameters), and active scenario list. This makes the ground truth log self-contained. A researcher can run a KS test or spectral analysis against the output without consulting the original configuration file.
+
+```json
+{"event_type": "config", "sim_version": "1.0.0", "seed": 42, "profile": "packaging", "signals": {"press.line_speed": {"noise": "gaussian", "sigma": 0.5}, "vibration.main_drive_x": {"noise": "student_t", "sigma": 0.3, "df": 5}}, "scenarios": ["job_changeover", "web_break", "dryer_drift"]}
+```
+
+**Event records.** All subsequent lines are event records:
 
 ```json
 {"sim_time": "2026-03-01T14:30:00.000Z", "event": "scenario_start", "scenario": "web_break", "affected_signals": ["press.web_tension", "press.line_speed", "press.machine_state"], "parameters": {"tension_spike_n": 720, "recovery_seconds": 1200}}

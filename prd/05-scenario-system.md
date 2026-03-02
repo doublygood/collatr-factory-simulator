@@ -248,6 +248,23 @@ scenarios:
     mean_interval_minutes: [10, 50]     # Poisson process
 ```
 
+## 5.13a Material Splice
+
+**Frequency:** 2-4 per shift (one splice per reel change; a reel lasts 2-4 hours at production speed).
+**Trigger:** `press.unwind_diameter` drops below 150 mm.
+**Duration:** 10-30 seconds of disturbance.
+
+The press uses a flying splice (zero-speed splicer). The web does not stop. `press.machine_state` stays Running (2) throughout. The operator joins a new roll to the running web while the press continues at speed.
+
+Sequence:
+1. `press.web_tension` spikes 50-100 N above normal for 1-3 seconds as the splice passes through the nip rollers.
+2. `press.registration_error_x` and `press.registration_error_y` increase by 0.1-0.3 mm for 10-20 seconds as the press re-registers on the new material.
+3. `press.waste_count` increments faster during the splice window (prints on the splice zone are waste).
+4. `press.unwind_diameter` resets to full reel size (1500 mm). `press.rewind_diameter` continues increasing on the output side.
+5. `press.line_speed` may dip 5-10% during the splice if the operator slows the press for the join. Speed recovers within 5-10 seconds.
+
+The ground truth event log (Section 4.7) records each splice with: trigger time, splice duration, tension spike magnitude, and registration recovery time. The event type is `material_splice`.
+
 ## 5.14 F&B Profile Scenarios
 
 The F&B profile adds seven scenarios specific to food and beverage production. Each scenario uses the same signal model types as packaging scenarios (first_order_lag, state_machine, ramp, counter) with F&B parameters.

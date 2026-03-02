@@ -187,7 +187,7 @@ CI = mean +/- 1.96 * std / sqrt(N)
 
 If the intervals for detector A and detector B do not overlap on a given metric, the difference is significant at p < 0.05.
 
-**Trivial baseline.** Report the performance of a random detector that fires with probability p per tick, where p equals the anomaly density of the dataset. Anomaly density is the fraction of ticks that fall inside any ground truth event window. This random baseline provides a floor. Any useful detector must beat it. If a detector does not beat the random baseline, it has no predictive value.
+**Random baseline.** Report a random baseline alongside detector results. A random detector fires an alert at each tick with probability p, where p equals the anomaly density of the dataset (total anomaly ticks divided by total ticks). This baseline achieves non-zero recall but low precision. Any useful detector must exceed the random baseline on both precision and F1. Report the baseline metrics in the results table alongside all detector results. This provides a floor and prevents overinterpretation of marginal results. If a detector does not beat the random baseline, it has no predictive value.
 
 ## 12.5 Recommended Run Configurations
 

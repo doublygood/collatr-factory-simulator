@@ -156,7 +156,7 @@ The oven also has belt speed, product core temperature, and zone 2 humidity. The
     │
 ┌───┴──────────┐
 │ CollatrEdge  │
-│ .50          │
+│ .60          │
 │              │
 │ 7x Modbus    │
 │  (inc. 3     │

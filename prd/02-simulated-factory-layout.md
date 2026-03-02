@@ -225,9 +225,9 @@ Additional public datasets worth cataloguing for future use: CNC Mill Tool Wear 
 
 | Protocol | Signal Count | Signals |
 |----------|-------------|---------|
-| Modbus TCP only | 19 | press.line_speed, press.ink_viscosity, press.ink_temperature, press.dryer_temp_zone_1/2/3, press.dryer_setpoint_zone_1/2/3, press.impression_count, press.good_count, press.waste_count, press.main_drive_current, press.main_drive_speed, press.nip_pressure, press.unwind_diameter, press.rewind_diameter, energy.line_power, energy.cumulative_kwh |
+| Modbus TCP only | 18 | press.ink_viscosity, press.ink_temperature, press.dryer_temp_zone_1/2/3, press.dryer_setpoint_zone_1/2/3, press.impression_count, press.good_count, press.waste_count, press.main_drive_current, press.main_drive_speed, press.nip_pressure, press.unwind_diameter, press.rewind_diameter, energy.line_power, energy.cumulative_kwh |
 | OPC-UA only | 4 | press.web_tension, press.registration_error_x, press.registration_error_y, slitter.web_tension |
-| Modbus TCP + OPC-UA | 7 | press.machine_state, laminator.nip_temp, laminator.nip_pressure, laminator.tunnel_temp, laminator.web_speed, laminator.adhesive_weight, slitter.speed |
+| Modbus TCP + OPC-UA | 8 | press.line_speed, press.machine_state, laminator.nip_temp, laminator.nip_pressure, laminator.tunnel_temp, laminator.web_speed, laminator.adhesive_weight, slitter.speed |
 | MQTT only | 16 | coder.state, coder.prints_total, coder.ink_level, coder.printhead_temp, coder.ink_pump_speed, coder.ink_pressure, coder.ink_viscosity_actual, coder.supply_voltage, coder.ink_consumption_ml, coder.nozzle_health, coder.gutter_fault, env.ambient_temp, env.ambient_humidity, vibration.main_drive_x/y/z |
 | Event + counter | 1 | slitter.reel_count (Modbus) |
 

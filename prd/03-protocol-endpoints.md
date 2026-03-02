@@ -172,9 +172,14 @@ Input registers mirror selected holding register values with different data enco
 | 100 | oven.zone_1_temp | int16 | x10 | C | Eurotherm-style |
 | 101 | oven.zone_2_temp | int16 | x10 | C | |
 | 102 | oven.zone_3_temp | int16 | x10 | C | |
-| 103 | oven.product_core_temp | int16 | x10 | C | BRC critical |
-| 104 | cip.wash_temp | int16 | x10 | C | |
-| 110-111 | energy.line_power | float32 | 1.0 | kW | Shared with packaging |
+| 103 | oven.zone_1_setpoint | int16 | x10 | C | Eurotherm-style |
+| 104 | oven.zone_2_setpoint | int16 | x10 | C | |
+| 105 | oven.zone_3_setpoint | int16 | x10 | C | |
+| 106 | oven.product_core_temp | int16 | x10 | C | BRC critical |
+| 110 | chiller.room_temp | int16 | x10 | C | |
+| 111 | chiller.setpoint | int16 | x10 | C | |
+| 115 | cip.wash_temp | int16 | x10 | C | |
+| 120-121 | energy.line_power | float32 | 1.0 | kW | Shared with packaging |
 
 The int16 x10 encoding matches the Eurotherm temperature controller pattern documented in the customer profiles research. This is the most common encoding for temperature readings from industrial controllers. CollatrEdge must handle the scaling correctly. The F&B profile uses input register addresses 100+ to avoid collision with the packaging profile addresses 0-11.
 
@@ -523,7 +528,7 @@ The most recent message on each topic is published with the retained flag set. T
 |---|---|---|
 | **Modbus HR** | 19 registers (press, laminator, slitter) | 31 registers (mixer, oven, filler, sealer, chiller, CIP) |
 | **Modbus HR (shared)** | 2 (energy) | 2 (energy) |
-| **Modbus IR** | 7 (Eurotherm temps + energy) | 6 (oven temps + CIP temp + energy) |
+| **Modbus IR** | 7 (Eurotherm temps + energy) | 11 (oven temps + setpoints + chiller temps + CIP temp + energy) |
 | **Modbus coils** | 6 (press, laminator, slitter) | 3 (mixer, chiller) |
 | **Modbus DI** | 3 (press) | 1 (chiller door) |
 | **OPC-UA** | 4 unique + dual (press tension, reg error, slitter tension) + shared (laminator, slitter, energy) | 17 (mixer, oven, filler, QC, CIP) + shared (energy) |

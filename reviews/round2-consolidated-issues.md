@@ -35,15 +35,15 @@
 
 | # | Source | Issue | File(s) | Status |
 |---|--------|-------|---------|--------|
-| L1 | Auto | Signal count in table 2.11: `press.line_speed` protocol assignment inconsistent | `02-simulated-factory-layout.md` | OPEN |
-| L2 | Auto | F&B network diagram: CollatrEdge and QC station both at .50 | `03a-network-topology.md` | OPEN |
-| L3 | Auto | F&B input register list in Section 3 shorter than Appendix A | `03-protocol-endpoints.md` | OPEN |
-| L4 | Auto | Config naming: Section 6 `drift_degrees` vs Appendix D `max_drift_c` | `06-configuration.md` | OPEN |
-| L5 | Auto | No material splice scenario | `05-scenario-system.md` | OPEN |
-| L6 | Auto | Checkweigher missing TNE thresholds (TN/28, WELMEC 6.7) | `02b-factory-layout-food-and-beverage.md` | OPEN |
-| L7 | Data | Second-order response must reset t on setpoint change (implied, not stated) | `04-data-generation-engine.md` | OPEN |
-| L8 | Data | Student-t variance 29% higher than sigma at df=5 (document or correct) | `04-data-generation-engine.md` | OPEN |
-| L9 | Data | AR(1) state after connection gap: specify "continue internally" | `04-data-generation-engine.md` | OPEN |
-| L10 | Data | Ground truth log should include noise parameters in header record | `04-data-generation-engine.md` | OPEN |
-| L11 | Data | No random baseline defined in evaluation protocol | `12-evaluation-protocol.md` | OPEN |
-| L12 | Data | 1/f noise absent (spectral analysis tell, Phase 2) | `04-data-generation-engine.md` | OPEN |
+| L1 | Auto | Signal count in table 2.11: `press.line_speed` protocol assignment inconsistent | `02-simulated-factory-layout.md` | RESOLVED |
+| L2 | Auto | F&B network diagram: CollatrEdge and QC station both at .50 | `03a-network-topology.md` | RESOLVED |
+| L3 | Auto | F&B input register list in Section 3 shorter than Appendix A | `03-protocol-endpoints.md` | RESOLVED |
+| L4 | Auto | Config naming: Section 6 `drift_degrees` vs Appendix D `max_drift_c` | `06-configuration.md` | RESOLVED |
+| L5 | Auto | No material splice scenario | `05-scenario-system.md` | RESOLVED |
+| L6 | Auto | Checkweigher missing TNE thresholds (TN/28, WELMEC 6.7) | `02b-factory-layout-food-and-beverage.md` | RESOLVED |
+| L7 | Data | Second-order response must reset t on setpoint change (implied, not stated) | `04-data-generation-engine.md` | RESOLVED |
+| L8 | Data | Student-t variance 29% higher than sigma at df=5 (document or correct) | `04-data-generation-engine.md` | RESOLVED |
+| L9 | Data | AR(1) state after connection gap: specify "continue internally" | `04-data-generation-engine.md` | RESOLVED |
+| L10 | Data | Ground truth log should include noise parameters in header record | `04-data-generation-engine.md` | RESOLVED |
+| L11 | Data | No random baseline defined in evaluation protocol | `12-evaluation-protocol.md` | RESOLVED |
+| L12 | Data | 1/f noise absent (spectral analysis tell, Phase 2) | `04-data-generation-engine.md` | RESOLVED |
