@@ -1,6 +1,6 @@
 # Phase 2: OPC-UA, MQTT, and Packaging Scenarios - Progress
 
-## Status: In Progress (15/16 tasks complete)
+## Status: All 16 tasks complete — awaiting code review
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
@@ -18,7 +18,7 @@
 - [x] 2.13: Material Splice Scenario
 - [x] 2.14: Ground Truth Event Log
 - [x] 2.15: Environment Composite Model
-- [ ] 2.16: Cross-Protocol Consistency Tests
+- [x] 2.16: Cross-Protocol Consistency Tests
 
 ## Notes
 
@@ -454,3 +454,28 @@ Humidity: same layered pattern but inverted. HVAC and perturbation offsets are n
 - Perturbation events use `numpy.poisson()` for correct Poisson statistics even with large dt values (60s). Magnitude drawn from `U[0.5*mag, 1.5*mag]` with random sign.
 
 **Test results:** 10/10 new tests pass. 1462 total tests pass (no regressions).
+
+### Task 2.16 (Complete)
+
+**Files created:**
+- `tests/integration/test_cross_protocol.py` — 12 integration tests, all pass
+
+**What was built:**
+Capstone cross-protocol consistency test that starts all three protocol adapters (ModbusServer, OpcuaServer, MqttPublisher) simultaneously against a single DataEngine and SignalStore, then verifies value consistency.
+
+Fixture: `all_protocols` — creates config/store/clock/engine, ticks engine 5x, injects known test values for all signals across all three protocols, starts Modbus (port 15503), OPC-UA (OS-assigned port), and MQTT publisher (Docker Mosquitto on 1883). Connects Modbus client, OPC-UA client, and MQTT subscriber. Yields all four components. Full cleanup on teardown.
+
+Test classes:
+- `TestModbusOpcuaConsistency` (5 tests): press.line_speed, press.machine_state, press.web_tension, and energy.line_power match between Modbus HR (float32) and OPC-UA (Double) within float32 precision. Comprehensive test covers 8 representative signals across all equipment groups (Press1, Laminator1, Slitter1, Energy) with both cross-protocol and injected-value assertions.
+- `TestMqttFromSameStore` (3 tests): coder/ink_level, env/ambient_temp, and batch vibration x/y/z MQTT payloads match injected store values. Verifies MQTT adapter reads from the same store as Modbus and OPC-UA.
+- `TestSimultaneousOperation` (4 tests): all three protocols serve data in the same session; store.set() propagates to both Modbus and OPC-UA within one sync cycle; MQTT topics are received alongside active Modbus/OPC-UA; machine state is observable from Modbus HR 210, OPC-UA Press1.State, and coder/state on MQTT — all consistent with injected values.
+
+**Key design decisions:**
+- No single signal exists on all three protocols in the packaging profile: Modbus + OPC-UA share 30 press/laminator/slitter/energy signals, MQTT publishes 16+1 coder/environment/vibration signals. Tests verify cross-protocol consistency within shared signal sets and same-store consistency across all three adapters.
+- `_float32_roundtrip()` helper converts expected float64 values through float32 encoding for accurate comparison with Modbus values. Tolerance of 0.01 is generous relative to float32 quantization error (~1e-5 for typical values) but matches existing test patterns.
+- MQTT subscriber created and subscribed BEFORE publisher starts to capture event-driven topics (coder/state, etc.) that fire only once on initial value change from None.
+- Modbus port 15503 avoids conflict with existing Modbus integration tests (port 15502).
+- `@pytest.mark.integration` + skipif broker unreachable: entire module skips when Docker not running.
+- Store change propagation test verifies the full path: `store.set()` -> Modbus sync (50ms) -> OPC-UA sync (500ms) -> both protocols show updated value.
+
+**Test results:** 12/12 integration tests pass. 1474 total tests pass (no regressions).

@@ -160,7 +160,7 @@
       "test_files": ["tests/integration/test_cross_protocol.py"],
       "prd_refs": ["prd/13-test-strategy.md"],
       "depends_on": ["2.3", "2.6"],
-      "passes": false
+      "passes": true
     }
   ]
 }
