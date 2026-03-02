@@ -637,6 +637,8 @@ class TestPackagingRegisterMap:
         # Press state
         assert 210 in hr_addrs  # machine_state
         assert hr_addrs[210].data_type == "uint16"
+        assert 211 in hr_addrs  # fault_code
+        assert hr_addrs[211].data_type == "uint16"
 
         # Press drive, nip, reels
         assert 300 in hr_addrs  # main_drive_current

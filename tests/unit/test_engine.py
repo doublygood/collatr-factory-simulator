@@ -124,9 +124,9 @@ class TestConstruction:
         """Engine creates 7 packaging generators."""
         assert len(engine.generators) == 7
 
-    def test_signal_count_is_47(self, engine: DataEngine) -> None:
-        """Packaging profile has 47 signals."""
-        assert engine.signal_count() == 47
+    def test_signal_count_is_48(self, engine: DataEngine) -> None:
+        """Packaging profile has 48 signals (47 + fault_code)."""
+        assert engine.signal_count() == 48
 
     def test_clock_is_set(self, engine: DataEngine) -> None:
         assert engine.clock is not None
@@ -187,9 +187,9 @@ class TestTick:
     def test_store_populated_after_tick(
         self, engine: DataEngine, store: SignalStore,
     ) -> None:
-        """After a tick, all 47 signals should be in the store."""
+        """After a tick, all 48 signals should be in the store."""
         engine.tick()
-        assert len(store) == 47
+        assert len(store) == 48
 
     def test_all_signal_ids_in_store(
         self, engine: DataEngine, store: SignalStore,
@@ -240,7 +240,7 @@ class TestTick:
         """Engine runs 100 ticks without error."""
         for _ in range(100):
             engine.tick()
-        assert len(store) == 47
+        assert len(store) == 48
         assert engine.clock.tick_count == 100
 
 

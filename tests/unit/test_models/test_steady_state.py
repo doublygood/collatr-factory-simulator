@@ -446,6 +446,22 @@ class TestClamp:
         assert clamp(0.0, 0.0, 100.0) == pytest.approx(0.0)
         assert clamp(100.0, 0.0, 100.0) == pytest.approx(100.0)
 
+    def test_nan_with_both_bounds(self) -> None:
+        result = clamp(float("nan"), 0.0, 100.0)
+        assert result == pytest.approx(0.0)
+
+    def test_nan_with_min_only(self) -> None:
+        result = clamp(float("nan"), -10.0, None)
+        assert result == pytest.approx(-10.0)
+
+    def test_nan_with_max_only(self) -> None:
+        result = clamp(float("nan"), None, 50.0)
+        assert result == pytest.approx(50.0)
+
+    def test_nan_with_no_bounds(self) -> None:
+        result = clamp(float("nan"), None, None)
+        assert result == pytest.approx(0.0)
+
     @given(
         value=st.floats(min_value=-1e6, max_value=1e6, allow_nan=False),
         lo=st.floats(min_value=-1e6, max_value=0.0, allow_nan=False),

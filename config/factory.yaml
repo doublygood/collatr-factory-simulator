@@ -304,6 +304,20 @@ equipment:
           states: ["off", "setup", "running", "idle", "fault", "maintenance"]
           initial_state: "idle"
 
+      fault_code:
+        model: "steady_state"
+        noise_sigma: 0.0
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 999.0
+        units: "code"
+        modbus_hr: [211]
+        modbus_type: "uint16"
+        opcua_node: "PackagingLine.Press1.FaultCode"
+        opcua_type: "UInt16"
+        params:
+          target: 0.0
+
       main_drive_current:
         model: "correlated_follower"
         parent: "press.line_speed"

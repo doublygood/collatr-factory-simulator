@@ -205,6 +205,18 @@ def _make_press_config() -> EquipmentConfig:
         },
     )
 
+    # --- fault_code (scenario-managed, defaults to 0) ---
+    signals["fault_code"] = SignalConfig(
+        model="steady_state",
+        noise_sigma=0.0,
+        sample_rate_ms=1000,
+        min_clamp=0.0,
+        max_clamp=999.0,
+        modbus_hr=[211],
+        modbus_type="uint16",
+        params={"target": 0.0},
+    )
+
     # --- main_drive_current ---
     signals["main_drive_current"] = SignalConfig(
         model="correlated_follower",
@@ -315,6 +327,7 @@ EXPECTED_SIGNAL_IDS = sorted([
     "press.good_count",
     "press.waste_count",
     "press.machine_state",
+    "press.fault_code",
     "press.main_drive_current",
     "press.main_drive_speed",
     "press.nip_pressure",
@@ -324,11 +337,11 @@ EXPECTED_SIGNAL_IDS = sorted([
 
 
 class TestSignalIds:
-    """All 21 press signal IDs are produced."""
+    """All 22 press signal IDs are produced."""
 
     def test_get_signal_ids_count(self, press: PressGenerator) -> None:
         ids = press.get_signal_ids()
-        assert len(ids) == 21, f"Expected 21 signal IDs, got {len(ids)}"
+        assert len(ids) == 22, f"Expected 22 signal IDs, got {len(ids)}"
 
     def test_get_signal_ids_complete(self, press: PressGenerator) -> None:
         ids = sorted(press.get_signal_ids())
@@ -682,7 +695,7 @@ class TestProtocolMappings:
 
     def test_mappings_count(self, press: PressGenerator) -> None:
         mappings = press.get_protocol_mappings()
-        assert len(mappings) == 21
+        assert len(mappings) == 22
 
     def test_line_speed_has_modbus(self, press: PressGenerator) -> None:
         mappings = press.get_protocol_mappings()

@@ -694,8 +694,8 @@ class TestDataEngineScenarioIntegration:
         for _ in range(100):
             engine.tick()
 
-        # All 47 signals should still be present
-        assert len(store) == 47
+        # All 48 signals should still be present
+        assert len(store) == 48
 
     def test_deterministic_scenario_timeline(self) -> None:
         """Same seed produces identical scenario timeline."""

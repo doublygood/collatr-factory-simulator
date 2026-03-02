@@ -22,6 +22,9 @@ from factory_simulator.models.first_order_lag import FirstOrderLagModel
 from factory_simulator.models.steady_state import SteadyStateModel
 from factory_simulator.store import SignalStore, SignalValue
 
+# Ambient temperature for cool-down (PRD Section 2.7)
+_AMBIENT_TEMP_C = 20.0
+
 
 def _float_param(params: dict[str, object], key: str, default: float) -> float:
     raw = params.get(key, default)
@@ -76,7 +79,10 @@ class LaminatorGenerator(EquipmentGenerator):
     def _build_first_order_lag(
         self, sig_cfg: SignalConfig | None,
     ) -> FirstOrderLagModel:
-        params: dict[str, object] = {"setpoint": 20.0, "tau": 120.0, "initial_value": 20.0}
+        params: dict[str, object] = {
+            "setpoint": _AMBIENT_TEMP_C, "tau": 120.0,
+            "initial_value": _AMBIENT_TEMP_C,
+        }
         noise = None
         if sig_cfg is not None:
             params.update(sig_cfg.params)
@@ -136,7 +142,7 @@ class LaminatorGenerator(EquipmentGenerator):
                                   _float_param(nip_cfg.params, "target", 55.0))
                 self._nip_temp.set_setpoint(sp)
         else:
-            self._nip_temp.set_setpoint(20.0)  # cool toward ambient
+            self._nip_temp.set_setpoint(_AMBIENT_TEMP_C)  # cool toward ambient
 
         raw_nip_temp = self._nip_temp.generate(sim_time, dt)
         nip_temp = self._post_process("nip_temp", raw_nip_temp)
@@ -155,7 +161,7 @@ class LaminatorGenerator(EquipmentGenerator):
                                   _float_param(tunnel_cfg.params, "target", 65.0))
                 self._tunnel_temp.set_setpoint(sp)
         else:
-            self._tunnel_temp.set_setpoint(20.0)
+            self._tunnel_temp.set_setpoint(_AMBIENT_TEMP_C)
 
         raw_tunnel = self._tunnel_temp.generate(sim_time, dt)
         tunnel = self._post_process("tunnel_temp", raw_tunnel)

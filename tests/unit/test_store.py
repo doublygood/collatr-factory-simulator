@@ -321,17 +321,17 @@ class TestClear:
 
 
 class TestRealisticScale:
-    def test_47_packaging_signals(self) -> None:
-        """Store handles the packaging profile's 47 signals."""
+    def test_48_packaging_signals(self) -> None:
+        """Store handles the packaging profile's 48 signals."""
         store = SignalStore()
-        for i in range(47):
+        for i in range(48):
             store.set(f"signal_{i:02d}", float(i), timestamp=0.1 * i)
-        assert len(store) == 47
+        assert len(store) == 48
         # Spot check first and last
         assert store.get("signal_00") is not None
         assert store.get("signal_00").value == 0.0  # type: ignore[union-attr]
-        assert store.get("signal_46") is not None
-        assert store.get("signal_46").value == 46.0  # type: ignore[union-attr]
+        assert store.get("signal_47") is not None
+        assert store.get("signal_47").value == 47.0  # type: ignore[union-attr]
 
     def test_68_fnb_signals(self) -> None:
         """Store handles the F&B profile's 68 signals."""

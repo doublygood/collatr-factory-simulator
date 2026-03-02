@@ -358,11 +358,11 @@ class TestLoadConfig:
         assert cfg.factory.name == "Demo Packaging Factory"
         assert cfg.simulation.time_scale == 1.0
 
-    def test_all_47_signals_present(self) -> None:
-        """Verify all 47 packaging signals are defined in the default config."""
+    def test_all_48_signals_present(self) -> None:
+        """Verify all 48 packaging signals are defined in the default config."""
         cfg = load_config("config/factory.yaml", apply_env=False)
         total_signals = sum(len(eq.signals) for eq in cfg.equipment.values())
-        assert total_signals == 47, f"Expected 47 signals, got {total_signals}"
+        assert total_signals == 48, f"Expected 48 signals, got {total_signals}"
 
     def test_equipment_groups(self) -> None:
         """Verify all 7 equipment groups are present."""
@@ -374,7 +374,7 @@ class TestLoadConfig:
         """PRD 2.2-2.9 signal counts."""
         cfg = load_config("config/factory.yaml", apply_env=False)
         counts = {name: len(eq.signals) for name, eq in cfg.equipment.items()}
-        assert counts["press"] == 21
+        assert counts["press"] == 22
         assert counts["laminator"] == 5
         assert counts["slitter"] == 3
         assert counts["coder"] == 11

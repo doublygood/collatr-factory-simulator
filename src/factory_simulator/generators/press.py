@@ -40,6 +40,9 @@ STATE_MAINTENANCE = 5
 
 _STATE_NAMES = ["Off", "Setup", "Running", "Idle", "Fault", "Maintenance"]
 
+# Ambient temperature for dryer cool-down (PRD Section 2.7)
+_AMBIENT_TEMP_C = 20.0
+
 # Default press state machine transitions
 _DEFAULT_TRANSITIONS = [
     # Idle -> Setup (condition: scenario engine or test triggers job_start)
@@ -274,7 +277,10 @@ class PressGenerator(EquipmentGenerator):
         self, sig_cfg: SignalConfig | None,
     ) -> FirstOrderLagModel:
         """Build a first-order lag model from config."""
-        params: dict[str, object] = {"setpoint": 20.0, "tau": 120.0, "initial_value": 20.0}
+        params: dict[str, object] = {
+            "setpoint": _AMBIENT_TEMP_C, "tau": 120.0,
+            "initial_value": _AMBIENT_TEMP_C,
+        }
         noise = None
         if sig_cfg is not None:
             params.update(sig_cfg.params)
@@ -315,7 +321,7 @@ class PressGenerator(EquipmentGenerator):
         return self._target_speed
 
     def get_signal_ids(self) -> list[str]:
-        """Return all 21 press signal IDs."""
+        """Return all 22 press signal IDs."""
         return [self._signal_id(name) for name in self._signal_configs]
 
     def generate(
@@ -533,6 +539,17 @@ class PressGenerator(EquipmentGenerator):
             self._signal_configs.get("rewind_diameter"),
         ))
 
+        # --- 11. Fault code (scenario-managed, preserve store value) ---
+        # The unplanned_stop scenario writes fault_code to the store before
+        # generators tick.  We read and re-emit the current value so the
+        # signal is always present in the store for the Modbus register map.
+        fault_sv = store.get(f"{self._equipment_id}.fault_code")
+        fault_val = float(fault_sv.value) if fault_sv is not None else 0.0
+        results.append(self._make_sv(
+            "fault_code", fault_val, sim_time,
+            self._signal_configs.get("fault_code"),
+        ))
+
         return results
 
     # -- State cascade --------------------------------------------------------
@@ -579,9 +596,9 @@ class PressGenerator(EquipmentGenerator):
         # Dryer setpoint changes on Off/Maintenance
         if new_state in (STATE_OFF, STATE_MAINTENANCE):
             # Dryers cool toward ambient (set setpoint to ambient temp)
-            self._dryer_temp_1.set_setpoint(20.0)
-            self._dryer_temp_2.set_setpoint(20.0)
-            self._dryer_temp_3.set_setpoint(20.0)
+            self._dryer_temp_1.set_setpoint(_AMBIENT_TEMP_C)
+            self._dryer_temp_2.set_setpoint(_AMBIENT_TEMP_C)
+            self._dryer_temp_3.set_setpoint(_AMBIENT_TEMP_C)
 
     def _update_dryer_setpoints(
         self,

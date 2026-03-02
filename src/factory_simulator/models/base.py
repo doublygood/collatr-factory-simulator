@@ -16,6 +16,7 @@ CLAUDE.md Rule 13: numpy.random.Generator with SeedSequence.
 
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -99,6 +100,14 @@ def clamp(value: float, min_clamp: float | None, max_clamp: float | None) -> flo
     float
         Clamped signal value.
     """
+    # NaN propagates through IEEE 754 comparisons as False, so guard
+    # explicitly to prevent NaN leaking into protocol registers.
+    if math.isnan(value):
+        if min_clamp is not None:
+            return min_clamp
+        if max_clamp is not None:
+            return max_clamp
+        return 0.0
     if min_clamp is not None and value < min_clamp:
         return min_clamp
     if max_clamp is not None and value > max_clamp:
