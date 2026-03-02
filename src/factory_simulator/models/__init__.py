@@ -13,6 +13,7 @@ from factory_simulator.models.noise import (
     NoiseGenerator,
 )
 from factory_simulator.models.ramp import RampModel
+from factory_simulator.models.random_walk import RandomWalkModel
 from factory_simulator.models.sinusoidal import SinusoidalModel
 from factory_simulator.models.steady_state import SteadyStateModel
 
@@ -21,6 +22,7 @@ __all__ = [
     "FirstOrderLagModel",
     "NoiseGenerator",
     "RampModel",
+    "RandomWalkModel",
     "SignalModel",
     "SinusoidalModel",
     "SteadyStateModel",

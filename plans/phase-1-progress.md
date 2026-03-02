@@ -11,7 +11,7 @@
 - [x] 1.6: Sinusoidal Model
 - [x] 1.7: First-Order Lag Model
 - [x] 1.8: Ramp Model
-- [ ] 1.9: Random Walk Model
+- [x] 1.9: Random Walk Model
 - [ ] 1.10: Counter Model
 - [ ] 1.11: Depletion Model
 - [ ] 1.12: Correlated Follower Model
@@ -338,3 +338,40 @@
 - Determinism (Rule 13): same seed identical (smooth and stepped), different seeds differ, no noise deterministic
 - Property-based (Hypothesis): output finite, reaches end (smooth and stepped), determinism any seed, smooth ramp monotonic, dwell sum within duration
 - PRD examples: press startup stepped (0→200 m/min, 180s, 4 steps), press shutdown smooth (200→0, 45s), overshoot magnitude (3% of step size), overshoot decay time constant verification
+
+### Task 1.9: Random Walk Model (completed)
+
+**Files created:**
+- `src/factory_simulator/models/random_walk.py` -- RandomWalkModel class
+- `tests/unit/test_models/test_random_walk.py` -- 40 tests (property-based with Hypothesis)
+
+**Files modified:**
+- `src/factory_simulator/models/__init__.py` -- exports RandomWalkModel
+
+**RandomWalkModel implementation (PRD 4.2.5):**
+- Core formula: `delta = drift_rate * N(0,1) - reversion_rate * (value - center); value += delta * dt`
+- Mean reversion via Ornstein-Uhlenbeck-like discrete Euler step
+- Physical bounds via `min_clamp` / `max_clamp` (applied to walk state, not just output)
+- `set_center(new_center)` for runtime target changes (e.g. ink viscosity target during job changeover)
+- Accepts optional `NoiseGenerator` as observation noise on top of the walk process
+- `reset()` restores initial value and clears noise AR(1) state
+
+**Key design decisions:**
+- Same `_float_param()` helper pattern as other signal models for safe param extraction
+- `initial_value` defaults to `center` if not specified
+- Clamping applied to the walk state itself (not just output), so the walk cannot exceed physical bounds even before noise
+- Observation noise is additive on top of the clamped walk value -- this means returned values can slightly exceed clamp bounds when observation noise is present (intentional: the clamp models physical limits of the process, noise models sensor measurement)
+- `set_center()` provided for scenario use (PRD 5.2 job changeover changes ink viscosity target)
+- `drift_rate` validated >= 0, `reversion_rate` validated >= 0
+
+**Test coverage (40 tests):**
+- Construction: defaults, explicit params, initial_value defaults/explicit, clamp bounds, validation errors (negative drift_rate, negative reversion_rate), zero drift/reversion allowed
+- Basic generation: no drift stays at center, values vary with nonzero drift, mean near center over long run, negative center, zero center
+- Mean reversion: strong reversion lower variance than weak, reversion pulls back from displacement, pure reversion exponential decay (matches exp(-rate*t) within 5%), zero reversion pure random walk
+- Clamping: min only, max only, both bounds, no bounds by default
+- Noise: adds variation, zero sigma clean, noise does not affect walk state
+- set_center: changes reversion target, walk moves toward new center
+- Reset: restores initial value, defaults to center, clears AR(1) noise state
+- Determinism (Rule 13): same seed identical, different seeds differ, no drift deterministic across seeds, noise+walk same seed identical
+- Property-based (Hypothesis): output always finite, determinism any seed, clamped output within bounds
+- PRD examples: ink viscosity (center 25 cP, bounded 15-35), registration error (center 0, bounded -0.5 to 0.5), coder ink viscosity (sigma 0.3 cP)
