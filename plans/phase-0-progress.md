@@ -1,13 +1,13 @@
 # Phase 0: Validation Spikes - Progress
 
-## Status: In Progress
+## Status: All Tasks Complete (pending review)
 
 ## Tasks
 - [x] 0.1: Project scaffolding
 - [x] 0.2: Spike: Multi-server pymodbus
 - [x] 0.3: Spike: Mosquitto sidecar + paho-mqtt
 - [x] 0.4: Spike: asyncua multiple instances
-- [ ] 0.5: Document spike results
+- [x] 0.5: Document spike results
 
 ## Task 0.1: Project Scaffolding
 
@@ -139,6 +139,23 @@
 - Writable setpoints: `var.set_writable()`
 - Value update: `server_node.write_value(value, ua.VariantType.Double)`
 - StatusCode: `ua.DataValue(ua.Variant(val, vtype), ua.StatusCode(ua.StatusCodes.BadSensorFailure))`
+
+## Task 0.5: Document Spike Results
+
+**Completed:** 2026-03-02
+
+**Created:**
+- `docs/validation-spikes.md` -- consolidated spike results document with:
+  - Summary table: all 3 spikes PASS, 32 total tests
+  - Per-spike sections: validated criteria, performance numbers, API quirks, reference code patterns
+  - Library versions: pymodbus 3.12.1, paho-mqtt 2.1.0, asyncua 1.1.8
+  - Decisions for Phase 1: API naming changes, subscription handler patterns, memory planning
+
+**Verified:**
+- All 32 spike tests pass (12 Modbus + 8 MQTT + 12 OPC-UA)
+- `ruff check src tests` -- all checks passed
+- `mypy src` -- success
+- Spike code already in `tests/spikes/` directory (no cleanup needed)
 
 ## Notes
 
