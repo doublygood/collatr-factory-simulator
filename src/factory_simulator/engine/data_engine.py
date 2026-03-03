@@ -36,6 +36,7 @@ from factory_simulator.generators.laminator import LaminatorGenerator
 from factory_simulator.generators.mixer import MixerGenerator
 from factory_simulator.generators.oven import OvenGenerator
 from factory_simulator.generators.press import PressGenerator
+from factory_simulator.generators.sealer import SealerGenerator
 from factory_simulator.generators.slitter import SlitterGenerator
 from factory_simulator.generators.vibration import VibrationGenerator
 from factory_simulator.store import SignalStore
@@ -60,6 +61,7 @@ _GENERATOR_REGISTRY: dict[str, type[EquipmentGenerator]] = {
     "high_shear_mixer": MixerGenerator,
     "tunnel_oven": OvenGenerator,
     "gravimetric_filler": FillerGenerator,
+    "tray_sealer": SealerGenerator,
 }
 
 

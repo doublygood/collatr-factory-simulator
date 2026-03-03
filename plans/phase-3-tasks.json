@@ -70,7 +70,7 @@
       "description": "Sealer equipment generator: 6 signals. Seal temp/pressure/dwell steady state during production, MAP gas mix (CO2/N2), vacuum level. Follows filler state. Register in data_engine.py.",
       "prd_refs": ["prd/02b-factory-layout-food-and-beverage.md (2b.5)"],
       "depends_on": ["3.1", "3.2"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.8",

@@ -9,7 +9,7 @@
 - [x] 3.4: Mixer Generator
 - [x] 3.5: Oven Generator
 - [x] 3.6: Filler Generator
-- [ ] 3.7: Sealer Generator
+- [x] 3.7: Sealer Generator
 - [ ] 3.8: Checkweigher (QC) Generator
 - [ ] 3.9: Chiller Generator
 - [ ] 3.10: CIP Generator
@@ -121,3 +121,15 @@ All Modbus addresses cross-referenced against PRD Appendix A. OPC-UA nodes match
 - Properties exposed for scenarios: state_machine, hopper_model, packs_produced, reject_count, last_fill_weight, line_speed_model
 - 28 tests covering: signal IDs, initial state, line speed per state, per-item timing, packs counting, fill deviation consistency, reject counting, hopper depletion, fill target output, output completeness, determinism, state machine access
 - All 1622 tests pass (1594 existing + 28 new).
+
+### Task 3.7: Sealer Generator
+`SealerGenerator` in `src/factory_simulator/generators/sealer.py` — 6 signals, follows filler state.
+- **seal_temp** (first-order lag on internal continuous state): converges toward target (180°C) when filler is Running (state==2), decays toward ambient (20°C) via tau=180s when inactive. Min clamp 100°C enforced on output.
+- **seal_pressure** (SteadyStateModel): target 3.5 bar when active; 0.0 when inactive.
+- **seal_dwell** (SteadyStateModel): always at target 2.0 s (process parameter, always generated).
+- **gas_co2_pct / gas_n2_pct** (SteadyStateModel): always generated (hold at 30%/70% targets, representing standby gas supply).
+- **vacuum_level** (SteadyStateModel): target -0.7 bar when active; 0.0 when inactive.
+- Registered in `data_engine.py` as `"tray_sealer": SealerGenerator`.
+- Graceful fallback: when `filler.state` is absent from store, behaves as inactive.
+- 20 tests covering: signal count, signal IDs, seal temp convergence, seal temp decay, seal pressure active/inactive, vacuum active/inactive, dwell always generated, gas mix always generated, clamping, no-filler-state fallback, determinism, different seeds.
+- All 1642 tests pass (1622 existing + 20 new).
