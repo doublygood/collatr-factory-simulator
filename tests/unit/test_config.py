@@ -15,22 +15,35 @@ from pydantic import ValidationError
 
 from factory_simulator.config import (
     BatchCycleConfig,
+    BearingIntermittentConfig,
+    BearingWearConfig,
     ChillerDoorAlarmConfig,
     CipCycleConfig,
     ColdChainBreakConfig,
+    CommDropConfig,
+    ContextualAnomalyConfig,
+    DataQualityConfig,
+    ElectricalIntermittentConfig,
     EquipmentConfig,
     ErrorInjectionConfig,
     FactoryInfo,
     FillWeightDriftConfig,
+    IntermittentFaultConfig,
+    MicroStopConfig,
     ModbusProtocolConfig,
     MqttProtocolConfig,
+    NoiseConfig,
     OpcuaProtocolConfig,
     OvenThermalExcursionConfig,
+    PartialModbusResponseConfig,
+    PneumaticIntermittentConfig,
     ScenariosConfig,
     SealIntegrityFailureConfig,
+    SensorDisconnectConfig,
     ShiftsConfig,
     SignalConfig,
     SimulationConfig,
+    StuckSensorConfig,
     load_config,
 )
 
@@ -942,3 +955,236 @@ class TestFnbConfigLoading:
         cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
         lid = cfg.equipment["mixer"].signals["lid_closed"]
         assert lid.modbus_coil == 100
+
+
+# ===================================================================
+# Phase 4 Config Models (Task 4.3)
+# ===================================================================
+
+
+class TestBearingWearConfigUpdated:
+    """Updated BearingWearConfig with Phase 4 fields."""
+
+    def test_new_defaults(self) -> None:
+        cfg = BearingWearConfig()
+        assert cfg.base_rate == [0.001, 0.005]
+        assert cfg.acceleration_k == [0.005, 0.01]
+        assert cfg.warning_threshold == 15.0
+        assert cfg.alarm_threshold == 25.0
+        assert cfg.current_increase_percent == [1.0, 5.0]
+        assert cfg.failure_vibration == [40.0, 50.0]
+
+    def test_inverted_base_rate_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            BearingWearConfig(base_rate=[0.005, 0.001])
+
+    def test_zero_warning_threshold_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="threshold must be positive"):
+            BearingWearConfig(warning_threshold=0.0)
+
+    def test_inverted_failure_vibration_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            BearingWearConfig(failure_vibration=[50.0, 40.0])
+
+    def test_yaml_has_new_fields(self) -> None:
+        """factory.yaml bearing_wear section should include Phase 4 fields."""
+        cfg = load_config("config/factory.yaml", apply_env=False)
+        bw = cfg.scenarios.bearing_wear
+        assert bw.base_rate == [0.001, 0.005]
+        assert bw.acceleration_k == [0.005, 0.01]
+        assert bw.warning_threshold == 15.0
+        assert bw.alarm_threshold == 25.0
+
+
+class TestMicroStopConfig:
+    def test_defaults(self) -> None:
+        cfg = MicroStopConfig()
+        assert cfg.enabled is True
+        assert cfg.frequency_per_shift == [10, 50]
+        assert cfg.duration_seconds == [5.0, 30.0]
+        assert cfg.speed_drop_percent == [30.0, 80.0]
+        assert cfg.ramp_down_seconds == [2.0, 5.0]
+        assert cfg.ramp_up_seconds == [5.0, 15.0]
+
+    def test_inverted_duration_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            MicroStopConfig(duration_seconds=[30.0, 5.0])
+
+    def test_inverted_speed_drop_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            MicroStopConfig(speed_drop_percent=[80.0, 30.0])
+
+    def test_yaml_has_micro_stop(self) -> None:
+        cfg = load_config("config/factory.yaml", apply_env=False)
+        assert cfg.scenarios.micro_stop is not None
+        assert cfg.scenarios.micro_stop.enabled is True
+        assert cfg.scenarios.micro_stop.frequency_per_shift == [10, 50]
+
+    def test_foodbev_micro_stop_disabled(self) -> None:
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        assert cfg.scenarios.micro_stop is not None
+        assert cfg.scenarios.micro_stop.enabled is False
+
+    def test_micro_stop_none_by_default(self) -> None:
+        cfg = ScenariosConfig()
+        assert cfg.micro_stop is None
+
+
+class TestContextualAnomalyConfig:
+    def test_defaults(self) -> None:
+        cfg = ContextualAnomalyConfig()
+        assert cfg.enabled is True
+        assert cfg.frequency_per_week == [2, 5]
+        assert cfg.types.heater_stuck.probability == 0.3
+        assert cfg.types.pressure_bleed.probability == 0.2
+        assert cfg.types.counter_false_trigger.increment_rate == 0.1
+        assert cfg.types.hot_during_maintenance.probability == 0.15
+        assert cfg.types.vibration_during_off.probability == 0.15
+
+    def test_inverted_frequency_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            ContextualAnomalyConfig(frequency_per_week=[5, 2])
+
+    def test_invalid_probability_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="probability must be between"):
+            ContextualAnomalyConfig(
+                types={"heater_stuck": {"probability": 1.5, "duration_seconds": [300.0, 3600.0]}}  # type: ignore[arg-type]
+            )
+
+    def test_yaml_has_contextual_anomaly(self) -> None:
+        cfg = load_config("config/factory.yaml", apply_env=False)
+        assert cfg.scenarios.contextual_anomaly is not None
+        assert cfg.scenarios.contextual_anomaly.enabled is True
+        assert cfg.scenarios.contextual_anomaly.frequency_per_week == [2, 5]
+
+    def test_foodbev_contextual_anomaly_disabled(self) -> None:
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        assert cfg.scenarios.contextual_anomaly is not None
+        assert cfg.scenarios.contextual_anomaly.enabled is False
+
+    def test_contextual_anomaly_none_by_default(self) -> None:
+        cfg = ScenariosConfig()
+        assert cfg.contextual_anomaly is None
+
+
+class TestIntermittentFaultConfig:
+    def test_defaults(self) -> None:
+        cfg = IntermittentFaultConfig()
+        assert cfg.enabled is True
+        faults = cfg.faults
+        assert faults.bearing_intermittent.enabled is True
+        assert faults.bearing_intermittent.phase1_duration_hours == [168.0, 336.0]
+        assert faults.electrical_intermittent.enabled is True
+        assert faults.sensor_intermittent.enabled is False
+        assert faults.pneumatic_intermittent.phase3_transition is False
+        assert faults.pneumatic_intermittent.affected_signals == ["coder.ink_pressure"]
+
+    def test_bearing_inverted_spike_magnitude_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            BearingIntermittentConfig(spike_magnitude=[25.0, 15.0])
+
+    def test_electrical_inverted_magnitude_pct_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            ElectricalIntermittentConfig(spike_magnitude_pct=[50.0, 20.0])
+
+    def test_pneumatic_phase3_false_by_default(self) -> None:
+        cfg = PneumaticIntermittentConfig()
+        assert cfg.phase3_transition is False
+
+    def test_yaml_has_intermittent_fault(self) -> None:
+        cfg = load_config("config/factory.yaml", apply_env=False)
+        assert cfg.scenarios.intermittent_fault is not None
+        assert cfg.scenarios.intermittent_fault.enabled is True
+        faults = cfg.scenarios.intermittent_fault.faults
+        assert faults.bearing_intermittent.enabled is True
+        assert faults.sensor_intermittent.enabled is False
+        assert faults.pneumatic_intermittent.phase3_transition is False
+
+    def test_foodbev_intermittent_fault_disabled(self) -> None:
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        assert cfg.scenarios.intermittent_fault is not None
+        assert cfg.scenarios.intermittent_fault.enabled is False
+
+    def test_intermittent_fault_none_by_default(self) -> None:
+        cfg = ScenariosConfig()
+        assert cfg.intermittent_fault is None
+
+
+class TestCommDropConfig:
+    def test_defaults(self) -> None:
+        cfg = CommDropConfig()
+        assert cfg.enabled is True
+        assert cfg.frequency_per_hour == [1.0, 2.0]
+        assert cfg.duration_seconds == [1.0, 10.0]
+
+    def test_inverted_duration_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            CommDropConfig(duration_seconds=[10.0, 1.0])
+
+    def test_inverted_frequency_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            CommDropConfig(frequency_per_hour=[2.0, 1.0])
+
+
+class TestDataQualityConfig:
+    def test_defaults(self) -> None:
+        cfg = DataQualityConfig()
+        assert cfg.modbus_drop.enabled is True
+        assert cfg.modbus_drop.duration_seconds == [1.0, 10.0]
+        assert cfg.opcua_stale.duration_seconds == [5.0, 30.0]
+        assert cfg.mqtt_drop.duration_seconds == [5.0, 30.0]
+        assert cfg.noise.global_sigma_multiplier == 1.0
+        assert cfg.duplicate_probability == 0.0001
+        assert cfg.exception_probability == 0.001
+        assert cfg.partial_modbus_response.probability == 0.0001
+        assert cfg.sensor_disconnect.enabled is True
+        assert cfg.sensor_disconnect.sentinel_defaults.temperature == 6553.5
+        assert cfg.sensor_disconnect.sentinel_defaults.pressure == 0.0
+        assert cfg.sensor_disconnect.sentinel_defaults.voltage == -32768.0
+        assert cfg.stuck_sensor.enabled is True
+        assert cfg.stuck_sensor.duration_seconds == [300.0, 14400.0]
+        assert cfg.mqtt_timestamp_offset_hours == 0.0
+        assert "press.impression_count" in cfg.counter_rollover
+
+    def test_invalid_duplicate_probability(self) -> None:
+        with pytest.raises(ValidationError, match="probability must be between"):
+            DataQualityConfig(duplicate_probability=1.5)
+
+    def test_invalid_exception_probability(self) -> None:
+        with pytest.raises(ValidationError, match="probability must be between"):
+            DataQualityConfig(exception_probability=-0.1)
+
+    def test_inverted_response_delay_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            DataQualityConfig(response_delay_ms=[50, 0])
+
+    def test_partial_modbus_probability_validated(self) -> None:
+        with pytest.raises(ValidationError, match="probability must be between"):
+            PartialModbusResponseConfig(probability=2.0)
+
+    def test_sensor_disconnect_inverted_duration_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            SensorDisconnectConfig(duration_seconds=[300.0, 30.0])
+
+    def test_stuck_sensor_inverted_frequency_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            StuckSensorConfig(frequency_per_week_per_signal=[2.0, 0.0])
+
+    def test_noise_zero_multiplier_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="global_sigma_multiplier must be positive"):
+            NoiseConfig(global_sigma_multiplier=0.0)
+
+    def test_yaml_has_data_quality(self) -> None:
+        cfg = load_config("config/factory.yaml", apply_env=False)
+        dq = cfg.data_quality
+        assert dq.modbus_drop.enabled is True
+        assert dq.modbus_drop.duration_seconds == [1.0, 10.0]
+        assert dq.opcua_stale.duration_seconds == [5.0, 30.0]
+        assert dq.sensor_disconnect.sentinel_defaults.temperature == 6553.5
+        assert dq.mqtt_timestamp_offset_hours == 0.0
+
+    def test_foodbev_yaml_has_data_quality(self) -> None:
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        dq = cfg.data_quality
+        assert dq.sensor_disconnect.enabled is True
+        assert dq.stuck_sensor.enabled is True

@@ -38,7 +38,7 @@
                 "prd/10-data-quality-realism.md"
             ],
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "4.4",

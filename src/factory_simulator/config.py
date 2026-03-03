@@ -379,7 +379,13 @@ class BearingWearConfig(BaseModel):
     enabled: bool = True
     start_after_hours: float = 48.0
     duration_hours: float = 336.0
+    base_rate: list[float] = Field(default_factory=lambda: [0.001, 0.005])
+    acceleration_k: list[float] = Field(default_factory=lambda: [0.005, 0.01])
+    warning_threshold: float = 15.0
+    alarm_threshold: float = 25.0
+    current_increase_percent: list[float] = Field(default_factory=lambda: [1.0, 5.0])
     culminate_in_failure: bool = False
+    failure_vibration: list[float] = Field(default_factory=lambda: [40.0, 50.0])
 
     @field_validator("start_after_hours", "duration_hours")
     @classmethod
@@ -387,6 +393,21 @@ class BearingWearConfig(BaseModel):
         if v <= 0:
             raise ValueError("hours must be positive")
         return v
+
+    @field_validator("warning_threshold", "alarm_threshold")
+    @classmethod
+    def _positive_threshold(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("threshold must be positive")
+        return v
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> BearingWearConfig:
+        _validate_range_pair(self.base_rate, "base_rate")
+        _validate_range_pair(self.acceleration_k, "acceleration_k")
+        _validate_range_pair(self.current_increase_percent, "current_increase_percent")
+        _validate_range_pair(self.failure_vibration, "failure_vibration")
+        return self
 
 
 class InkViscosityExcursionConfig(BaseModel):
@@ -606,6 +627,466 @@ class ColdChainBreakConfig(BaseModel):
         return self
 
 
+# ---------------------------------------------------------------------------
+# Phase 4 scenario configs: micro-stop, contextual anomaly, intermittent fault
+# ---------------------------------------------------------------------------
+
+
+class MicroStopConfig(BaseModel):
+    """PRD 5.15: Micro-stop scenario (brief speed dips, no state change)."""
+
+    enabled: bool = True
+    frequency_per_shift: list[int] = Field(default_factory=lambda: [10, 50])
+    duration_seconds: list[float] = Field(default_factory=lambda: [5.0, 30.0])
+    speed_drop_percent: list[float] = Field(default_factory=lambda: [30.0, 80.0])
+    ramp_down_seconds: list[float] = Field(default_factory=lambda: [2.0, 5.0])
+    ramp_up_seconds: list[float] = Field(default_factory=lambda: [5.0, 15.0])
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> MicroStopConfig:
+        _validate_range_pair(self.frequency_per_shift, "frequency_per_shift")
+        _validate_range_pair(self.duration_seconds, "duration_seconds")
+        _validate_range_pair(self.speed_drop_percent, "speed_drop_percent")
+        _validate_range_pair(self.ramp_down_seconds, "ramp_down_seconds")
+        _validate_range_pair(self.ramp_up_seconds, "ramp_up_seconds")
+        return self
+
+
+class HeaterStuckConfig(BaseModel):
+    """Contextual anomaly type: heater stuck on during idle/maintenance."""
+
+    probability: float = 0.3
+    duration_seconds: list[float] = Field(default_factory=lambda: [300.0, 3600.0])
+
+    @field_validator("probability")
+    @classmethod
+    def _prob_range(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError("probability must be between 0.0 and 1.0")
+        return v
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> HeaterStuckConfig:
+        _validate_range_pair(self.duration_seconds, "duration_seconds")
+        return self
+
+
+class PressureBleedConfig(BaseModel):
+    """Contextual anomaly type: pressure bleed during idle."""
+
+    probability: float = 0.2
+    duration_seconds: list[float] = Field(default_factory=lambda: [600.0, 7200.0])
+
+    @field_validator("probability")
+    @classmethod
+    def _prob_range(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError("probability must be between 0.0 and 1.0")
+        return v
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> PressureBleedConfig:
+        _validate_range_pair(self.duration_seconds, "duration_seconds")
+        return self
+
+
+class CounterFalseTriggerConfig(BaseModel):
+    """Contextual anomaly type: counter incrementing when machine is off."""
+
+    probability: float = 0.2
+    duration_seconds: list[float] = Field(default_factory=lambda: [60.0, 600.0])
+    increment_rate: float = 0.1
+
+    @field_validator("probability")
+    @classmethod
+    def _prob_range(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError("probability must be between 0.0 and 1.0")
+        return v
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> CounterFalseTriggerConfig:
+        _validate_range_pair(self.duration_seconds, "duration_seconds")
+        return self
+
+
+class HotDuringMaintenanceConfig(BaseModel):
+    """Contextual anomaly type: temperature readings during maintenance state."""
+
+    probability: float = 0.15
+    duration_seconds: list[float] = Field(default_factory=lambda: [1800.0, 7200.0])
+
+    @field_validator("probability")
+    @classmethod
+    def _prob_range(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError("probability must be between 0.0 and 1.0")
+        return v
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> HotDuringMaintenanceConfig:
+        _validate_range_pair(self.duration_seconds, "duration_seconds")
+        return self
+
+
+class VibrationDuringOffConfig(BaseModel):
+    """Contextual anomaly type: vibration signal active when machine is off."""
+
+    probability: float = 0.15
+    duration_seconds: list[float] = Field(default_factory=lambda: [300.0, 1800.0])
+
+    @field_validator("probability")
+    @classmethod
+    def _prob_range(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError("probability must be between 0.0 and 1.0")
+        return v
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> VibrationDuringOffConfig:
+        _validate_range_pair(self.duration_seconds, "duration_seconds")
+        return self
+
+
+class ContextualAnomalyTypesConfig(BaseModel):
+    """Container for all 5 contextual anomaly type configurations (PRD 5.16)."""
+
+    heater_stuck: HeaterStuckConfig = Field(default_factory=HeaterStuckConfig)
+    pressure_bleed: PressureBleedConfig = Field(default_factory=PressureBleedConfig)
+    counter_false_trigger: CounterFalseTriggerConfig = Field(
+        default_factory=CounterFalseTriggerConfig
+    )
+    hot_during_maintenance: HotDuringMaintenanceConfig = Field(
+        default_factory=HotDuringMaintenanceConfig
+    )
+    vibration_during_off: VibrationDuringOffConfig = Field(
+        default_factory=VibrationDuringOffConfig
+    )
+
+
+class ContextualAnomalyConfig(BaseModel):
+    """PRD 5.16: Contextual anomaly scenario."""
+
+    enabled: bool = True
+    frequency_per_week: list[int] = Field(default_factory=lambda: [2, 5])
+    types: ContextualAnomalyTypesConfig = Field(
+        default_factory=ContextualAnomalyTypesConfig
+    )
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> ContextualAnomalyConfig:
+        _validate_range_pair(self.frequency_per_week, "frequency_per_week")
+        return self
+
+
+class BearingIntermittentConfig(BaseModel):
+    """Intermittent fault subtype: bearing vibration (PRD 5.17)."""
+
+    enabled: bool = True
+    start_after_hours: float = 24.0
+    phase1_duration_hours: list[float] = Field(default_factory=lambda: [168.0, 336.0])
+    phase1_frequency_per_day: list[float] = Field(default_factory=lambda: [1.0, 3.0])
+    phase1_spike_duration_s: list[float] = Field(default_factory=lambda: [10.0, 60.0])
+    phase2_duration_hours: list[float] = Field(default_factory=lambda: [48.0, 168.0])
+    phase2_frequency_per_day: list[float] = Field(default_factory=lambda: [5.0, 20.0])
+    phase2_spike_duration_s: list[float] = Field(default_factory=lambda: [30.0, 300.0])
+    phase3_transition: bool = True
+    affected_signals: list[str] = Field(
+        default_factory=lambda: [
+            "vibration.main_drive_x",
+            "vibration.main_drive_y",
+            "vibration.main_drive_z",
+        ]
+    )
+    spike_magnitude: list[float] = Field(default_factory=lambda: [15.0, 25.0])
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> BearingIntermittentConfig:
+        _validate_range_pair(self.phase1_duration_hours, "phase1_duration_hours")
+        _validate_range_pair(self.phase1_frequency_per_day, "phase1_frequency_per_day")
+        _validate_range_pair(self.phase1_spike_duration_s, "phase1_spike_duration_s")
+        _validate_range_pair(self.phase2_duration_hours, "phase2_duration_hours")
+        _validate_range_pair(self.phase2_frequency_per_day, "phase2_frequency_per_day")
+        _validate_range_pair(self.phase2_spike_duration_s, "phase2_spike_duration_s")
+        _validate_range_pair(self.spike_magnitude, "spike_magnitude")
+        return self
+
+
+class ElectricalIntermittentConfig(BaseModel):
+    """Intermittent fault subtype: electrical current spikes (PRD 5.17)."""
+
+    enabled: bool = True
+    start_after_hours: float = 48.0
+    phase1_duration_hours: list[float] = Field(default_factory=lambda: [72.0, 168.0])
+    phase1_frequency_per_day: list[float] = Field(default_factory=lambda: [1.0, 2.0])
+    phase1_spike_duration_s: list[float] = Field(default_factory=lambda: [1.0, 10.0])
+    phase2_duration_hours: list[float] = Field(default_factory=lambda: [24.0, 72.0])
+    phase2_frequency_per_day: list[float] = Field(default_factory=lambda: [5.0, 15.0])
+    phase2_spike_duration_s: list[float] = Field(default_factory=lambda: [2.0, 30.0])
+    phase3_transition: bool = True
+    affected_signals: list[str] = Field(
+        default_factory=lambda: ["press.main_drive_current"]
+    )
+    spike_magnitude_pct: list[float] = Field(default_factory=lambda: [20.0, 50.0])
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> ElectricalIntermittentConfig:
+        _validate_range_pair(self.phase1_duration_hours, "phase1_duration_hours")
+        _validate_range_pair(self.phase1_frequency_per_day, "phase1_frequency_per_day")
+        _validate_range_pair(self.phase1_spike_duration_s, "phase1_spike_duration_s")
+        _validate_range_pair(self.phase2_duration_hours, "phase2_duration_hours")
+        _validate_range_pair(self.phase2_frequency_per_day, "phase2_frequency_per_day")
+        _validate_range_pair(self.phase2_spike_duration_s, "phase2_spike_duration_s")
+        _validate_range_pair(self.spike_magnitude_pct, "spike_magnitude_pct")
+        return self
+
+
+class SensorIntermittentConfig(BaseModel):
+    """Intermittent fault subtype: sensor sentinel value spikes (PRD 5.17)."""
+
+    enabled: bool = False
+    start_after_hours: float = 24.0
+    phase1_duration_hours: list[float] = Field(default_factory=lambda: [48.0, 168.0])
+    phase1_frequency_per_day: list[float] = Field(default_factory=lambda: [1.0, 3.0])
+    phase1_spike_duration_s: list[float] = Field(default_factory=lambda: [1.0, 5.0])
+    phase2_duration_hours: list[float] = Field(default_factory=lambda: [24.0, 72.0])
+    phase2_frequency_per_day: list[float] = Field(default_factory=lambda: [5.0, 15.0])
+    phase2_spike_duration_s: list[float] = Field(default_factory=lambda: [2.0, 10.0])
+    phase3_transition: bool = True
+    affected_signals: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> SensorIntermittentConfig:
+        _validate_range_pair(self.phase1_duration_hours, "phase1_duration_hours")
+        _validate_range_pair(self.phase1_frequency_per_day, "phase1_frequency_per_day")
+        _validate_range_pair(self.phase1_spike_duration_s, "phase1_spike_duration_s")
+        _validate_range_pair(self.phase2_duration_hours, "phase2_duration_hours")
+        _validate_range_pair(self.phase2_frequency_per_day, "phase2_frequency_per_day")
+        _validate_range_pair(self.phase2_spike_duration_s, "phase2_spike_duration_s")
+        return self
+
+
+class PneumaticIntermittentConfig(BaseModel):
+    """Intermittent fault subtype: pneumatic pressure drops (PRD 5.17)."""
+
+    enabled: bool = True
+    start_after_hours: float = 72.0
+    phase1_duration_hours: list[float] = Field(default_factory=lambda: [168.0, 504.0])
+    phase1_frequency_per_day: list[float] = Field(default_factory=lambda: [1.0, 2.0])
+    phase1_spike_duration_s: list[float] = Field(default_factory=lambda: [2.0, 30.0])
+    phase2_duration_hours: list[float] = Field(default_factory=lambda: [48.0, 168.0])
+    phase2_frequency_per_day: list[float] = Field(default_factory=lambda: [3.0, 10.0])
+    phase2_spike_duration_s: list[float] = Field(default_factory=lambda: [5.0, 60.0])
+    phase3_transition: bool = False
+    affected_signals: list[str] = Field(
+        default_factory=lambda: ["coder.ink_pressure"]
+    )
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> PneumaticIntermittentConfig:
+        _validate_range_pair(self.phase1_duration_hours, "phase1_duration_hours")
+        _validate_range_pair(self.phase1_frequency_per_day, "phase1_frequency_per_day")
+        _validate_range_pair(self.phase1_spike_duration_s, "phase1_spike_duration_s")
+        _validate_range_pair(self.phase2_duration_hours, "phase2_duration_hours")
+        _validate_range_pair(self.phase2_frequency_per_day, "phase2_frequency_per_day")
+        _validate_range_pair(self.phase2_spike_duration_s, "phase2_spike_duration_s")
+        return self
+
+
+class IntermittentFaultFaultsConfig(BaseModel):
+    """Container for all 4 intermittent fault subtype configurations (PRD 5.17)."""
+
+    bearing_intermittent: BearingIntermittentConfig = Field(
+        default_factory=BearingIntermittentConfig
+    )
+    electrical_intermittent: ElectricalIntermittentConfig = Field(
+        default_factory=ElectricalIntermittentConfig
+    )
+    sensor_intermittent: SensorIntermittentConfig = Field(
+        default_factory=SensorIntermittentConfig
+    )
+    pneumatic_intermittent: PneumaticIntermittentConfig = Field(
+        default_factory=PneumaticIntermittentConfig
+    )
+
+
+class IntermittentFaultConfig(BaseModel):
+    """PRD 5.17: Intermittent fault scenario (three-phase progression)."""
+
+    enabled: bool = True
+    faults: IntermittentFaultFaultsConfig = Field(
+        default_factory=IntermittentFaultFaultsConfig
+    )
+
+
+# ---------------------------------------------------------------------------
+# Data quality injection configs (PRD Section 10)
+# ---------------------------------------------------------------------------
+
+
+class CommDropConfig(BaseModel):
+    """Configuration for a single protocol communication drop (PRD 10.2)."""
+
+    enabled: bool = True
+    frequency_per_hour: list[float] = Field(default_factory=lambda: [1.0, 2.0])
+    duration_seconds: list[float] = Field(default_factory=lambda: [1.0, 10.0])
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> CommDropConfig:
+        _validate_range_pair(self.frequency_per_hour, "frequency_per_hour")
+        _validate_range_pair(self.duration_seconds, "duration_seconds")
+        return self
+
+
+class NoiseConfig(BaseModel):
+    """Global noise calibration settings (PRD 10.3)."""
+
+    enabled: bool = True
+    global_sigma_multiplier: float = 1.0
+
+    @field_validator("global_sigma_multiplier")
+    @classmethod
+    def _multiplier_positive(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("global_sigma_multiplier must be positive")
+        return v
+
+
+class SensorDisconnectSentinelConfig(BaseModel):
+    """Default sentinel values per signal type (PRD 10.9)."""
+
+    temperature: float = 6553.5   # Siemens wire break convention
+    pressure: float = 0.0          # 4-20 mA open circuit
+    voltage: float = -32768.0      # int16 min, open circuit
+
+
+class SensorDisconnectConfig(BaseModel):
+    """Sensor disconnect injection config (PRD 10.9)."""
+
+    enabled: bool = True
+    frequency_per_24h_per_signal: list[float] = Field(
+        default_factory=lambda: [0.0, 1.0]
+    )
+    duration_seconds: list[float] = Field(default_factory=lambda: [30.0, 300.0])
+    sentinel_defaults: SensorDisconnectSentinelConfig = Field(
+        default_factory=SensorDisconnectSentinelConfig
+    )
+    per_signal_overrides: dict[str, float] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> SensorDisconnectConfig:
+        _validate_range_pair(
+            self.frequency_per_24h_per_signal, "frequency_per_24h_per_signal"
+        )
+        _validate_range_pair(self.duration_seconds, "duration_seconds")
+        return self
+
+
+class StuckSensorConfig(BaseModel):
+    """Stuck sensor (frozen value) injection config (PRD 10.10)."""
+
+    enabled: bool = True
+    frequency_per_week_per_signal: list[float] = Field(
+        default_factory=lambda: [0.0, 2.0]
+    )
+    duration_seconds: list[float] = Field(default_factory=lambda: [300.0, 14400.0])
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> StuckSensorConfig:
+        _validate_range_pair(
+            self.frequency_per_week_per_signal, "frequency_per_week_per_signal"
+        )
+        _validate_range_pair(self.duration_seconds, "duration_seconds")
+        return self
+
+
+class PartialModbusResponseConfig(BaseModel):
+    """Partial Modbus response injection config (PRD 10.11)."""
+
+    enabled: bool = True
+    probability: float = 0.0001
+
+    @field_validator("probability")
+    @classmethod
+    def _prob_range(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError("probability must be between 0.0 and 1.0")
+        return v
+
+
+class DataQualityConfig(BaseModel):
+    """Root data quality injection configuration (PRD Section 10, Appendix D)."""
+
+    # Communication drops per protocol
+    modbus_drop: CommDropConfig = Field(
+        default_factory=lambda: CommDropConfig(
+            enabled=True,
+            frequency_per_hour=[1.0, 2.0],
+            duration_seconds=[1.0, 10.0],
+        )
+    )
+    opcua_stale: CommDropConfig = Field(
+        default_factory=lambda: CommDropConfig(
+            enabled=True,
+            frequency_per_hour=[1.0, 2.0],
+            duration_seconds=[5.0, 30.0],
+        )
+    )
+    mqtt_drop: CommDropConfig = Field(
+        default_factory=lambda: CommDropConfig(
+            enabled=True,
+            frequency_per_hour=[1.0, 2.0],
+            duration_seconds=[5.0, 30.0],
+        )
+    )
+
+    # Noise calibration
+    noise: NoiseConfig = Field(default_factory=NoiseConfig)
+
+    # Duplicate timestamps (PRD 10.5)
+    duplicate_probability: float = 0.0001
+
+    # Modbus exception / partial response (PRD 10.6, 10.11)
+    exception_probability: float = 0.001
+    timeout_probability: float = 0.0005
+    response_delay_ms: list[int] = Field(default_factory=lambda: [0, 50])
+    partial_modbus_response: PartialModbusResponseConfig = Field(
+        default_factory=PartialModbusResponseConfig
+    )
+
+    # Counter rollover overrides (PRD 10.4)
+    counter_rollover: dict[str, float] = Field(
+        default_factory=lambda: {
+            "press.impression_count": 4294967295.0,
+            "press.good_count": 4294967295.0,
+            "press.waste_count": 4294967295.0,
+            "coder.prints_total": 4294967295.0,
+            "energy.cumulative_kwh": 999999.0,
+        }
+    )
+
+    # Sensor events (PRD 10.9, 10.10)
+    sensor_disconnect: SensorDisconnectConfig = Field(
+        default_factory=SensorDisconnectConfig
+    )
+    stuck_sensor: StuckSensorConfig = Field(default_factory=StuckSensorConfig)
+
+    # Timezone offset for MQTT timestamps (PRD 10.7)
+    mqtt_timestamp_offset_hours: float = 0.0
+
+    @field_validator("duplicate_probability", "exception_probability", "timeout_probability")
+    @classmethod
+    def _prob_range(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError("probability must be between 0.0 and 1.0")
+        return v
+
+    @model_validator(mode="after")
+    def _delay_range_valid(self) -> DataQualityConfig:
+        _validate_range_pair(self.response_delay_ms, "response_delay_ms")
+        return self
+
+
 class ScenariosConfig(BaseModel):
     """Container for all scenario configurations."""
 
@@ -625,6 +1106,11 @@ class ScenariosConfig(BaseModel):
     cold_start_spike: ColdStartSpikeConfig = Field(default_factory=ColdStartSpikeConfig)
     coder_depletion: CoderDepletionConfig = Field(default_factory=CoderDepletionConfig)
     material_splice: MaterialSpliceConfig = Field(default_factory=MaterialSpliceConfig)
+
+    # Phase 4 advanced scenarios — optional, None when not configured
+    micro_stop: MicroStopConfig | None = None
+    contextual_anomaly: ContextualAnomalyConfig | None = None
+    intermittent_fault: IntermittentFaultConfig | None = None
 
     # F&B scenarios (PRD 5.14) — optional, None when using packaging profile
     batch_cycle: BatchCycleConfig | None = None
@@ -682,6 +1168,7 @@ class FactoryConfig(BaseModel):
     equipment: dict[str, EquipmentConfig] = Field(default_factory=dict)
     scenarios: ScenariosConfig = Field(default_factory=ScenariosConfig)
     shifts: ShiftsConfig = Field(default_factory=ShiftsConfig)
+    data_quality: DataQualityConfig = Field(default_factory=DataQualityConfig)
 
 
 # ---------------------------------------------------------------------------

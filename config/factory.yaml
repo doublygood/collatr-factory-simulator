@@ -847,7 +847,13 @@ scenarios:
     enabled: true
     start_after_hours: 48
     duration_hours: 336
+    base_rate: [0.001, 0.005]
+    acceleration_k: [0.005, 0.01]
+    warning_threshold: 15.0
+    alarm_threshold: 25.0
+    current_increase_percent: [1.0, 5.0]
     culminate_in_failure: false
+    failure_vibration: [40.0, 50.0]
 
   ink_viscosity_excursion:
     enabled: true
@@ -876,6 +882,147 @@ scenarios:
     idle_threshold_minutes: 30
     spike_duration_seconds: [2.0, 5.0]
     spike_magnitude: [1.5, 2.0]
+
+  # Phase 4: Micro-stops (PRD 5.15)
+  micro_stop:
+    enabled: true
+    frequency_per_shift: [10, 50]
+    duration_seconds: [5.0, 30.0]
+    speed_drop_percent: [30.0, 80.0]
+    ramp_down_seconds: [2.0, 5.0]
+    ramp_up_seconds: [5.0, 15.0]
+
+  # Phase 4: Contextual anomalies (PRD 5.16)
+  contextual_anomaly:
+    enabled: true
+    frequency_per_week: [2, 5]
+    types:
+      heater_stuck:
+        probability: 0.3
+        duration_seconds: [300.0, 3600.0]
+      pressure_bleed:
+        probability: 0.2
+        duration_seconds: [600.0, 7200.0]
+      counter_false_trigger:
+        probability: 0.2
+        duration_seconds: [60.0, 600.0]
+        increment_rate: 0.1
+      hot_during_maintenance:
+        probability: 0.15
+        duration_seconds: [1800.0, 7200.0]
+      vibration_during_off:
+        probability: 0.15
+        duration_seconds: [300.0, 1800.0]
+
+  # Phase 4: Intermittent faults (PRD 5.17)
+  intermittent_fault:
+    enabled: true
+    faults:
+      bearing_intermittent:
+        enabled: true
+        start_after_hours: 24
+        phase1_duration_hours: [168.0, 336.0]
+        phase1_frequency_per_day: [1.0, 3.0]
+        phase1_spike_duration_s: [10.0, 60.0]
+        phase2_duration_hours: [48.0, 168.0]
+        phase2_frequency_per_day: [5.0, 20.0]
+        phase2_spike_duration_s: [30.0, 300.0]
+        phase3_transition: true
+        affected_signals:
+          - "vibration.main_drive_x"
+          - "vibration.main_drive_y"
+          - "vibration.main_drive_z"
+        spike_magnitude: [15.0, 25.0]
+      electrical_intermittent:
+        enabled: true
+        start_after_hours: 48
+        phase1_duration_hours: [72.0, 168.0]
+        phase1_frequency_per_day: [1.0, 2.0]
+        phase1_spike_duration_s: [1.0, 10.0]
+        phase2_duration_hours: [24.0, 72.0]
+        phase2_frequency_per_day: [5.0, 15.0]
+        phase2_spike_duration_s: [2.0, 30.0]
+        phase3_transition: true
+        affected_signals:
+          - "press.main_drive_current"
+        spike_magnitude_pct: [20.0, 50.0]
+      sensor_intermittent:
+        enabled: false
+        phase1_duration_hours: [48.0, 168.0]
+        phase1_frequency_per_day: [1.0, 3.0]
+        phase1_spike_duration_s: [1.0, 5.0]
+        phase2_duration_hours: [24.0, 72.0]
+        phase2_frequency_per_day: [5.0, 15.0]
+        phase2_spike_duration_s: [2.0, 10.0]
+        phase3_transition: true
+      pneumatic_intermittent:
+        enabled: true
+        start_after_hours: 72
+        phase1_duration_hours: [168.0, 504.0]
+        phase1_frequency_per_day: [1.0, 2.0]
+        phase1_spike_duration_s: [2.0, 30.0]
+        phase2_duration_hours: [48.0, 168.0]
+        phase2_frequency_per_day: [3.0, 10.0]
+        phase2_spike_duration_s: [5.0, 60.0]
+        phase3_transition: false
+        affected_signals:
+          - "coder.ink_pressure"
+
+# ---------------------------------------------------------------------------
+# Data Quality Injection (PRD Section 10, Appendix D)
+# ---------------------------------------------------------------------------
+
+data_quality:
+  modbus_drop:
+    enabled: true
+    frequency_per_hour: [1.0, 2.0]
+    duration_seconds: [1.0, 10.0]
+
+  opcua_stale:
+    enabled: true
+    frequency_per_hour: [1.0, 2.0]
+    duration_seconds: [5.0, 30.0]
+
+  mqtt_drop:
+    enabled: true
+    frequency_per_hour: [1.0, 2.0]
+    duration_seconds: [5.0, 30.0]
+
+  noise:
+    enabled: true
+    global_sigma_multiplier: 1.0
+
+  duplicate_probability: 0.0001
+  exception_probability: 0.001
+  timeout_probability: 0.0005
+  response_delay_ms: [0, 50]
+
+  partial_modbus_response:
+    enabled: true
+    probability: 0.0001
+
+  counter_rollover:
+    press.impression_count: 4294967295
+    press.good_count: 4294967295
+    press.waste_count: 4294967295
+    coder.prints_total: 4294967295
+    energy.cumulative_kwh: 999999.0
+
+  sensor_disconnect:
+    enabled: true
+    frequency_per_24h_per_signal: [0.0, 1.0]
+    duration_seconds: [30.0, 300.0]
+    sentinel_defaults:
+      temperature: 6553.5
+      pressure: 0.0
+      voltage: -32768.0
+
+  stuck_sensor:
+    enabled: true
+    frequency_per_week_per_signal: [0.0, 2.0]
+    duration_seconds: [300.0, 14400.0]
+
+  mqtt_timestamp_offset_hours: 0
 
 # ---------------------------------------------------------------------------
 # Shifts (PRD Section 6.2)

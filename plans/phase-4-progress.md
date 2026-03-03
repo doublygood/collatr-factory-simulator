@@ -5,7 +5,7 @@
 ## Tasks
 - [x] 4.1: Poisson Scheduling Engine
 - [x] 4.2: Scenario Priority and Conflict Resolution
-- [ ] 4.3: Phase 4 Config Models
+- [x] 4.3: Phase 4 Config Models
 - [ ] 4.4: Motor Bearing Wear Scenario
 - [ ] 4.5: Micro-Stops Scenario
 - [ ] 4.6: Contextual Anomalies Scenario
@@ -26,6 +26,47 @@
 - gutter_fault probability 18x too high → Fix in Task 4.13
 
 ## Notes
+
+### Task 4.3 — Phase 4 Config Models (COMPLETE)
+
+Added to `src/factory_simulator/config.py`:
+- **Updated `BearingWearConfig`**: added `base_rate`, `acceleration_k`, `warning_threshold`,
+  `alarm_threshold`, `current_increase_percent`, `failure_vibration` fields with validators.
+- **`MicroStopConfig`**: frequency_per_shift, duration_seconds, speed_drop_percent, ramp
+  down/up seconds.
+- **`ContextualAnomalyConfig`** + 5 nested type configs: `HeaterStuckConfig`,
+  `PressureBleedConfig`, `CounterFalseTriggerConfig`, `HotDuringMaintenanceConfig`,
+  `VibrationDuringOffConfig`. All nested in `ContextualAnomalyTypesConfig`.
+- **`IntermittentFaultConfig`** + 4 subtypes: `BearingIntermittentConfig`,
+  `ElectricalIntermittentConfig`, `SensorIntermittentConfig`, `PneumaticIntermittentConfig`.
+  Nested in `IntermittentFaultFaultsConfig`. Sensor starts disabled; pneumatic has
+  phase3_transition=False.
+- **`DataQualityConfig`**: `CommDropConfig` (modbus_drop/opcua_stale/mqtt_drop with
+  per-protocol duration defaults), `NoiseConfig`, `SensorDisconnectConfig` (with
+  `SensorDisconnectSentinelConfig` sub-model), `StuckSensorConfig`,
+  `PartialModbusResponseConfig`. Plus scalar fields: duplicate_probability,
+  exception_probability, timeout_probability, response_delay_ms, counter_rollover dict,
+  mqtt_timestamp_offset_hours.
+- **`ScenariosConfig`**: added `micro_stop`, `contextual_anomaly`, `intermittent_fault`
+  (all `| None = None`, following F&B scenario pattern).
+- **`FactoryConfig`**: added `data_quality: DataQualityConfig`.
+
+Updated `config/factory.yaml`:
+- bearing_wear: added base_rate, acceleration_k, warning_threshold, alarm_threshold,
+  current_increase_percent, failure_vibration
+- Added micro_stop, contextual_anomaly, intermittent_fault scenario sections (enabled)
+- Added data_quality section with all defaults from PRD Appendix D
+
+Updated `config/factory-foodbev.yaml`:
+- bearing_wear: added new fields (enabled=false)
+- Added micro_stop, contextual_anomaly, intermittent_fault (all disabled)
+- Added data_quality section (sensor/stuck enabled, packaging-specific counters omitted)
+
+37 new tests in `TestBearingWearConfigUpdated`, `TestMicroStopConfig`,
+`TestContextualAnomalyConfig`, `TestIntermittentFaultConfig`, `TestCommDropConfig`,
+`TestDataQualityConfig` covering defaults, validation, and YAML loading.
+
+2118 tests passing.
 
 ### Task 4.2 — Scenario Priority and Conflict Resolution (COMPLETE)
 

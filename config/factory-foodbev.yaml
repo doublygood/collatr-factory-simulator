@@ -1045,6 +1045,12 @@ scenarios:
     enabled: false
   bearing_wear:
     enabled: false
+    base_rate: [0.001, 0.005]
+    acceleration_k: [0.005, 0.01]
+    warning_threshold: 15.0
+    alarm_threshold: 25.0
+    current_increase_percent: [1.0, 5.0]
+    failure_vibration: [40.0, 50.0]
   ink_viscosity_excursion:
     enabled: false
   registration_drift:
@@ -1097,6 +1103,76 @@ scenarios:
     enabled: true
     frequency_per_month: [1, 2]
     duration_seconds: [1800, 7200]
+
+  # Phase 4: Micro-stops (disabled for F&B)
+  micro_stop:
+    enabled: false
+    frequency_per_shift: [10, 50]
+    duration_seconds: [5.0, 30.0]
+    speed_drop_percent: [30.0, 80.0]
+    ramp_down_seconds: [2.0, 5.0]
+    ramp_up_seconds: [5.0, 15.0]
+
+  # Phase 4: Contextual anomalies (disabled for F&B)
+  contextual_anomaly:
+    enabled: false
+    frequency_per_week: [2, 5]
+
+  # Phase 4: Intermittent faults (disabled for F&B)
+  intermittent_fault:
+    enabled: false
+
+# ---------------------------------------------------------------------------
+# Data Quality Injection (PRD Section 10, Appendix D)
+# ---------------------------------------------------------------------------
+
+data_quality:
+  modbus_drop:
+    enabled: true
+    frequency_per_hour: [1.0, 2.0]
+    duration_seconds: [1.0, 10.0]
+
+  opcua_stale:
+    enabled: true
+    frequency_per_hour: [1.0, 2.0]
+    duration_seconds: [5.0, 30.0]
+
+  mqtt_drop:
+    enabled: true
+    frequency_per_hour: [1.0, 2.0]
+    duration_seconds: [5.0, 30.0]
+
+  noise:
+    enabled: true
+    global_sigma_multiplier: 1.0
+
+  duplicate_probability: 0.0001
+  exception_probability: 0.001
+  timeout_probability: 0.0005
+  response_delay_ms: [0, 50]
+
+  partial_modbus_response:
+    enabled: true
+    probability: 0.0001
+
+  counter_rollover:
+    energy.cumulative_kwh: 999999.0
+
+  sensor_disconnect:
+    enabled: true
+    frequency_per_24h_per_signal: [0.0, 1.0]
+    duration_seconds: [30.0, 300.0]
+    sentinel_defaults:
+      temperature: 6553.5
+      pressure: 0.0
+      voltage: -32768.0
+
+  stuck_sensor:
+    enabled: true
+    frequency_per_week_per_signal: [0.0, 2.0]
+    duration_seconds: [300.0, 14400.0]
+
+  mqtt_timestamp_offset_hours: 0
 
 # ---------------------------------------------------------------------------
 # Shifts (PRD Section 6.2)
