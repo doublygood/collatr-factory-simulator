@@ -39,6 +39,7 @@ class SimulationConfig(BaseModel):
     tick_interval_ms: int = 100
     start_time: str | None = None
     log_level: str = "info"
+    sim_duration_s: float | None = None
 
     @field_validator("time_scale")
     @classmethod

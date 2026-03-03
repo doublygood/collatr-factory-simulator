@@ -1,9 +1,9 @@
 # Phase 4: Full Scenario System and Data Quality — Progress
 
-## Status: NOT STARTED
+## Status: In Progress
 
 ## Tasks
-- [ ] 4.1: Poisson Scheduling Engine
+- [x] 4.1: Poisson Scheduling Engine
 - [ ] 4.2: Scenario Priority and Conflict Resolution
 - [ ] 4.3: Phase 4 Config Models
 - [ ] 4.4: Motor Bearing Wear Scenario
@@ -27,4 +27,16 @@
 
 ## Notes
 
-(Tasks will be logged here as they are completed)
+### Task 4.1 — Poisson Scheduling Engine (COMPLETE)
+
+Implementation was already present in `scenario_engine.py` and `data_engine.py` from prior work:
+- `_poisson_starts()` generates Poisson inter-arrival times via `rng.exponential(mean_interval)`
+- `_spawn_rng()` uses `SeedSequence.spawn(1)[0]` (Y1 fix)
+- `ScenarioEngine.__init__` accepts `sim_duration_s` parameter (Y3 fix)
+- `DataEngine` passes `config.simulation.sim_duration_s` (or 8h default) to `ScenarioEngine`
+- 21 new tests in `test_scenario_engine.py` covering KS test, min-gap, cross-shift, determinism, sim_duration
+
+One test fix required: `test_generates_timeline_from_config` in `test_basic_scenarios.py` used
+`sim_duration_s=8*3600`. With Poisson scheduling, P(0 UnplannedStops in 8h) ≈ 22% for the
+default frequency [1,2]/shift. Extended to `sim_duration_s=7*86400` (1 week) to make the
+presence assertion statistically robust.

@@ -122,10 +122,13 @@ class DataEngine:
         self._ground_truth = ground_truth
 
         # Master RNG -- child rngs are spawned per generator (Rule 13)
+        # Use SeedSequence hierarchy for proper statistical independence (Y1 fix)
         seed = config.simulation.random_seed
-        self._root_rng = np.random.default_rng(
-            np.random.SeedSequence(seed) if seed is not None else None
+        self._root_ss = (
+            np.random.SeedSequence(seed) if seed is not None
+            else np.random.SeedSequence()
         )
+        self._root_rng = np.random.default_rng(self._root_ss)
 
         # Generator bookkeeping
         self._generators: list[EquipmentGenerator] = []
@@ -135,10 +138,18 @@ class DataEngine:
         self._build_generators()
 
         # Scenario engine (PRD 8.2 step 3: evaluated before generators)
+        # Y1: Use SeedSequence.spawn for child RNG
+        # Y3: Pass sim_duration_s from config when set
+        scenario_rng = np.random.default_rng(self._root_ss.spawn(1)[0])
         self._scenario_engine = ScenarioEngine(
             scenarios_config=config.scenarios,
             shifts_config=config.shifts,
-            rng=np.random.default_rng(self._root_rng.integers(0, 2**63)),
+            rng=scenario_rng,
+            sim_duration_s=(
+                config.simulation.sim_duration_s
+                if config.simulation.sim_duration_s is not None
+                else 8 * 3600  # default: one shift
+            ),
             ground_truth=ground_truth,
         )
 
@@ -198,10 +209,8 @@ class DataEngine:
                 )
                 continue
 
-            # Spawn an isolated child RNG per generator (Rule 13)
-            child_rng = np.random.default_rng(
-                self._root_rng.integers(0, 2**63)
-            )
+            # Spawn an isolated child RNG per generator (Rule 13, Y1 fix)
+            child_rng = np.random.default_rng(self._root_ss.spawn(1)[0])
 
             gen = gen_class(eq_id, eq_cfg, child_rng)
             self._generators.append(gen)

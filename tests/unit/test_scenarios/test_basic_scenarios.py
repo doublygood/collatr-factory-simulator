@@ -546,7 +546,7 @@ class TestScenarioEngine:
             scenarios_config=scenarios_cfg,
             shifts_config=shifts_cfg,
             rng=rng,
-            sim_duration_s=8 * 3600,
+            sim_duration_s=7 * 86400,  # 1 week: guarantees all Poisson types appear
         )
 
         assert len(se.scenarios) > 0
