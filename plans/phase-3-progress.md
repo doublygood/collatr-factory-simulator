@@ -19,7 +19,7 @@
 - [x] 3.14: F&B OPC-UA + MQTT Validation Tests
 - [x] 3.15: Batch Cycle Scenario (Mixer)
 - [x] 3.16: Oven Thermal Excursion Scenario
-- [ ] 3.17: Fill Weight Drift Scenario
+- [x] 3.17: Fill Weight Drift Scenario
 - [ ] 3.18: Seal Integrity Failure Scenario
 - [ ] 3.19: Chiller Door Alarm Scenario
 - [ ] 3.20: CIP Cycle Scenario
@@ -307,3 +307,22 @@ All 1820 tests pass.
 - Uses F&B config (factory-foodbev.yaml); packages config used for NoMixer test
 
 All 1865 tests pass.
+
+### Task 3.17: Fill Weight Drift Scenario
+
+`FillWeightDrift` in `src/factory_simulator/scenarios/fill_weight_drift.py` — fill weight mean drifts from target.
+
+- **Mechanism**: modifies `filler._fill_giveaway` each tick to shift the Gaussian mean used for per-item draw `Normal(fill_target + fill_giveaway, sigma)`. Drift is a linear ramp capped at `max_drift`.
+- **Direction**: +1 for over-weight drift, -1 for under-weight, random by default
+- **Drift rate**: 0.05-0.2 g/min (PRD 5.14.3)
+- **Duration**: 10-60 min (PRD 5.14.3)
+- **Recovery**: on `_on_complete`, saved `_fill_giveaway` is restored (operator recalibration)
+- **Reject count**: increases naturally as more items fall outside fill_tolerance (no explicit intervention needed — driven by shifted mean)
+- **Ground truth**: logs `signal_anomaly` on `filler.fill_weight` at activation
+- **Graceful exit**: if no FillerGenerator found in engine (e.g. packaging config), scenario completes immediately
+
+**Tests** (`tests/unit/test_scenarios/test_fill_weight_drift.py`):
+- 17 tests in 5 classes: Lifecycle, Effect, Recovery, Defaults, NoFiller
+- Key tests: giveaway increases/decreases per direction, drift proportional to rate×elapsed, capped at max_drift, giveaway restored exactly after completion, mid-scenario elevation observed then restored, default ranges match PRD, graceful completion without filler
+
+All 1830 non-integration tests pass (17 new).

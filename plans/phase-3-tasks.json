@@ -170,7 +170,7 @@
       "description": "Fill weight mean drifts from target at 0.05-0.2 g/min. Reject count increases proportionally. Recovery after 10-60 min via operator recalibration.",
       "prd_refs": ["prd/05-scenario-system.md (5.14.3)"],
       "depends_on": ["3.6"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.18",
