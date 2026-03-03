@@ -305,10 +305,11 @@ class ColdStart(Scenario):
         # Ground truth: energy and current spike anomalies (PRD 4.7)
         gt = engine.ground_truth
         if gt is not None:
-            gt.log_signal_anomaly(
-                sim_time, "energy.line_power", "spike",
-                spike_power, [0.0, normal_power],
-            )
+            if energy is not None:
+                gt.log_signal_anomaly(
+                    sim_time, "energy.line_power", "spike",
+                    spike_power, [0.0, normal_power],
+                )
             gt.log_signal_anomaly(
                 sim_time, "press.main_drive_current", "spike",
                 spike_current, [0.0, normal_current],

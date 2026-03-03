@@ -42,6 +42,11 @@ if TYPE_CHECKING:
     from factory_simulator.config import FactoryConfig
     from factory_simulator.store import SignalStore, SignalValue
 
+# Reference epoch for converting sim_time to ISO 8601 timestamps.
+# Matches the reference epoch in GroundTruthLogger._format_time().
+# Rule 6: all signal-related timestamps use simulated time, not wall clock.
+_REFERENCE_EPOCH_TS: float = datetime(2026, 1, 1, tzinfo=UTC).timestamp()
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -138,7 +143,21 @@ def _is_event_driven(relative: str) -> bool:
     return relative in _EVENT_DRIVEN_SUFFIXES
 
 
-def make_payload(value: float | str, quality: str, unit: str) -> bytes:
+def _sim_time_to_iso(sim_time: float) -> str:
+    """Convert sim_time (seconds from simulation start) to ISO 8601 UTC.
+
+    Uses the same reference epoch (2026-01-01T00:00:00Z) as the ground
+    truth logger, ensuring cross-protocol timestamp consistency.
+
+    Rule 6: all timestamps in signal payloads use simulated time.
+    """
+    dt_obj = datetime.fromtimestamp(_REFERENCE_EPOCH_TS + sim_time, tz=UTC)
+    return dt_obj.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt_obj.microsecond // 1000:03d}Z"
+
+
+def make_payload(
+    value: float | str, quality: str, unit: str, sim_time: float,
+) -> bytes:
     """Build a JSON payload per PRD Section 3.3.4.
 
     Parameters
@@ -149,6 +168,9 @@ def make_payload(value: float | str, quality: str, unit: str) -> bytes:
         Quality flag: ``'good'``, ``'uncertain'``, or ``'bad'``.
     unit:
         Engineering unit string (e.g. ``'C'``, ``'m/min'``).
+    sim_time:
+        Simulated time in seconds (from SignalValue.timestamp).
+        Converted to ISO 8601 using the reference epoch (Rule 6).
 
     Returns
     -------
@@ -156,8 +178,7 @@ def make_payload(value: float | str, quality: str, unit: str) -> bytes:
         UTF-8 encoded JSON with fields: ``timestamp``, ``value``,
         ``unit``, ``quality``.
     """
-    now = datetime.now(UTC)
-    ts = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+    ts = _sim_time_to_iso(sim_time)
     payload_dict = {
         "timestamp": ts,
         "value": value,
@@ -168,7 +189,7 @@ def make_payload(value: float | str, quality: str, unit: str) -> bytes:
 
 
 def make_batch_vibration_payload(
-    x: float, y: float, z: float, quality: str, unit: str
+    x: float, y: float, z: float, quality: str, unit: str, sim_time: float,
 ) -> bytes:
     """Build a batch vibration JSON payload per PRD Section 3.3.6.
 
@@ -180,6 +201,9 @@ def make_batch_vibration_payload(
         Combined quality flag: ``'good'``, ``'uncertain'``, or ``'bad'``.
     unit:
         Engineering unit string (e.g. ``'mm/s'``).
+    sim_time:
+        Simulated time in seconds (from SignalValue.timestamp).
+        Converted to ISO 8601 using the reference epoch (Rule 6).
 
     Returns
     -------
@@ -187,8 +211,7 @@ def make_batch_vibration_payload(
         UTF-8 encoded JSON with fields: ``timestamp``, ``x``, ``y``, ``z``,
         ``unit``, ``quality``.
     """
-    now = datetime.now(UTC)
-    ts = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+    ts = _sim_time_to_iso(sim_time)
     payload_dict = {
         "timestamp": ts,
         "x": x,
@@ -427,7 +450,7 @@ class MqttPublisher:
 
     def _publish_entry(self, entry: TopicEntry, sv: SignalValue) -> None:
         """Publish one signal value to its MQTT topic."""
-        payload = make_payload(sv.value, sv.quality, entry.unit)
+        payload = make_payload(sv.value, sv.quality, entry.unit, sv.timestamp)
         self._client.publish(
             entry.topic,
             payload=payload,
@@ -459,9 +482,11 @@ class MqttPublisher:
             return
 
         quality = _worst_quality([sv_x.quality, sv_y.quality, sv_z.quality])
+        # Use the most recent timestamp among the three axes (Rule 6)
+        sim_time = max(sv_x.timestamp, sv_y.timestamp, sv_z.timestamp)
         payload = make_batch_vibration_payload(
             float(sv_x.value), float(sv_y.value), float(sv_z.value),
-            quality, entry.unit,
+            quality, entry.unit, sim_time,
         )
         self._client.publish(
             entry.topic, payload=payload, qos=entry.qos, retain=entry.retain

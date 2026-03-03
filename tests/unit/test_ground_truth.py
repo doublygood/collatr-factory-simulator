@@ -685,7 +685,7 @@ class TestScenarioIntermediateEvents:
         records = _read_lines(tmp_log)
         anomalies = [r for r in records if r["event"] == "signal_anomaly"]
         assert len(anomalies) >= 1
-        assert anomalies[0]["signal"].startswith("press.dryer_zone")
+        assert anomalies[0]["signal"].startswith("press.dryer_temp_zone_")
         assert anomalies[0]["anomaly_type"] == "drift"
 
     def test_ink_excursion_emits_signal_anomaly(

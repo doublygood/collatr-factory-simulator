@@ -517,3 +517,45 @@ Review performed after all 16 tasks completed. See `plans/phase-2-review.md` for
 - `ruff check src tests`: All checks passed
 - `mypy src`: Success, no issues found in 48 source files
 - `pytest`: 1481 passed (7 new tests from code review fixes)
+
+---
+
+## Independent Review Findings (addressed)
+
+See `plans/phase-2-independent-review.md` for full findings (3 RED, 6 YELLOW, 10 GREEN).
+
+### RED findings (fixed)
+
+**R1: MQTT payload timestamps use wall clock (Rule 6 violation)**
+- Added `_sim_time_to_iso()` helper and `_REFERENCE_EPOCH_TS` constant to `mqtt_publisher.py`
+- Changed `make_payload()` and `make_batch_vibration_payload()` to accept `sim_time` parameter instead of calling `datetime.now(UTC)`
+- `_publish_entry()` now passes `sv.timestamp` (sim_time from SignalValue)
+- `_publish_batch_vib()` uses `max(sv_x.timestamp, sv_y.timestamp, sv_z.timestamp)`
+- Uses same reference epoch (2026-01-01T00:00:00Z) as `GroundTruthLogger._format_time()` for cross-protocol timestamp consistency
+- Added 2 new unit tests verifying sim_time-based timestamps
+
+**R2: DryerDrift uses wrong signal names in ground truth**
+- Fixed `_AFFECTED_SIGNALS["DryerDrift"]` in `scenario_engine.py`: `press.dryer_zone1_temp` → `press.dryer_temp_zone_1` (and zones 2, 3)
+- Fixed `dryer_drift.py` `_on_activate()`: `f"press.dryer_zone{self._zone}_temp"` → `f"press.dryer_temp_zone_{self._zone}"`
+- Fixed test assertion in `test_ground_truth.py`
+- Also fixed `_AFFECTED_SIGNALS["JobChangeover"]`: `press.prints_total` (non-existent) → `press.impression_count`, `press.good_count`, `press.waste_count` (actual affected counters)
+
+**R3: Phase 2 scenarios not auto-scheduled (documented as deferred)**
+- Added documentation comment in `_generate_timeline()` explaining Phase 2 scenarios use `add_scenario()` for manual scheduling
+- PRD Appendix F explicitly assigns full scenario scheduling engine (Poisson inter-arrival, priority rules) to Phase 4
+- Not a code defect; this is correct phasing per the PRD
+
+### YELLOW findings (addressed)
+
+**Y2: ColdStart `spike_power` potentially unbound** (fixed)
+- Moved `log_signal_anomaly("energy.line_power", ...)` inside the `if energy is not None:` block in `cold_start.py`
+
+**Y4: `_format_time` docstring contradicts implementation** (fixed)
+- Updated docstring to: "Always treats sim_time as seconds from the reference epoch (2026-01-01T00:00:00Z)."
+
+**Y1, Y3, Y5, Y6**: Deferred per review recommendation (tracked for Phase 3/4).
+
+### Final CI results after independent review fixes
+- `ruff check src tests`: All checks passed
+- `mypy src`: Success, no issues found in 48 source files
+- `pytest`: 1483 passed (2 new sim_time verification tests)

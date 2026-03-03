@@ -145,6 +145,14 @@ class ScenarioEngine:
         Schedules scenarios based on their configured frequency and
         duration ranges.  Scenarios are spread across the simulation
         duration with random spacing.
+
+        Note: Only Phase 1 scenarios (unplanned stops, job changeovers,
+        shift changes) are auto-scheduled here.  Phase 2 scenarios
+        (WebBreak, DryerDrift, InkExcursion, RegistrationDrift, ColdStart,
+        CoderDepletion, MaterialSplice) can be added manually via
+        ``add_scenario()``.  Full auto-scheduling with Poisson
+        inter-arrival times and priority rules is deferred to Phase 4
+        per PRD Appendix F.
         """
         self._schedule_unplanned_stops()
         self._schedule_job_changeovers()
@@ -276,8 +284,8 @@ _AFFECTED_SIGNALS: dict[str, list[str]] = {
         "press.machine_state", "press.web_break", "press.fault_active",
     ],
     "DryerDrift": [
-        "press.dryer_zone1_temp", "press.dryer_zone2_temp",
-        "press.dryer_zone3_temp", "press.waste_count",
+        "press.dryer_temp_zone_1", "press.dryer_temp_zone_2",
+        "press.dryer_temp_zone_3", "press.waste_count",
     ],
     "InkExcursion": [
         "press.ink_viscosity", "press.registration_error_x",
@@ -303,7 +311,7 @@ _AFFECTED_SIGNALS: dict[str, list[str]] = {
     ],
     "JobChangeover": [
         "press.machine_state", "press.line_speed",
-        "press.prints_total",
+        "press.impression_count", "press.good_count", "press.waste_count",
     ],
     "ShiftChange": [
         "press.machine_state", "press.line_speed",

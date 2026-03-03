@@ -284,35 +284,35 @@ class TestMakePayload:
     """make_payload produces compliant PRD 3.3.4 JSON payloads."""
 
     def test_payload_is_valid_json(self):
-        data = json.loads(make_payload(42.7, "good", "C"))
+        data = json.loads(make_payload(42.7, "good", "C", sim_time=0.0))
         assert isinstance(data, dict)
 
     def test_payload_has_required_fields(self):
-        data = json.loads(make_payload(42.7, "good", "C"))
+        data = json.loads(make_payload(42.7, "good", "C", sim_time=0.0))
         assert set(data.keys()) == {"timestamp", "value", "unit", "quality"}
 
     def test_value_is_numeric_not_string(self):
-        data = json.loads(make_payload(42.7, "good", "C"))
+        data = json.loads(make_payload(42.7, "good", "C", sim_time=0.0))
         assert isinstance(data["value"], float | int)
         assert data["value"] == pytest.approx(42.7)
 
     def test_integer_value(self):
-        data = json.loads(make_payload(100, "good", "count"))
+        data = json.loads(make_payload(100, "good", "count", sim_time=0.0))
         assert isinstance(data["value"], int | float)
         assert data["value"] == 100
 
     def test_quality_field(self):
         for quality in ("good", "uncertain", "bad"):
-            data = json.loads(make_payload(1.0, quality, "C"))
+            data = json.loads(make_payload(1.0, quality, "C", sim_time=0.0))
             assert data["quality"] == quality
 
     def test_unit_field(self):
-        data = json.loads(make_payload(35.0, "good", "m/min"))
+        data = json.loads(make_payload(35.0, "good", "m/min", sim_time=0.0))
         assert data["unit"] == "m/min"
 
     def test_timestamp_is_iso8601_utc(self):
         from datetime import datetime
-        data = json.loads(make_payload(1.0, "good", "C"))
+        data = json.loads(make_payload(1.0, "good", "C", sim_time=0.0))
         ts = data["timestamp"]
         # Must end in Z (UTC) and contain T
         assert ts.endswith("Z")
@@ -323,13 +323,20 @@ class TestMakePayload:
         assert parsed.tzinfo is not None
 
     def test_timestamp_has_milliseconds(self):
-        data = json.loads(make_payload(1.0, "good", "C"))
+        data = json.loads(make_payload(1.0, "good", "C", sim_time=0.0))
         ts = data["timestamp"]
         # Format: ...T14:30:00.000Z  -- 3 digits after the dot
         parts = ts.split(".")
         assert len(parts) == 2
         ms_part = parts[1].rstrip("Z")
         assert len(ms_part) == 3, f"Expected 3-digit ms, got {ms_part!r}"
+
+    def test_timestamp_uses_sim_time_not_wall_clock(self):
+        """Payload timestamp must reflect sim_time, not wall clock (Rule 6)."""
+        # sim_time=3600 = 1 hour from reference epoch (2026-01-01T00:00:00Z)
+        data = json.loads(make_payload(1.0, "good", "C", sim_time=3600.0))
+        ts = data["timestamp"]
+        assert ts == "2026-01-01T01:00:00.000Z"
 
 
 # ---------------------------------------------------------------------------
@@ -566,36 +573,39 @@ class TestMakeBatchVibrationPayload:
     """make_batch_vibration_payload produces PRD 3.3.6 compliant payloads."""
 
     def test_payload_is_valid_json(self):
-        data = json.loads(make_batch_vibration_payload(4.2, 3.8, 5.1, "good", "mm/s"))
+        data = json.loads(make_batch_vibration_payload(4.2, 3.8, 5.1, "good", "mm/s", sim_time=0.0))
         assert isinstance(data, dict)
 
     def test_payload_has_required_fields(self):
-        data = json.loads(make_batch_vibration_payload(4.2, 3.8, 5.1, "good", "mm/s"))
+        data = json.loads(make_batch_vibration_payload(4.2, 3.8, 5.1, "good", "mm/s", sim_time=0.0))
         assert set(data.keys()) == {"timestamp", "x", "y", "z", "unit", "quality"}
 
     def test_no_value_field(self):
         """Batch payload uses x/y/z, not the single 'value' field."""
-        data = json.loads(make_batch_vibration_payload(4.2, 3.8, 5.1, "good", "mm/s"))
+        data = json.loads(make_batch_vibration_payload(4.2, 3.8, 5.1, "good", "mm/s", sim_time=0.0))
         assert "value" not in data
 
     def test_x_y_z_values(self):
-        data = json.loads(make_batch_vibration_payload(4.2, 3.8, 5.1, "good", "mm/s"))
+        data = json.loads(make_batch_vibration_payload(4.2, 3.8, 5.1, "good", "mm/s", sim_time=0.0))
         assert data["x"] == pytest.approx(4.2)
         assert data["y"] == pytest.approx(3.8)
         assert data["z"] == pytest.approx(5.1)
 
     def test_unit_field(self):
-        data = json.loads(make_batch_vibration_payload(1.0, 2.0, 3.0, "good", "mm/s"))
+        data = json.loads(make_batch_vibration_payload(1.0, 2.0, 3.0, "good", "mm/s", sim_time=0.0))
         assert data["unit"] == "mm/s"
 
     def test_quality_field(self):
         for quality in ("good", "uncertain", "bad"):
-            data = json.loads(make_batch_vibration_payload(1.0, 2.0, 3.0, quality, "mm/s"))
+            raw = make_batch_vibration_payload(
+                1.0, 2.0, 3.0, quality, "mm/s", sim_time=0.0,
+            )
+            data = json.loads(raw)
             assert data["quality"] == quality
 
     def test_timestamp_iso8601_utc(self):
         from datetime import datetime
-        data = json.loads(make_batch_vibration_payload(1.0, 2.0, 3.0, "good", "mm/s"))
+        data = json.loads(make_batch_vibration_payload(1.0, 2.0, 3.0, "good", "mm/s", sim_time=0.0))
         ts = data["timestamp"]
         assert ts.endswith("Z")
         assert "T" in ts
@@ -603,12 +613,20 @@ class TestMakeBatchVibrationPayload:
         assert parsed.tzinfo is not None
 
     def test_timestamp_has_milliseconds(self):
-        data = json.loads(make_batch_vibration_payload(1.0, 2.0, 3.0, "good", "mm/s"))
+        data = json.loads(make_batch_vibration_payload(1.0, 2.0, 3.0, "good", "mm/s", sim_time=0.0))
         ts = data["timestamp"]
         parts = ts.split(".")
         assert len(parts) == 2
         ms_part = parts[1].rstrip("Z")
         assert len(ms_part) == 3
+
+    def test_timestamp_uses_sim_time_not_wall_clock(self):
+        """Batch vibration timestamp must reflect sim_time (Rule 6)."""
+        raw = make_batch_vibration_payload(
+            1.0, 2.0, 3.0, "good", "mm/s", sim_time=7200.0,
+        )
+        data = json.loads(raw)
+        assert data["timestamp"] == "2026-01-01T02:00:00.000Z"
 
 
 class TestBuildBatchVibrationEntry:

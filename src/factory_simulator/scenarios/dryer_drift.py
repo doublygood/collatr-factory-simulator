@@ -176,7 +176,7 @@ class DryerDrift(Scenario):
         # Ground truth: temperature drift anomaly (PRD 4.7)
         gt = engine.ground_truth
         if gt is not None:
-            signal = f"press.dryer_zone{self._zone}_temp"
+            signal = f"press.dryer_temp_zone_{self._zone}"
             gt.log_signal_anomaly(
                 sim_time, signal, "drift",
                 self._original_setpoint,

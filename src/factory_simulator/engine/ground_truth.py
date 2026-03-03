@@ -307,12 +307,11 @@ class GroundTruthLogger:
 
     @staticmethod
     def _format_time(sim_time: float) -> str:
-        """Convert sim_time (seconds from epoch) to ISO 8601 string.
+        """Convert sim_time to ISO 8601 string.
 
-        If sim_time is small (< ~1 year in seconds, i.e. relative offset),
-        treat it as seconds from a reference epoch (2026-01-01T00:00:00Z)
-        consistent with simulation clock usage.  Otherwise treat as
-        absolute epoch seconds.
+        Always treats sim_time as seconds from the reference epoch
+        (2026-01-01T00:00:00Z).  All simulation times are relative
+        offsets from simulation start.
         """
         # Simulation typically uses relative seconds from start.
         # Use a fixed reference epoch for consistent output.
