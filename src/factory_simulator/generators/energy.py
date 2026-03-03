@@ -24,16 +24,19 @@ from factory_simulator.store import SignalStore, SignalValue
 
 
 class EnergyGenerator(EquipmentGenerator):
-    """Energy monitoring generator -- 2 signals, correlated with press.
+    """Energy monitoring generator -- 2 signals, correlated with line speed.
 
     Signals:
-    - line_power: correlated follower of press.line_speed
+    - line_power: correlated follower of the configured speed signal
       (base load + proportional load)
     - cumulative_kwh: counter that accumulates based on line_power
 
-    Energy consumption correlates with press operating state.
-    Base load is the intercept of the correlated follower; running
-    load scales with line speed.
+    The parent speed signal is configurable via EquipmentConfig.model_extra:
+    - Packaging profile: press.line_speed (default)
+    - F&B profile: filler.line_speed
+
+    Config extra fields (EquipmentConfig.model_extra):
+    - coupling_speed_signal: str  (default "press.line_speed")
     """
 
     def __init__(
@@ -43,6 +46,10 @@ class EnergyGenerator(EquipmentGenerator):
         rng: np.random.Generator,
     ) -> None:
         super().__init__(equipment_id, config, rng)
+        extras = config.model_extra or {}
+        self._speed_signal: str = str(
+            extras.get("coupling_speed_signal", "press.line_speed")
+        )
         self._build_models()
 
     def _build_models(self) -> None:
@@ -85,8 +92,8 @@ class EnergyGenerator(EquipmentGenerator):
     ) -> list[SignalValue]:
         results: list[SignalValue] = []
 
-        # Read press speed for correlation
-        press_speed = float(store.get_value("press.line_speed", 0.0))
+        # Read configured speed signal for correlation
+        press_speed = float(store.get_value(self._speed_signal, 0.0))
 
         # 1. Line power (follows press speed, with base load)
         self._line_power.set_parent_value(press_speed)

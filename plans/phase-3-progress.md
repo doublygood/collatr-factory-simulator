@@ -13,7 +13,7 @@
 - [x] 3.8: Checkweigher (QC) Generator
 - [x] 3.9: Chiller Generator
 - [x] 3.10: CIP Generator
-- [ ] 3.11: Shared Generator Coupling for F&B
+- [x] 3.11: Shared Generator Coupling for F&B
 - [ ] 3.12: F&B Modbus — CDAB Encoding + Dynamic Block Sizing
 - [ ] 3.13: F&B Modbus — Multi-Slave Oven Eurotherm UIDs
 - [ ] 3.14: F&B OPC-UA + MQTT Validation Tests
@@ -176,3 +176,24 @@ All Modbus addresses cross-referenced against PRD Appendix A. OPC-UA nodes match
 - Properties exposed for scenarios: state (R), cycle_time_elapsed (R), conductivity (R), wash_temp (R), flow_rate (R), final_rinse_passed (R).
 - 58 tests covering: signal count/IDs, initial Idle state, force_state (all phases, case-insensitive, same-state noop), auto-progression through all phases, wash_temp lag, flow_rate active/idle, conductivity rise/decay, cycle_time_elapsed increment/reset, final_rinse_passed flag, signal clamp bounds, determinism, _parse_state (valid/invalid inputs), protocol mappings (HR + OPC-UA state).
 - All 1660 unit tests pass (1602 existing + 58 new; note: integration tests not run in unit-only suite).
+
+### Task 3.11: Shared Generator Coupling for F&B
+Made `CoderGenerator` and `EnergyGenerator` configurable for their coupling signals.
+
+**CoderGenerator** (`src/factory_simulator/generators/coder.py`):
+- Reads `coupling_state_signal` from `EquipmentConfig.model_extra` (default `"press.machine_state"`)
+- Reads `coupling_speed_signal` from `EquipmentConfig.model_extra` (default `"press.line_speed"`)
+- `generate()` uses these signal names to read from the store — no other logic changes
+- Packaging profile: no config fields → defaults → press coupling (fully backward-compatible)
+- F&B profile: `coupling_state_signal: "filler.state"`, `coupling_speed_signal: "filler.line_speed"` in `factory-foodbev.yaml`
+
+**EnergyGenerator** (`src/factory_simulator/generators/energy.py`):
+- Reads `coupling_speed_signal` from `EquipmentConfig.model_extra` (default `"press.line_speed"`)
+- `generate()` uses the configured signal name — no other logic changes
+
+**Design decision**: The state condition logic (`press_running`, `press_idle`, `shutdown`, etc.) is unchanged because both press (states 0-5) and filler (states 0-4) use the same state numbering scheme (Running=2, Idle/Starved=3, Off=0, Setup=1). The `shutdown` condition `state in (0, 5)` works correctly for filler since state 5 never occurs.
+
+**Tests** (`tests/unit/test_generators/test_fnb_coupling.py`):
+- 20 new tests: 12 for coder (default/F&B coupling, pump speed tracking), 8 for energy (default/F&B coupling)
+- Key tests: `test_not_driven_by_filler` (packaging coder ignores filler), `test_not_driven_by_press` (F&B coder ignores press), `test_not_driven_by_filler` (packaging energy ignores filler), `test_not_driven_by_press` (F&B energy ignores press)
+- All 1783 tests pass (1763 existing + 20 new).

@@ -110,7 +110,7 @@
       "description": "Make coder and energy generators configurable for their coupling signals (state_signal, speed_signal). Coder follows filler.state for F&B, press.machine_state for packaging. Energy follows filler.line_speed for F&B. Backward compatible defaults.",
       "prd_refs": ["prd/02b-factory-layout-food-and-beverage.md (2b.9, 2b.11)"],
       "depends_on": ["3.6"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.12",

@@ -67,14 +67,14 @@ def _float_param(params: dict[str, object], key: str, default: float) -> float:
 
 
 class CoderGenerator(EquipmentGenerator):
-    """Coder (CIJ printer) generator -- 11 signals, follows press state.
+    """Coder (CIJ printer) generator -- 11 signals, follows press or filler state.
 
     Signals:
     - state: state machine (Off/Ready/Printing/Fault/Standby)
     - prints_total: counter (increments when Printing)
     - ink_level: depletion (depletes when Printing)
     - printhead_temp: steady state
-    - ink_pump_speed: correlated follower of press.line_speed
+    - ink_pump_speed: correlated follower of coupling speed signal
     - ink_pressure: steady state
     - ink_viscosity_actual: steady state
     - supply_voltage: steady state
@@ -82,10 +82,13 @@ class CoderGenerator(EquipmentGenerator):
     - nozzle_health: depletion (slow degradation)
     - gutter_fault: state machine (clear/fault binary)
 
-    The coder derives its state from the press machine state:
-    - Press Running -> Coder Printing
-    - Press Idle -> Coder Ready (then Standby after a while)
-    - Press Off -> Coder Off
+    The coder derives its state from a configurable coupling signal:
+    - Packaging profile: follows press.machine_state / press.line_speed (default)
+    - F&B profile: follows filler.state / filler.line_speed
+
+    Config extra fields (EquipmentConfig.model_extra):
+    - coupling_state_signal: str  (default "press.machine_state")
+    - coupling_speed_signal: str  (default "press.line_speed")
     """
 
     def __init__(
@@ -95,6 +98,13 @@ class CoderGenerator(EquipmentGenerator):
         rng: np.random.Generator,
     ) -> None:
         super().__init__(equipment_id, config, rng)
+        extras = config.model_extra or {}
+        self._state_signal: str = str(
+            extras.get("coupling_state_signal", "press.machine_state")
+        )
+        self._speed_signal: str = str(
+            extras.get("coupling_speed_signal", "press.line_speed")
+        )
         self._prev_press_state: int = 3  # Idle
         self._quality_overrides: dict[str, str] = {}
         self._build_models()
@@ -257,9 +267,9 @@ class CoderGenerator(EquipmentGenerator):
     ) -> list[SignalValue]:
         results: list[SignalValue] = []
 
-        # Read press state to drive coder state transitions
-        press_state = int(store.get_value("press.machine_state", 3))
-        press_speed = float(store.get_value("press.line_speed", 0.0))
+        # Read coupling state/speed to drive coder state transitions
+        press_state = int(store.get_value(self._state_signal, 3))
+        press_speed = float(store.get_value(self._speed_signal, 0.0))
 
         # Drive coder state from press state via conditions
         self._update_conditions_from_press(press_state)
