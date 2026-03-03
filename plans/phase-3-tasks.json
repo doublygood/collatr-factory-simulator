@@ -130,7 +130,7 @@
       "description": "Add multi-slave support for oven zone controllers (UIDs 11, 12, 13). Each slave has IR block with PV/SP/output_power as int16 x10. Config-driven slave definitions. Sync loop updates secondary blocks.",
       "prd_refs": ["prd/03-protocol-endpoints.md (3.1.6)", "prd/appendix-a-modbus-register-map.md"],
       "depends_on": ["3.5", "3.12"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.14",

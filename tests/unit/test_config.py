@@ -760,7 +760,9 @@ class TestFnbConfigLoading:
         for sig_name in cdab_signals:
             sig = mixer.signals[sig_name]
             assert sig.modbus_hr is not None, f"mixer.{sig_name} should have modbus_hr"
-            assert sig.modbus_byte_order == "CDAB", f"mixer.{sig_name} should be CDAB, got {sig.modbus_byte_order}"
+            assert sig.modbus_byte_order == "CDAB", (
+                f"mixer.{sig_name} should be CDAB, got {sig.modbus_byte_order}"
+            )
 
     def test_mixer_modbus_addresses(self) -> None:
         """Mixer HR addresses per Appendix A."""

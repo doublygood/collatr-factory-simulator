@@ -998,3 +998,212 @@ class TestFnbDynamicCoilsDI:
 
         dis = server._di_block.getValues(101, 1)  # addr 100 + offset 1
         assert dis[0] is True
+
+
+# ---------------------------------------------------------------------------
+# Multi-slave Eurotherm zone controller tests (PRD 3.1.6)
+# ---------------------------------------------------------------------------
+
+_FNB_CONFIG_PATH = Path(__file__).resolve().parents[3] / "config" / "factory-foodbev.yaml"
+
+
+def _make_multi_slave_config() -> FactoryConfig:
+    """Build a minimal config with a secondary Modbus slave for testing.
+
+    Simulates a single Eurotherm zone controller at UID 11 with:
+    - IR 0: zone PV (int16 x10) — appears in BOTH main and secondary slave
+    - IR 1: zone SP (int16 x10) — appears in BOTH main and secondary slave
+    - IR 2: output power (int16 x10) — ONLY on secondary slave UID 11
+    """
+    return FactoryConfig(
+        simulation=SimulationConfig(tick_interval_ms=100, random_seed=42),
+        protocols=ProtocolsConfig(
+            modbus=ModbusProtocolConfig(port=15515, unit_id=1),
+        ),
+        equipment={
+            "oven": EquipmentConfig(
+                enabled=True,
+                type="test",
+                signals={
+                    "zone_1_temp": SignalConfig(
+                        model="steady_state",
+                        modbus_ir=[100],
+                        modbus_slave_id=11,
+                        modbus_slave_ir=[0],
+                        params={"target": 160.0},
+                    ),
+                    "zone_1_setpoint": SignalConfig(
+                        model="steady_state",
+                        modbus_ir=[103],
+                        modbus_slave_id=11,
+                        modbus_slave_ir=[1],
+                        params={"target": 160.0},
+                    ),
+                    "zone_1_output_power": SignalConfig(
+                        model="steady_state",
+                        modbus_slave_id=11,
+                        modbus_ir=[2],  # exclusive to secondary slave
+                        params={"target": 50.0},
+                    ),
+                },
+            ),
+        },
+    )
+
+
+class TestMultiSlaveRegisterMap:
+    """Tests for secondary Modbus slave map building (PRD 3.1.6)."""
+
+    def test_secondary_slave_discovered(self) -> None:
+        """A signal with modbus_slave_id creates a secondary slave map."""
+        config = _make_multi_slave_config()
+        rmap = build_register_map(config)
+        assert len(rmap.secondary_slaves) == 1
+        assert rmap.secondary_slaves[0].slave_id == 11
+
+    def test_secondary_slave_has_three_ir_entries(self) -> None:
+        """Secondary slave UID 11 has PV (IR 0), SP (IR 1), output (IR 2)."""
+        config = _make_multi_slave_config()
+        rmap = build_register_map(config)
+        slave = rmap.secondary_slaves[0]
+        ir_addrs = {e.address: e.signal_id for e in slave.ir_entries}
+        assert 0 in ir_addrs
+        assert ir_addrs[0] == "oven.zone_1_temp"
+        assert 1 in ir_addrs
+        assert ir_addrs[1] == "oven.zone_1_setpoint"
+        assert 2 in ir_addrs
+        assert ir_addrs[2] == "oven.zone_1_output_power"
+
+    def test_dual_mapped_signal_in_main_ir_block(self) -> None:
+        """zone_1_temp (has modbus_slave_ir) also appears in main IR block."""
+        config = _make_multi_slave_config()
+        rmap = build_register_map(config)
+        main_ir_addrs = {e.address: e.signal_id for e in rmap.ir_entries}
+        # zone_1_temp at IR 100 and zone_1_setpoint at IR 103 must be present
+        assert 100 in main_ir_addrs
+        assert main_ir_addrs[100] == "oven.zone_1_temp"
+        assert 103 in main_ir_addrs
+        assert main_ir_addrs[103] == "oven.zone_1_setpoint"
+
+    def test_exclusive_slave_signal_absent_from_main_ir(self) -> None:
+        """zone_1_output_power (no modbus_slave_ir) is NOT in main IR block."""
+        config = _make_multi_slave_config()
+        rmap = build_register_map(config)
+        main_ir_signals = {e.signal_id for e in rmap.ir_entries}
+        assert "oven.zone_1_output_power" not in main_ir_signals
+
+    def test_secondary_slave_ir_syncs(self) -> None:
+        """Secondary slave IR block is populated from the signal store."""
+        config = _make_multi_slave_config()
+        store = SignalStore()
+        store.set("oven.zone_1_temp", 170.5, 0.0)
+        store.set("oven.zone_1_setpoint", 160.0, 0.0)
+        store.set("oven.zone_1_output_power", 42.7, 0.0)
+
+        server = ModbusServer(config, store, port=15516)
+        server.sync_registers()
+
+        # Secondary slave IR block for UID 11
+        ir_block = server._secondary_ir_blocks[11]
+        # IR 0 = zone_1_temp = 170.5 → int16 x10 = 1705
+        pv_regs = ir_block.getValues(1, 1)  # addr 0 + offset 1
+        assert abs(decode_int16_x10(pv_regs[0]) - 170.5) < 0.1
+
+        # IR 1 = zone_1_setpoint = 160.0 → 1600
+        sp_regs = ir_block.getValues(2, 1)  # addr 1 + offset 1
+        assert abs(decode_int16_x10(sp_regs[0]) - 160.0) < 0.1
+
+        # IR 2 = zone_1_output_power = 42.7 → 427
+        pwr_regs = ir_block.getValues(3, 1)  # addr 2 + offset 1
+        assert abs(decode_int16_x10(pwr_regs[0]) - 42.7) < 0.1
+
+    def test_secondary_slave_context_created(self) -> None:
+        """ModbusServer creates a secondary device context for each slave."""
+        config = _make_multi_slave_config()
+        store = SignalStore()
+        server = ModbusServer(config, store, port=15517)
+        assert 11 in server._secondary_contexts
+        assert 11 in server._secondary_ir_blocks
+
+    def test_packaging_config_has_no_secondary_slaves(self) -> None:
+        """Packaging profile must have zero secondary slaves."""
+        config = load_config(_CONFIG_PATH, apply_env=False)
+        rmap = build_register_map(config)
+        assert len(rmap.secondary_slaves) == 0
+
+    def test_missing_signal_does_not_crash_secondary_sync(self) -> None:
+        """Secondary slave sync is tolerant of missing store signals."""
+        config = _make_multi_slave_config()
+        store = SignalStore()
+        # Don't set any signal values
+
+        server = ModbusServer(config, store, port=15518)
+        # Should not raise
+        server.sync_registers()
+        ir_block = server._secondary_ir_blocks[11]
+        regs = ir_block.getValues(1, 3)  # addr 0-2 + offset 1
+        assert all(r == 0 for r in regs)
+
+
+class TestFnbMultiSlaveConfig:
+    """Verify F&B config creates correct secondary slaves for oven zones."""
+
+    @pytest.fixture
+    def fnb_rmap(self) -> object:
+        config = load_config(_FNB_CONFIG_PATH, apply_env=False)
+        return build_register_map(config)
+
+    def test_three_secondary_slaves(self, fnb_rmap: object) -> None:
+        """F&B config must produce 3 secondary slaves: UIDs 11, 12, 13."""
+        assert hasattr(fnb_rmap, "secondary_slaves")
+        slave_ids = {s.slave_id for s in fnb_rmap.secondary_slaves}  # type: ignore[union-attr]
+        assert slave_ids == {11, 12, 13}
+
+    def test_each_slave_has_pv_sp_output_power(self, fnb_rmap: object) -> None:
+        """Each Eurotherm slave has IR 0 (PV), IR 1 (SP), IR 2 (output power)."""
+        for slave in fnb_rmap.secondary_slaves:  # type: ignore[union-attr]
+            ir_addrs = {e.address for e in slave.ir_entries}
+            assert 0 in ir_addrs, f"UID {slave.slave_id} missing IR 0 (PV)"
+            assert 1 in ir_addrs, f"UID {slave.slave_id} missing IR 1 (SP)"
+            assert 2 in ir_addrs, f"UID {slave.slave_id} missing IR 2 (output power)"
+
+    def test_zone_temps_still_in_main_ir_block(self, fnb_rmap: object) -> None:
+        """Zone temps (dual-mapped) remain in main UID-1 IR block at 100-102."""
+        main_ir_addrs = {e.address for e in fnb_rmap.ir_entries}  # type: ignore[union-attr]
+        assert 100 in main_ir_addrs  # oven.zone_1_temp
+        assert 101 in main_ir_addrs  # oven.zone_2_temp
+        assert 102 in main_ir_addrs  # oven.zone_3_temp
+
+    def test_zone_setpoints_still_in_main_ir_block(self, fnb_rmap: object) -> None:
+        """Zone setpoints (dual-mapped) remain in main UID-1 IR block at 103-105."""
+        main_ir_addrs = {e.address for e in fnb_rmap.ir_entries}  # type: ignore[union-attr]
+        assert 103 in main_ir_addrs  # oven.zone_1_setpoint
+        assert 104 in main_ir_addrs  # oven.zone_2_setpoint
+        assert 105 in main_ir_addrs  # oven.zone_3_setpoint
+
+    def test_output_power_not_in_main_ir_block(self, fnb_rmap: object) -> None:
+        """Output power signals are exclusive to secondary slaves."""
+        main_ir_signals = {e.signal_id for e in fnb_rmap.ir_entries}  # type: ignore[union-attr]
+        assert "oven.zone_1_output_power" not in main_ir_signals
+        assert "oven.zone_2_output_power" not in main_ir_signals
+        assert "oven.zone_3_output_power" not in main_ir_signals
+
+    def test_fnb_secondary_slave_sync(self) -> None:
+        """F&B server syncs zone PV/SP/output to secondary slave IR blocks."""
+        config = load_config(_FNB_CONFIG_PATH, apply_env=False)
+        store = SignalStore()
+        store.set("oven.zone_1_temp", 165.0, 0.0)
+        store.set("oven.zone_1_setpoint", 160.0, 0.0)
+        store.set("oven.zone_1_output_power", 55.0, 0.0)
+
+        server = ModbusServer(config, store, port=15519)
+        server.sync_registers()
+
+        ir_block = server._secondary_ir_blocks[11]
+        pv_regs = ir_block.getValues(1, 1)   # IR 0 + offset = PV
+        sp_regs = ir_block.getValues(2, 1)   # IR 1 + offset = SP
+        pwr_regs = ir_block.getValues(3, 1)  # IR 2 + offset = output power
+
+        assert abs(decode_int16_x10(pv_regs[0]) - 165.0) < 0.1
+        assert abs(decode_int16_x10(sp_regs[0]) - 160.0) < 0.1
+        assert abs(decode_int16_x10(pwr_regs[0]) - 55.0) < 0.1

@@ -247,6 +247,23 @@ class FactoryDeviceContext(ModbusDeviceContext):
 # ---------------------------------------------------------------------------
 
 
+@dataclass(slots=True)
+class SecondarySlaveEntry:
+    """An input register entry on a secondary Modbus slave (Eurotherm zone controller)."""
+
+    signal_id: str
+    address: int       # IR address on the secondary slave
+    data_type: str = "int16_x10"
+
+
+@dataclass
+class SecondarySlaveRegisterMap:
+    """Register mapping for one secondary Modbus slave (one Eurotherm unit)."""
+
+    slave_id: int
+    ir_entries: list[SecondarySlaveEntry] = field(default_factory=list)
+
+
 @dataclass
 class RegisterMap:
     """Collected register mappings for one factory profile."""
@@ -256,6 +273,7 @@ class RegisterMap:
     coil_defs: list[CoilDefinition] = field(default_factory=list)
     di_defs: list[DiscreteInputDefinition] = field(default_factory=list)
     float32_hr_addresses: set[int] = field(default_factory=set)
+    secondary_slaves: list[SecondarySlaveRegisterMap] = field(default_factory=list)
 
 
 def build_register_map(config: FactoryConfig) -> RegisterMap:
@@ -298,10 +316,17 @@ def build_register_map(config: FactoryConfig) -> RegisterMap:
                     rmap.float32_hr_addresses.add(sig_cfg.modbus_hr[0])
                     rmap.float32_hr_addresses.add(sig_cfg.modbus_hr[0] + 1)
 
-            # Input registers — skip signals belonging to secondary slaves
+            # Input registers — skip signals that belong *exclusively* to a
+            # secondary slave (modbus_slave_id set, but no modbus_slave_ir
+            # means modbus_ir holds the secondary-slave address, not a main
+            # UID-1 address).  Signals with modbus_slave_ir serve both the
+            # main UID-1 block (via modbus_ir) and a secondary slave block.
             if sig_cfg.modbus_ir is not None and len(sig_cfg.modbus_ir) > 0:
-                if sig_cfg.modbus_slave_id is not None:
-                    # This signal is served on a secondary Modbus slave (task 3.13)
+                if (
+                    sig_cfg.modbus_slave_id is not None
+                    and sig_cfg.modbus_slave_ir is None
+                ):
+                    # Exclusive to secondary slave — skip from main IR block
                     continue
                 # 1 address = int16_x10 (temperature), 2 addresses = float32
                 ir_type = "int16_x10" if len(sig_cfg.modbus_ir) == 1 else "float32"
@@ -352,10 +377,46 @@ def build_register_map(config: FactoryConfig) -> RegisterMap:
                     ),
                 )
 
+    # -- Secondary slave IR maps (F&B oven Eurotherm zone controllers) --
+    # Signals with modbus_slave_id contribute to secondary slave IR blocks.
+    # The IR address is taken from modbus_slave_ir (if set) or modbus_ir
+    # (backward-compatible for signals that use modbus_ir as the slave address).
+    secondary_slave_dict: dict[int, SecondarySlaveRegisterMap] = {}
+    for eq_id, eq_cfg in config.equipment.items():
+        if not eq_cfg.enabled:
+            continue
+        for sig_name, sig_cfg in eq_cfg.signals.items():
+            if sig_cfg.modbus_slave_id is None:
+                continue
+            # Determine the IR address on the secondary slave
+            if sig_cfg.modbus_slave_ir is not None and len(sig_cfg.modbus_slave_ir) > 0:
+                secondary_ir_addr = sig_cfg.modbus_slave_ir[0]
+            elif sig_cfg.modbus_ir is not None and len(sig_cfg.modbus_ir) > 0:
+                secondary_ir_addr = sig_cfg.modbus_ir[0]
+            else:
+                continue  # No IR address configured for this slave signal
+
+            slave_id = sig_cfg.modbus_slave_id
+            if slave_id not in secondary_slave_dict:
+                secondary_slave_dict[slave_id] = SecondarySlaveRegisterMap(
+                    slave_id=slave_id,
+                )
+            signal_id = f"{eq_id}.{sig_name}"
+            secondary_slave_dict[slave_id].ir_entries.append(
+                SecondarySlaveEntry(
+                    signal_id=signal_id,
+                    address=secondary_ir_addr,
+                    data_type="int16_x10",
+                ),
+            )
+
+    rmap.secondary_slaves = list(secondary_slave_dict.values())
+
     logger.info(
-        "Modbus register map built: %d HR, %d IR, %d coils, %d DI",
+        "Modbus register map built: %d HR, %d IR, %d coils, %d DI, %d secondary slaves",
         len(rmap.hr_entries), len(rmap.ir_entries),
         len(rmap.coil_defs), len(rmap.di_defs),
+        len(rmap.secondary_slaves),
     )
     return rmap
 
@@ -438,6 +499,30 @@ class ModbusServer:
             di=self._di_block,
         )
 
+        # Build secondary slave IR blocks and device contexts.
+        # Each secondary slave (Eurotherm UID 11-13) gets its own IR block.
+        # HR/coil/DI are minimal stubs (secondary slaves expose IR only).
+        self._secondary_ir_blocks: dict[int, ModbusSequentialDataBlock] = {}
+        self._secondary_contexts: dict[int, FactoryDeviceContext] = {}
+        for slave_map in self._rmap.secondary_slaves:
+            ir_addrs = [e.address for e in slave_map.ir_entries]
+            ir_size = _compute_block_size(ir_addrs, min_size=8)
+            ir_block: ModbusSequentialDataBlock = ModbusSequentialDataBlock(  # type: ignore[no-untyped-call]
+                0, [0] * ir_size,
+            )
+            self._secondary_ir_blocks[slave_map.slave_id] = ir_block
+            # Minimal stubs for HR/coil/DI — secondary slaves only serve IR
+            _stub_hr = ModbusSequentialDataBlock(0, [0] * 8)  # type: ignore[no-untyped-call]
+            _stub_co = ModbusSequentialDataBlock(0, [False] * 8)  # type: ignore[no-untyped-call]
+            _stub_di = ModbusSequentialDataBlock(0, [False] * 8)  # type: ignore[no-untyped-call]
+            self._secondary_contexts[slave_map.slave_id] = FactoryDeviceContext(
+                float32_addresses=set(),
+                hr=_stub_hr,
+                ir=ir_block,
+                co=_stub_co,
+                di=_stub_di,
+            )
+
         # Track last-synced register values for writable HR entries.
         # Used to detect client FC16 writes: if the register block value
         # differs from what we last wrote, a client must have changed it.
@@ -477,6 +562,7 @@ class ModbusServer:
         self._sync_input_registers()
         self._sync_coils()
         self._sync_discrete_inputs()
+        self._sync_secondary_slaves()
 
     def _sync_holding_registers(self) -> None:
         """Sync HR values between store and the data block.
@@ -641,13 +727,51 @@ class ModbusServer:
                 result = False
             self._di_block.setValues(addr, [result])
 
+    def _sync_secondary_slaves(self) -> None:
+        """Copy signal values into secondary slave IR blocks (Eurotherm controllers).
+
+        Each secondary slave (UID 11-13) serves int16 x10 input registers for
+        oven zone PV (IR 0), SP (IR 1), and output power (IR 2).
+        Note: ModbusDeviceContext adds +1 to addresses; apply same +1 offset.
+        """
+        for slave_map in self._rmap.secondary_slaves:
+            ir_block = self._secondary_ir_blocks[slave_map.slave_id]
+            for entry in slave_map.ir_entries:
+                sv = self._store.get(entry.signal_id)
+                if sv is None:
+                    continue
+                value = sv.value
+                if isinstance(value, str):
+                    continue
+                addr = entry.address + 1  # +1: ModbusDeviceContext offset
+                if entry.data_type == "int16_x10":
+                    encoded = encode_int16_x10(float(value))
+                    ir_block.setValues(addr, [encoded])
+
     # -- Async lifecycle ------------------------------------------------------
 
     async def start(self) -> None:
-        """Start the Modbus TCP server and register update loop."""
-        server_context = ModbusServerContext(  # type: ignore[no-untyped-call]
-            devices=self._device_context, single=True,
-        )
+        """Start the Modbus TCP server and register update loop.
+
+        Uses single-slave mode for packaging profiles (no secondary slaves)
+        and multi-slave mode for F&B profiles (secondary slaves for Eurotherm
+        zone controllers at UIDs 11-13).  Multi-slave mode routes requests by
+        unit ID; single-slave mode ignores unit ID (preserves packaging tests).
+        """
+        if self._secondary_contexts:
+            # F&B multi-slave mode: route by unit ID
+            devices: dict[int, FactoryDeviceContext] = {
+                self._modbus_cfg.unit_id: self._device_context,
+                **self._secondary_contexts,
+            }
+            server_context = ModbusServerContext(  # type: ignore[no-untyped-call]
+                devices=devices, single=False,
+            )
+        else:
+            # Packaging single-slave mode: all requests go to primary context
+            server_context = ModbusServerContext(  # type: ignore[no-untyped-call]
+                devices=self._device_context, single=True,
+            )
         self._tcp_server = ModbusTcpServer(
             server_context,
             address=(self._host, self._port),

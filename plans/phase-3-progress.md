@@ -15,7 +15,7 @@
 - [x] 3.10: CIP Generator
 - [x] 3.11: Shared Generator Coupling for F&B
 - [x] 3.12: F&B Modbus — CDAB Encoding + Dynamic Block Sizing
-- [ ] 3.13: F&B Modbus — Multi-Slave Oven Eurotherm UIDs
+- [x] 3.13: F&B Modbus — Multi-Slave Oven Eurotherm UIDs
 - [ ] 3.14: F&B OPC-UA + MQTT Validation Tests
 - [ ] 3.15: Batch Cycle Scenario (Mixer)
 - [ ] 3.16: Oven Thermal Excursion Scenario
@@ -228,3 +228,38 @@ Made `CoderGenerator` and `EnergyGenerator` configurable for their coupling sign
 All 1806 tests pass.
 
 **Decision**: Kept packaging profile hardcoded coil/DI defs unchanged — they'll just be "False" coils in F&B mode since `press.*` signals don't exist in the F&B store. This is correct behaviour and avoids profile-sniffing logic.
+
+### Task 3.13: F&B Modbus — Multi-Slave Oven Eurotherm UIDs
+
+**Files changed**: `src/factory_simulator/config.py`, `src/factory_simulator/protocols/modbus_server.py`, `config/factory-foodbev.yaml`, `tests/unit/test_protocols/test_modbus.py`, `tests/unit/test_config.py`
+
+**Design**: Multi-slave support adds secondary `ModbusDeviceContext` instances for Eurotherm UIDs 11-13. A new config field `modbus_slave_ir` on `SignalConfig` allows signals to appear in BOTH the main UID-1 IR block AND a secondary slave IR block. Signals with `modbus_slave_id` but NO `modbus_slave_ir` remain exclusive to the secondary slave (backward-compatible with existing output_power config using `modbus_ir`).
+
+**config.py**: Added `modbus_slave_ir: list[int] | None = None` to `SignalConfig`. This is the IR address on the secondary slave (separate from `modbus_ir` which is the main UID-1 address). When both `modbus_slave_id` and `modbus_slave_ir` are set, the signal appears in BOTH blocks.
+
+**factory-foodbev.yaml**: Added `modbus_slave_id` + `modbus_slave_ir` to 6 oven signals:
+- `zone_1_temp`: slave_id=11, slave_ir=[0] (PV at IR 0 of UID 11)
+- `zone_1_setpoint`: slave_id=11, slave_ir=[1] (SP at IR 1 of UID 11)
+- `zone_2_temp`: slave_id=12, slave_ir=[0] (PV at IR 0 of UID 12)
+- `zone_2_setpoint`: slave_id=12, slave_ir=[1] (SP at IR 1 of UID 12)
+- `zone_3_temp`: slave_id=13, slave_ir=[0] (PV at IR 0 of UID 13)
+- `zone_3_setpoint`: slave_id=13, slave_ir=[1] (SP at IR 1 of UID 13)
+Existing output_power signals keep `modbus_slave_id` + `modbus_ir: [2]` (no `modbus_slave_ir`).
+
+**modbus_server.py** additions:
+1. `SecondarySlaveEntry`: signal_id, address, data_type ("int16_x10") for one IR entry on a secondary slave
+2. `SecondarySlaveRegisterMap`: slave_id + list of SecondarySlaveEntry
+3. `RegisterMap.secondary_slaves`: new field holding all secondary slave maps
+4. `build_register_map`: updated skip logic (skip from main IR only if `modbus_slave_id is not None AND modbus_slave_ir is None`); added secondary slave discovery loop
+5. `ModbusServer.__init__`: builds `_secondary_ir_blocks` and `_secondary_contexts` (FactoryDeviceContext with minimal stub HR/coil/DI) per slave
+6. `_sync_secondary_slaves()`: copies signal values from store to secondary IR blocks as int16_x10
+7. `sync_registers()`: calls `_sync_secondary_slaves()`
+8. `start()`: uses `ModbusServerContext(devices=dict, single=False)` when secondary slaves exist; `single=True` for packaging profile (preserves existing behavior)
+
+**Tests added** (17 new tests in test_modbus.py):
+- `TestMultiSlaveRegisterMap` (8): secondary slave discovery, PV/SP/output at correct IR addresses, dual-mapped signals in both main and secondary IR, exclusive signals not in main IR, IR block sync, no secondary slaves for packaging, tolerant of missing store signals
+- `TestFnbMultiSlaveConfig` (7): F&B config has UIDs 11-13, each has IR 0-2, zone temps/setpoints in main IR block, output powers NOT in main IR, sync check for UID 11
+
+**Also fixed**: Pre-existing E501 ruff violation in `test_config.py:763` (line too long in assertion).
+
+All 1820 tests pass.

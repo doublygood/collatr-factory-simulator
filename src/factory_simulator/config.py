@@ -252,6 +252,8 @@ class SignalConfig(BaseModel):
     modbus_coil: int | None = None     # Coil address for binary signals (F&B)
     modbus_di: int | None = None       # Discrete input address for binary signals (F&B)
     modbus_slave_id: int | None = None # Secondary slave UID (F&B oven zones, task 3.13)
+    # IR address on secondary slave — used alongside modbus_slave_id
+    modbus_slave_ir: list[int] | None = None
 
     # Protocol: OPC-UA
     opcua_node: str | None = None

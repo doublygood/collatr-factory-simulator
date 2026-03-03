@@ -197,6 +197,8 @@ equipment:
         modbus_hr: [1100, 1101]
         modbus_type: "float32"
         modbus_ir: [100]
+        modbus_slave_id: 11    # Eurotherm UID 11: IR 0 = zone 1 PV (PRD 3.1.6)
+        modbus_slave_ir: [0]
         params:
           tau: 180.0
           initial_value: 20.0
@@ -213,6 +215,8 @@ equipment:
         modbus_hr: [1102, 1103]
         modbus_type: "float32"
         modbus_ir: [101]
+        modbus_slave_id: 12    # Eurotherm UID 12: IR 0 = zone 2 PV (PRD 3.1.6)
+        modbus_slave_ir: [0]
         params:
           tau: 180.0
           initial_value: 20.0
@@ -229,6 +233,8 @@ equipment:
         modbus_hr: [1104, 1105]
         modbus_type: "float32"
         modbus_ir: [102]
+        modbus_slave_id: 13    # Eurotherm UID 13: IR 0 = zone 3 PV (PRD 3.1.6)
+        modbus_slave_ir: [0]
         params:
           tau: 180.0
           initial_value: 20.0
@@ -243,6 +249,8 @@ equipment:
         modbus_type: "float32"
         modbus_writable: true
         modbus_ir: [103]
+        modbus_slave_id: 11    # Eurotherm UID 11: IR 1 = zone 1 SP (PRD 3.1.6)
+        modbus_slave_ir: [1]
         params:
           target: 160.0
 
@@ -256,6 +264,8 @@ equipment:
         modbus_type: "float32"
         modbus_writable: true
         modbus_ir: [104]
+        modbus_slave_id: 12    # Eurotherm UID 12: IR 1 = zone 2 SP (PRD 3.1.6)
+        modbus_slave_ir: [1]
         params:
           target: 200.0
 
@@ -269,6 +279,8 @@ equipment:
         modbus_type: "float32"
         modbus_writable: true
         modbus_ir: [105]
+        modbus_slave_id: 13    # Eurotherm UID 13: IR 1 = zone 3 SP (PRD 3.1.6)
+        modbus_slave_ir: [1]
         params:
           target: 180.0
 
