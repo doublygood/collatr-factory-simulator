@@ -25,7 +25,7 @@
 - [x] 3.20: CIP Cycle Scenario
 - [x] 3.21: Cold Chain Break Scenario
 - [x] 3.22: F&B Scenario Auto-Scheduling
-- [ ] 3.23: F&B Modbus Integration Test
+- [x] 3.23: F&B Modbus Integration Test
 - [ ] 3.24: F&B OPC-UA + MQTT Integration Test
 - [ ] 3.25: F&B Cross-Protocol Consistency Test
 
@@ -379,6 +379,25 @@ All 1953 tests pass (18 new).
 - Key tests: compressor_forced_off True on activation, store shows compressor_state=0.0, room_temp rises with compressor locked, rises faster than bang-bang baseline, forced_off released after completion, no permanent lock (temp recovers to <10°C), default 1800-7200 s range, graceful exit without chiller.
 
 All 1968 tests pass (15 new).
+
+### Task 3.23: F&B Modbus Integration Test
+
+**File**: `tests/integration/test_modbus_fnb_integration.py`
+
+**49 tests in 7 classes** verifying end-to-end DataEngine + ModbusServer with F&B config:
+
+- **TestMixerHoldingRegistersCdab** (6): HR 1000-1011 with CDAB decode; confirms word-swap differs from ABCD
+- **TestOvenHoldingRegistersAbcd** (5): HR 1100-1125 — zone temps/setpoints, belt speed, core temp, humidity
+- **TestFnbEquipmentHR** (7): Filler HR 1200, sealer HR 1300-1311, chiller HR 1400-1407, CIP HR 1500-1507, shared energy HR 600-603, all-HR-readable sweep
+- **TestFnbInputRegisters** (8): IR 100-106 (oven), IR 110-111 (chiller), IR 115 (CIP), IR 120-121 (energy float32), all-IR-readable sweep
+- **TestFnbCoils** (5): Coil 100 (lid_closed), 101 (compressor_state), 102 (defrost_active); dynamic update test
+- **TestFnbDiscreteInputs** (2): DI 100 (door_open) False and True
+- **TestMultiSlaveOvenControllers** (10): UIDs 11/12/13 IR 0/1/2 — PV/SP/output_power for all 3 zones; slave count/entry count
+- **TestFnbOvenSetpointWrite** (2): FC16 write to zone_1/2 setpoints + readback
+- **TestFnbCrossRegisterConsistency** (4): HR vs IR agreement for zone_1_temp, chiller.room_temp, zone_1_temp vs UID 11 IR, energy HR vs IR
+
+**Key decision**: Used pymodbus 3.12.x `device_id=` kwarg (not `slave=`) for secondary slave requests.
+All 2020 tests pass (49 new).
 
 ### Task 3.22: F&B Scenario Auto-Scheduling
 

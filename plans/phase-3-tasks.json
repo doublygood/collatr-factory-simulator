@@ -230,7 +230,7 @@
       "description": "End-to-end: DataEngine + Modbus server with F&B config. Verify all F&B HR (CDAB mixer, ABCD rest), IR (int16 x10), coils, DI, multi-slave UIDs 11-13, shared energy registers.",
       "prd_refs": ["prd/appendix-a-modbus-register-map.md"],
       "depends_on": ["3.4", "3.5", "3.6", "3.7", "3.8", "3.9", "3.10", "3.12", "3.13"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.24",
