@@ -1,0 +1,256 @@
+{
+  "phase": 3,
+  "name": "F&B (Food & Beverage) Chilled Ready Meal Profile",
+  "tasks": [
+    {
+      "id": "3.1",
+      "name": "F&B Equipment Config Models",
+      "group": "A: Profile Infrastructure",
+      "file": "src/factory_simulator/config.py",
+      "description": "Add Pydantic config models for F&B scenario configs (BatchCycleConfig, OvenThermalExcursionConfig, FillWeightDriftConfig, SealIntegrityFailureConfig, ChillerDoorAlarmConfig, CipCycleConfig, ColdChainBreakConfig). Extend ScenariosConfig with optional F&B fields.",
+      "prd_refs": ["prd/05-scenario-system.md (5.14)", "prd/06-configuration.md"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "3.2",
+      "name": "F&B Factory Config (factory-foodbev.yaml)",
+      "group": "A: Profile Infrastructure",
+      "file": "config/factory-foodbev.yaml",
+      "description": "Create F&B factory configuration with all 9 equipment groups (6 new + 3 shared), 68 signals with Modbus/OPC-UA/MQTT mappings, and F&B scenario configs. Cross-reference all addresses against PRD Appendix A/B/C.",
+      "prd_refs": ["prd/02b-factory-layout-food-and-beverage.md", "prd/appendix-a-modbus-register-map.md", "prd/appendix-b-opcua-node-tree.md", "prd/appendix-c-mqtt-topic-map.md", "prd/06-configuration.md"],
+      "depends_on": ["3.1"],
+      "passes": false
+    },
+    {
+      "id": "3.3",
+      "name": "Thermal Diffusion Signal Model",
+      "group": "B: Equipment Generators",
+      "file": "src/factory_simulator/models/thermal_diffusion.py",
+      "description": "Implement truncated Fourier series thermal diffusion model (PRD 4.2.10) for product core temperature. Adaptive term count, reset capability, noise injection. S-curve heat penetration profile for food products.",
+      "prd_refs": ["prd/04-data-generation-engine.md (4.2.10)"],
+      "depends_on": [],
+      "passes": false
+    },
+    {
+      "id": "3.4",
+      "name": "Mixer Generator",
+      "group": "B: Equipment Generators",
+      "file": "src/factory_simulator/generators/mixer.py",
+      "description": "Mixer equipment generator: 8 signals, 6-state batch cycle state machine (Off/Loading/Mixing/Holding/Discharging/CIP). Batch weight steps, speed ramp, torque correlation, batch_id string generation. Register in data_engine.py.",
+      "prd_refs": ["prd/02b-factory-layout-food-and-beverage.md (2b.2)", "prd/04-data-generation-engine.md (4.6, 4.2.14)"],
+      "depends_on": ["3.1", "3.2"],
+      "passes": false
+    },
+    {
+      "id": "3.5",
+      "name": "Oven Generator",
+      "group": "B: Equipment Generators",
+      "file": "src/factory_simulator/generators/oven.py",
+      "description": "Oven equipment generator: 13 signals, 5-state machine. 3-zone PID temps with thermal coupling, product core temp via ThermalDiffusionModel, output power as correlated follower of temp error, belt speed determines product dwell. Register in data_engine.py.",
+      "prd_refs": ["prd/02b-factory-layout-food-and-beverage.md (2b.3)", "prd/04-data-generation-engine.md (4.2.3, 4.2.10, 4.3.1, 4.6)"],
+      "depends_on": ["3.3", "3.1", "3.2"],
+      "passes": false
+    },
+    {
+      "id": "3.6",
+      "name": "Filler Generator",
+      "group": "B: Equipment Generators",
+      "file": "src/factory_simulator/generators/filler.py",
+      "description": "Filler equipment generator: 8 signals, 5-state machine. Per-item fill weight (Gaussian around target + giveaway), item arrival gated by line_speed, hopper sawtooth depletion, reject counting on tolerance violation. Register in data_engine.py.",
+      "prd_refs": ["prd/02b-factory-layout-food-and-beverage.md (2b.4)", "prd/04-data-generation-engine.md (4.6)"],
+      "depends_on": ["3.1", "3.2"],
+      "passes": false
+    },
+    {
+      "id": "3.7",
+      "name": "Sealer Generator",
+      "group": "B: Equipment Generators",
+      "file": "src/factory_simulator/generators/sealer.py",
+      "description": "Sealer equipment generator: 6 signals. Seal temp/pressure/dwell steady state during production, MAP gas mix (CO2/N2), vacuum level. Follows filler state. Register in data_engine.py.",
+      "prd_refs": ["prd/02b-factory-layout-food-and-beverage.md (2b.5)"],
+      "depends_on": ["3.1", "3.2"],
+      "passes": false
+    },
+    {
+      "id": "3.8",
+      "name": "Checkweigher (QC) Generator",
+      "group": "B: Equipment Generators",
+      "file": "src/factory_simulator/generators/checkweigher.py",
+      "description": "Checkweigher/metal detection generator: 6 signals. Actual weight mirrors filler fill_weight + offset, overweight/underweight counting, rare metal detect trips, throughput follows filler speed. Per-item generation. Register in data_engine.py.",
+      "prd_refs": ["prd/02b-factory-layout-food-and-beverage.md (2b.6)"],
+      "depends_on": ["3.6"],
+      "passes": false
+    },
+    {
+      "id": "3.9",
+      "name": "Chiller Generator",
+      "group": "B: Equipment Generators",
+      "file": "src/factory_simulator/generators/chiller.py",
+      "description": "Refrigeration generator: 7 signals. Room temp via bang-bang hysteresis (sawtooth), compressor binary state, suction/discharge pressure, periodic defrost cycles, door_open discrete input. Register in data_engine.py.",
+      "prd_refs": ["prd/02b-factory-layout-food-and-beverage.md (2b.7)", "prd/04-data-generation-engine.md (4.2.12)"],
+      "depends_on": ["3.1", "3.2"],
+      "passes": false
+    },
+    {
+      "id": "3.10",
+      "name": "CIP Generator",
+      "group": "B: Equipment Generators",
+      "file": "src/factory_simulator/generators/cip.py",
+      "description": "CIP (Clean-in-Place) generator: 5 signals, 6-state phase sequence (Idle/Pre-rinse/Caustic/Intermediate/Acid/Final). Wash temp ramps, conductivity profile (rise during caustic, exponential decay during rinse), flow rate, cycle time counter. Register in data_engine.py.",
+      "prd_refs": ["prd/02b-factory-layout-food-and-beverage.md (2b.8)", "prd/04-data-generation-engine.md (4.6)"],
+      "depends_on": ["3.1", "3.2"],
+      "passes": false
+    },
+    {
+      "id": "3.11",
+      "name": "Shared Generator Coupling for F&B",
+      "group": "C: Protocol Endpoints",
+      "file": "src/factory_simulator/generators/coder.py",
+      "description": "Make coder and energy generators configurable for their coupling signals (state_signal, speed_signal). Coder follows filler.state for F&B, press.machine_state for packaging. Energy follows filler.line_speed for F&B. Backward compatible defaults.",
+      "prd_refs": ["prd/02b-factory-layout-food-and-beverage.md (2b.9, 2b.11)"],
+      "depends_on": ["3.6"],
+      "passes": false
+    },
+    {
+      "id": "3.12",
+      "name": "F&B Modbus — CDAB Encoding + Dynamic Block Sizing",
+      "group": "C: Protocol Endpoints",
+      "file": "src/factory_simulator/protocols/modbus_server.py",
+      "description": "Add CDAB float32/uint32 encode/decode, byte_order field on HoldingRegisterEntry, dynamic block sizing from config, F&B coils (100-102) and DI (100) support. Sync respects per-entry byte order.",
+      "prd_refs": ["prd/03-protocol-endpoints.md (3.1)", "prd/appendix-a-modbus-register-map.md"],
+      "depends_on": ["3.2"],
+      "passes": false
+    },
+    {
+      "id": "3.13",
+      "name": "F&B Modbus — Multi-Slave Oven Eurotherm UIDs",
+      "group": "C: Protocol Endpoints",
+      "file": "src/factory_simulator/protocols/modbus_server.py",
+      "description": "Add multi-slave support for oven zone controllers (UIDs 11, 12, 13). Each slave has IR block with PV/SP/output_power as int16 x10. Config-driven slave definitions. Sync loop updates secondary blocks.",
+      "prd_refs": ["prd/03-protocol-endpoints.md (3.1.6)", "prd/appendix-a-modbus-register-map.md"],
+      "depends_on": ["3.5", "3.12"],
+      "passes": false
+    },
+    {
+      "id": "3.14",
+      "name": "F&B OPC-UA + MQTT Validation Tests",
+      "group": "C: Protocol Endpoints",
+      "file": "tests/unit/test_protocols/test_opcua_fnb.py",
+      "description": "Validate OPC-UA FoodBevLine node tree and MQTT foodbev1 topic map are built correctly from F&B config. Verify all node paths match Appendix B and all topics match Appendix C. No vibration topics for F&B.",
+      "prd_refs": ["prd/appendix-b-opcua-node-tree.md", "prd/appendix-c-mqtt-topic-map.md"],
+      "depends_on": ["3.2", "3.4", "3.5", "3.6", "3.7", "3.8", "3.9", "3.10"],
+      "passes": false
+    },
+    {
+      "id": "3.15",
+      "name": "Batch Cycle Scenario (Mixer)",
+      "group": "D: Scenarios",
+      "file": "src/factory_simulator/scenarios/batch_cycle.py",
+      "description": "Batch cycle drives mixer through Loading→Mixing→Holding→Discharging sequence. 20-45 min per batch, 8-16 per shift. Batch-to-batch variation. Ground truth batch events.",
+      "prd_refs": ["prd/05-scenario-system.md (5.14.1)"],
+      "depends_on": ["3.4"],
+      "passes": false
+    },
+    {
+      "id": "3.16",
+      "name": "Oven Thermal Excursion Scenario",
+      "group": "D: Scenarios",
+      "file": "src/factory_simulator/scenarios/oven_thermal_excursion.py",
+      "description": "One oven zone drifts from setpoint (0.1-0.3 C/min). Adjacent zones respond via thermal coupling (0.05 factor). Product core temp deviates. Recovery after 30-90 min. Analogous to DryerDrift.",
+      "prd_refs": ["prd/05-scenario-system.md (5.14.2)"],
+      "depends_on": ["3.5"],
+      "passes": false
+    },
+    {
+      "id": "3.17",
+      "name": "Fill Weight Drift Scenario",
+      "group": "D: Scenarios",
+      "file": "src/factory_simulator/scenarios/fill_weight_drift.py",
+      "description": "Fill weight mean drifts from target at 0.05-0.2 g/min. Reject count increases proportionally. Recovery after 10-60 min via operator recalibration.",
+      "prd_refs": ["prd/05-scenario-system.md (5.14.3)"],
+      "depends_on": ["3.6"],
+      "passes": false
+    },
+    {
+      "id": "3.18",
+      "name": "Seal Integrity Failure Scenario",
+      "group": "D: Scenarios",
+      "file": "src/factory_simulator/scenarios/seal_integrity.py",
+      "description": "Seal temp drops below threshold, seal pressure decreases, vacuum degrades, QC rejects spike. Line stops for seal bar replacement/adjustment. Uses existing sealer signals.",
+      "prd_refs": ["prd/05-scenario-system.md (5.14.4)"],
+      "depends_on": ["3.7", "3.8"],
+      "passes": false
+    },
+    {
+      "id": "3.19",
+      "name": "Chiller Door Alarm Scenario",
+      "group": "D: Scenarios",
+      "file": "src/factory_simulator/scenarios/chiller_door_alarm.py",
+      "description": "Door opens, room temp rises 0.5-2 C/min, compressor cycles harder. Door close triggers first_order_lag recovery to setpoint. Duration 5-20 min.",
+      "prd_refs": ["prd/05-scenario-system.md (5.14.5)"],
+      "depends_on": ["3.9"],
+      "passes": false
+    },
+    {
+      "id": "3.20",
+      "name": "CIP Cycle Scenario",
+      "group": "D: Scenarios",
+      "file": "src/factory_simulator/scenarios/cip_cycle.py",
+      "description": "Triggers CIP generator through Pre-rinse→Caustic→Rinse→Acid→Final phases. Production stops: mixer→Idle, filler→Off. 30-60 min per cycle, 1-3 per day. Production resumes on completion.",
+      "prd_refs": ["prd/05-scenario-system.md (5.14.6)"],
+      "depends_on": ["3.10", "3.4", "3.6"],
+      "passes": false
+    },
+    {
+      "id": "3.21",
+      "name": "Cold Chain Break Scenario",
+      "group": "D: Scenarios",
+      "file": "src/factory_simulator/scenarios/cold_chain_break.py",
+      "description": "Compressor locks off (failure). Room temp rises toward ambient at 0.5-1.5 C/min. Crosses 8C alarm. After repair, compressor restarts, first_order_lag recovery. 30-120 min, 1-2 per month.",
+      "prd_refs": ["prd/05-scenario-system.md (5.14.7)"],
+      "depends_on": ["3.9"],
+      "passes": false
+    },
+    {
+      "id": "3.22",
+      "name": "F&B Scenario Auto-Scheduling",
+      "group": "D: Scenarios",
+      "file": "src/factory_simulator/engine/scenario_engine.py",
+      "description": "Add scheduling methods for all 7 F&B scenarios to ScenarioEngine._generate_timeline(). Update _AFFECTED_SIGNALS with F&B signal sets. Config-to-param mapping for each F&B scenario type.",
+      "prd_refs": ["prd/05-scenario-system.md (5.14)"],
+      "depends_on": ["3.15", "3.16", "3.17", "3.18", "3.19", "3.20", "3.21", "3.1"],
+      "passes": false
+    },
+    {
+      "id": "3.23",
+      "name": "F&B Modbus Integration Test",
+      "group": "E: Integration",
+      "file": "tests/integration/test_modbus_fnb_integration.py",
+      "description": "End-to-end: DataEngine + Modbus server with F&B config. Verify all F&B HR (CDAB mixer, ABCD rest), IR (int16 x10), coils, DI, multi-slave UIDs 11-13, shared energy registers.",
+      "prd_refs": ["prd/appendix-a-modbus-register-map.md"],
+      "depends_on": ["3.4", "3.5", "3.6", "3.7", "3.8", "3.9", "3.10", "3.12", "3.13"],
+      "passes": false
+    },
+    {
+      "id": "3.24",
+      "name": "F&B OPC-UA + MQTT Integration Test",
+      "group": "E: Integration",
+      "file": "tests/integration/test_fnb_opcua_mqtt_integration.py",
+      "description": "End-to-end: DataEngine + OPC-UA server + MQTT publisher with F&B config. Verify FoodBevLine nodes, 13 MQTT topics, no vibration topics, correct payloads.",
+      "prd_refs": ["prd/appendix-b-opcua-node-tree.md", "prd/appendix-c-mqtt-topic-map.md"],
+      "depends_on": ["3.4", "3.5", "3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.14"],
+      "passes": false
+    },
+    {
+      "id": "3.25",
+      "name": "F&B Cross-Protocol Consistency Test",
+      "group": "E: Integration",
+      "file": "tests/integration/test_fnb_cross_protocol.py",
+      "description": "Verify same F&B signal values across Modbus, OPC-UA, MQTT within one engine tick. CDAB Modbus matches OPC-UA Double. Ground truth records F&B scenario events correctly.",
+      "prd_refs": ["prd/appendix-f-implementation-phases.md (Phase 3 exit criteria)"],
+      "depends_on": ["3.23", "3.24"],
+      "passes": false
+    }
+  ]
+}
