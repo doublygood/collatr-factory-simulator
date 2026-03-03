@@ -687,3 +687,258 @@ class TestModbusRegisterCoverage:
         assert press.signals["dryer_temp_zone_1"].modbus_ir == [0]
         assert press.signals["dryer_temp_zone_2"].modbus_ir == [1]
         assert press.signals["dryer_temp_zone_3"].modbus_ir == [2]
+
+
+# ===================================================================
+# F&B Config Loading (Task 3.2)
+# ===================================================================
+
+
+class TestFnbConfigLoading:
+    """Tests for loading and validating config/factory-foodbev.yaml."""
+
+    def test_load_foodbev_yaml(self) -> None:
+        """The F&B config should load without errors."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        assert cfg.factory.name == "Demo F&B Factory"
+        assert cfg.factory.site_id == "demo"
+
+    def test_68_signals_total(self) -> None:
+        """Verify all 68 F&B signals are defined (PRD 2b.14)."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        total = sum(len(eq.signals) for eq in cfg.equipment.values())
+        assert total == 68, f"Expected 68 signals, got {total}"
+
+    def test_equipment_groups(self) -> None:
+        """Verify all 10 equipment groups are present."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        expected = {
+            "mixer", "oven", "filler", "sealer", "qc",
+            "chiller", "cip", "coder", "environment", "energy",
+        }
+        assert set(cfg.equipment.keys()) == expected
+
+    def test_signal_counts_per_equipment(self) -> None:
+        """PRD 2b signal counts per equipment group."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        counts = {name: len(eq.signals) for name, eq in cfg.equipment.items()}
+        assert counts["mixer"] == 8
+        assert counts["oven"] == 13
+        assert counts["filler"] == 8
+        assert counts["sealer"] == 6
+        assert counts["qc"] == 6
+        assert counts["chiller"] == 7
+        assert counts["cip"] == 5
+        assert counts["coder"] == 11
+        assert counts["environment"] == 2
+        assert counts["energy"] == 2
+
+    def test_equipment_types(self) -> None:
+        """Verify equipment type strings match generator registry expectations."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        assert cfg.equipment["mixer"].type == "high_shear_mixer"
+        assert cfg.equipment["oven"].type == "tunnel_oven"
+        assert cfg.equipment["filler"].type == "gravimetric_filler"
+        assert cfg.equipment["sealer"].type == "tray_sealer"
+        assert cfg.equipment["qc"].type == "checkweigher"
+        assert cfg.equipment["chiller"].type == "cold_room"
+        assert cfg.equipment["cip"].type == "cip_skid"
+        assert cfg.equipment["coder"].type == "cij_printer"
+        assert cfg.equipment["energy"].type == "power_meter"
+        assert cfg.equipment["environment"].type == "iolink_sensor"
+
+    def test_mqtt_line_id_foodbev1(self) -> None:
+        """MQTT line_id must be 'foodbev1' for F&B profile."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        assert cfg.protocols.mqtt.line_id == "foodbev1"
+
+    def test_mixer_cdab_byte_order(self) -> None:
+        """Mixer Modbus signals use CDAB byte order (Allen-Bradley)."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        mixer = cfg.equipment["mixer"]
+        cdab_signals = ["speed", "torque", "batch_temp", "batch_weight", "mix_time_elapsed"]
+        for sig_name in cdab_signals:
+            sig = mixer.signals[sig_name]
+            assert sig.modbus_hr is not None, f"mixer.{sig_name} should have modbus_hr"
+            byte_order = sig.model_extra.get("modbus_byte_order") if sig.model_extra else None
+            assert byte_order == "CDAB", f"mixer.{sig_name} should be CDAB, got {byte_order}"
+
+    def test_mixer_modbus_addresses(self) -> None:
+        """Mixer HR addresses per Appendix A."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        mixer = cfg.equipment["mixer"]
+        assert mixer.signals["speed"].modbus_hr == [1000, 1001]
+        assert mixer.signals["torque"].modbus_hr == [1002, 1003]
+        assert mixer.signals["batch_temp"].modbus_hr == [1004, 1005]
+        assert mixer.signals["batch_weight"].modbus_hr == [1006, 1007]
+        assert mixer.signals["mix_time_elapsed"].modbus_hr == [1010, 1011]
+
+    def test_oven_modbus_addresses(self) -> None:
+        """Oven HR and IR addresses per Appendix A."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        oven = cfg.equipment["oven"]
+        assert oven.signals["zone_1_temp"].modbus_hr == [1100, 1101]
+        assert oven.signals["zone_2_temp"].modbus_hr == [1102, 1103]
+        assert oven.signals["zone_3_temp"].modbus_hr == [1104, 1105]
+        assert oven.signals["zone_1_setpoint"].modbus_hr == [1110, 1111]
+        assert oven.signals["belt_speed"].modbus_hr == [1120, 1121]
+        assert oven.signals["product_core_temp"].modbus_hr == [1122, 1123]
+        assert oven.signals["humidity_zone_2"].modbus_hr == [1124, 1125]
+        # IR addresses
+        assert oven.signals["zone_1_temp"].modbus_ir == [100]
+        assert oven.signals["zone_2_temp"].modbus_ir == [101]
+        assert oven.signals["zone_3_temp"].modbus_ir == [102]
+        assert oven.signals["product_core_temp"].modbus_ir == [106]
+
+    def test_oven_setpoints_writable(self) -> None:
+        """Oven zone setpoints must be writable per Appendix A."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        oven = cfg.equipment["oven"]
+        for z in [1, 2, 3]:
+            sig = oven.signals[f"zone_{z}_setpoint"]
+            assert sig.modbus_writable is True, f"oven.zone_{z}_setpoint should be writable"
+
+    def test_oven_output_power_multi_slave(self) -> None:
+        """Oven output power signals map to multi-slave UIDs 11-13 (PRD 3.1.6)."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        oven = cfg.equipment["oven"]
+        for zone, uid in [(1, 11), (2, 12), (3, 13)]:
+            sig = oven.signals[f"zone_{zone}_output_power"]
+            slave_id = sig.model_extra.get("modbus_slave_id") if sig.model_extra else None
+            assert slave_id == uid, f"zone_{zone}_output_power slave_id should be {uid}"
+            assert sig.modbus_ir == [2]
+
+    def test_filler_opcua_nodes(self) -> None:
+        """Filler signals use OPC-UA with FoodBevLine prefix (Appendix B)."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        filler = cfg.equipment["filler"]
+        assert filler.signals["line_speed"].opcua_node == "FoodBevLine.Filler1.LineSpeed"
+        assert filler.signals["fill_weight"].opcua_node == "FoodBevLine.Filler1.FillWeight"
+        assert filler.signals["state"].opcua_node == "FoodBevLine.Filler1.State"
+        assert filler.signals["packs_produced"].opcua_node == "FoodBevLine.Filler1.PacksProduced"
+
+    def test_filler_hopper_level_modbus_only(self) -> None:
+        """Filler hopper_level is the only filler signal on Modbus HR."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        filler = cfg.equipment["filler"]
+        assert filler.signals["hopper_level"].modbus_hr == [1200, 1201]
+        # All other filler signals should not have modbus_hr
+        for sig_name in ["line_speed", "fill_weight", "fill_target",
+                         "fill_deviation", "packs_produced", "reject_count", "state"]:
+            assert filler.signals[sig_name].modbus_hr is None
+
+    def test_qc_opcua_nodes(self) -> None:
+        """QC signals use OPC-UA with FoodBevLine.QC1 prefix (Appendix B)."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        qc = cfg.equipment["qc"]
+        assert qc.signals["actual_weight"].opcua_node == "FoodBevLine.QC1.ActualWeight"
+        assert qc.signals["reject_total"].opcua_node == "FoodBevLine.QC1.RejectTotal"
+        assert qc.signals["throughput"].opcua_node == "FoodBevLine.QC1.Throughput"
+
+    def test_chiller_modbus_addresses(self) -> None:
+        """Chiller HR, IR, coil, and DI addresses per Appendix A."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        chiller = cfg.equipment["chiller"]
+        assert chiller.signals["room_temp"].modbus_hr == [1400, 1401]
+        assert chiller.signals["room_temp"].modbus_ir == [110]
+        assert chiller.signals["setpoint"].modbus_hr == [1402, 1403]
+        assert chiller.signals["setpoint"].modbus_writable is True
+        assert chiller.signals["suction_pressure"].modbus_hr == [1404, 1405]
+        assert chiller.signals["discharge_pressure"].modbus_hr == [1406, 1407]
+        # Coils
+        compressor = chiller.signals["compressor_state"]
+        assert compressor.model_extra.get("modbus_coil") == 101
+        defrost = chiller.signals["defrost_active"]
+        assert defrost.model_extra.get("modbus_coil") == 102
+        # Discrete input
+        door = chiller.signals["door_open"]
+        assert door.model_extra.get("modbus_di") == 100
+
+    def test_cip_modbus_addresses(self) -> None:
+        """CIP Modbus HR and IR addresses per Appendix A."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        cip = cfg.equipment["cip"]
+        assert cip.signals["wash_temp"].modbus_hr == [1500, 1501]
+        assert cip.signals["wash_temp"].modbus_ir == [115]
+        assert cip.signals["flow_rate"].modbus_hr == [1502, 1503]
+        assert cip.signals["conductivity"].modbus_hr == [1504, 1505]
+        assert cip.signals["cycle_time_elapsed"].modbus_hr == [1506, 1507]
+
+    def test_energy_shared_registers(self) -> None:
+        """Energy registers shared at HR 600-603 + F&B IR 120-121."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        energy = cfg.equipment["energy"]
+        assert energy.signals["line_power"].modbus_hr == [600, 601]
+        assert energy.signals["line_power"].modbus_ir == [120, 121]
+        assert energy.signals["cumulative_kwh"].modbus_hr == [602, 603]
+        # OPC-UA nodes under FoodBevLine
+        assert energy.signals["line_power"].opcua_node == "FoodBevLine.Energy.LinePower"
+        assert energy.signals["cumulative_kwh"].opcua_node == "FoodBevLine.Energy.CumulativeKwh"
+
+    def test_coder_mqtt_topics(self) -> None:
+        """Coder MQTT topics for F&B (same topic paths, foodbev1 line_id)."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        coder = cfg.equipment["coder"]
+        assert coder.signals["state"].mqtt_topic == "coder/state"
+        assert coder.signals["prints_total"].mqtt_topic == "coder/prints_total"
+        assert coder.signals["nozzle_health"].mqtt_topic == "coder/nozzle_health"
+        assert coder.signals["gutter_fault"].mqtt_topic == "coder/gutter_fault"
+
+    def test_environment_mqtt_topics(self) -> None:
+        """Environment MQTT topics for F&B."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        env = cfg.equipment["environment"]
+        assert env.signals["ambient_temp"].mqtt_topic == "env/ambient_temp"
+        assert env.signals["ambient_humidity"].mqtt_topic == "env/ambient_humidity"
+
+    def test_no_vibration_equipment(self) -> None:
+        """F&B profile has no vibration equipment group."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        assert "vibration" not in cfg.equipment
+
+    def test_fnb_scenarios_enabled(self) -> None:
+        """F&B scenario configs should be present and enabled."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        assert cfg.scenarios.batch_cycle is not None
+        assert cfg.scenarios.batch_cycle.enabled is True
+        assert cfg.scenarios.oven_thermal_excursion is not None
+        assert cfg.scenarios.oven_thermal_excursion.enabled is True
+        assert cfg.scenarios.fill_weight_drift is not None
+        assert cfg.scenarios.fill_weight_drift.enabled is True
+        assert cfg.scenarios.seal_integrity_failure is not None
+        assert cfg.scenarios.seal_integrity_failure.enabled is True
+        assert cfg.scenarios.chiller_door_alarm is not None
+        assert cfg.scenarios.chiller_door_alarm.enabled is True
+        assert cfg.scenarios.cip_cycle is not None
+        assert cfg.scenarios.cip_cycle.enabled is True
+        assert cfg.scenarios.cold_chain_break is not None
+        assert cfg.scenarios.cold_chain_break.enabled is True
+
+    def test_packaging_scenarios_disabled(self) -> None:
+        """Most packaging scenarios should be disabled for F&B profile."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        assert cfg.scenarios.job_changeover.enabled is False
+        assert cfg.scenarios.web_break.enabled is False
+        assert cfg.scenarios.dryer_drift.enabled is False
+        assert cfg.scenarios.bearing_wear.enabled is False
+
+    def test_coder_coupling_config(self) -> None:
+        """Coder should have coupling config for F&B (follows filler)."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        coder = cfg.equipment["coder"]
+        assert coder.model_extra is not None
+        assert coder.model_extra.get("coupling_state_signal") == "filler.state"
+        assert coder.model_extra.get("coupling_speed_signal") == "filler.line_speed"
+        assert coder.model_extra.get("coupling_running_state") == 2
+
+    def test_energy_follows_filler(self) -> None:
+        """Energy line_power should follow filler.line_speed for F&B."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        energy = cfg.equipment["energy"]
+        assert energy.signals["line_power"].parent == "filler.line_speed"
+
+    def test_mixer_coil_address(self) -> None:
+        """Mixer lid_closed should map to coil 100."""
+        cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
+        lid = cfg.equipment["mixer"].signals["lid_closed"]
+        assert lid.model_extra.get("modbus_coil") == 100

@@ -4,7 +4,7 @@
 
 ## Tasks
 - [x] 3.1: F&B Equipment Config Models
-- [ ] 3.2: F&B Factory Config (factory-foodbev.yaml)
+- [x] 3.2: F&B Factory Config (factory-foodbev.yaml)
 - [ ] 3.3: Thermal Diffusion Signal Model
 - [ ] 3.4: Mixer Generator
 - [ ] 3.5: Oven Generator
@@ -44,3 +44,20 @@ Added 7 Pydantic config models for F&B scenarios to `config.py`:
 Extended `ScenariosConfig` with 7 optional fields (None by default for packaging profile).
 All follow existing range-pair validation pattern with `_validate_range_pair()`.
 22 new tests added. All 1513 tests pass.
+
+### Task 3.2: F&B Factory Config (factory-foodbev.yaml)
+Created `config/factory-foodbev.yaml` with all 68 signals across 10 equipment groups:
+- **Mixer** (8 signals): `modbus_byte_order: "CDAB"` on HR 1000-1011 for Allen-Bradley CompactLogix, coil 100 for lid_closed
+- **Oven** (13 signals): 3-zone temps + setpoints (writable), 3 output_power on multi-slave UIDs 11/12/13 (IR 0-2, int16 x10), belt_speed, state
+- **Filler** (8 signals): 7 OPC-UA only (FoodBevLine.Filler1.*), hopper_level sole Modbus signal (HR 1200-1201)
+- **Sealer** (6 signals): HR 1300-1311, seal temp/pressure/dwell + MAP gas + vacuum
+- **QC** (6 signals): All OPC-UA (FoodBevLine.QC1.*), actual_weight/overweight/underweight/metal_detect/throughput/state
+- **Chiller** (7 signals): HR 1400-1407, IR 110-111, coils 101-102, DI 100
+- **CIP** (5 signals): state OPC-UA, rest on HR 1500-1507, IR 115
+- **Coder** (11 signals, shared): MQTT topics with coupling_state_signal=filler.state, coupling_running_state=Running
+- **Environment** (2 signals, shared): MQTT, tighter F&B ranges (center 15°C for food factory)
+- **Energy** (2 signals, shared): HR 600-603 (shared registers), OPC-UA FoodBevLine.Energy, parent=filler.line_speed
+
+All 7 F&B scenarios enabled; packaging scenarios disabled except shift_change.
+All Modbus addresses cross-referenced against PRD Appendix A. OPC-UA nodes match Appendix B. MQTT topics match Appendix C (13 total: 11 coder + 2 env, no vibration).
+22 new tests in `TestFnbConfigLoading`. All 1538 tests pass.

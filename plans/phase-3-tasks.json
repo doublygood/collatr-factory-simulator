@@ -20,7 +20,7 @@
       "description": "Create F&B factory configuration with all 9 equipment groups (6 new + 3 shared), 68 signals with Modbus/OPC-UA/MQTT mappings, and F&B scenario configs. Cross-reference all addresses against PRD Appendix A/B/C.",
       "prd_refs": ["prd/02b-factory-layout-food-and-beverage.md", "prd/appendix-a-modbus-register-map.md", "prd/appendix-b-opcua-node-tree.md", "prd/appendix-c-mqtt-topic-map.md", "prd/06-configuration.md"],
       "depends_on": ["3.1"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.3",

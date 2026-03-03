@@ -1,0 +1,1103 @@
+# Collatr Factory Simulator Configuration
+# Profile: F&B Chilled Ready Meal (68 signals, 10 equipment groups)
+# PRD Reference: Section 2b, Appendix A/B/C (F&B sections)
+
+factory:
+  name: "Demo F&B Factory"
+  site_id: "demo"
+  timezone: "Europe/London"
+
+simulation:
+  time_scale: 1.0          # 1.0 = real-time, 10.0 = 10x speed
+  random_seed: null         # null = time-based, integer = deterministic
+  tick_interval_ms: 100     # Internal engine tick rate (ms)
+  start_time: null          # null = now, ISO8601 = specific start
+  log_level: "info"
+
+protocols:
+  modbus:
+    enabled: true
+    bind_address: "0.0.0.0"
+    port: 502
+    unit_id: 1
+    byte_order: "ABCD"       # Default; mixer signals override to CDAB per-signal
+    error_injection:
+      exception_probability: 0.001
+      timeout_probability: 0.0005
+      response_delay_ms: [0, 50]
+
+  opcua:
+    enabled: true
+    bind_address: "0.0.0.0"
+    port: 4840
+    server_name: "Collatr Factory Simulator"
+    namespace_uri: "urn:collatr:factory-simulator"
+    security_mode: "None"
+    anonymous_access: true
+    users:
+      - username: "collatr"
+        password: "collatr123"
+
+  mqtt:
+    enabled: true
+    broker_host: "mqtt-broker"
+    broker_port: 1883
+    topic_prefix: "collatr/factory"
+    line_id: "foodbev1"        # F&B line identifier (packaging uses "packaging1")
+    sparkplug_b: false
+    retain: true
+    client_id: "factory-simulator"
+    username: null
+    password: null
+    qos_default: 1
+    buffer_limit: 1000
+    buffer_overflow: "drop_oldest"
+    lwt_topic: "collatr/factory/status"
+    lwt_payload: '{"status": "offline"}'
+    vibration_per_axis_enabled: false   # No vibration equipment in F&B profile
+
+# ---------------------------------------------------------------------------
+# Equipment: F&B Profile (68 signals across 10 groups)
+# PRD Reference: Section 2b.2-2b.11, Appendix A/B/C (F&B sections)
+# ---------------------------------------------------------------------------
+
+equipment:
+
+  # --- Mixing and Blending: 8 signals (PRD 2b.2) ---
+  # Allen-Bradley CompactLogix PLC, CDAB byte order
+  mixer:
+    enabled: true
+    type: "high_shear_mixer"
+    target_speed: 2000            # RPM normal mixing speed
+    speed_range: [0, 3000]
+    signals:
+      speed:
+        model: "ramp"
+        noise_sigma: 10.0
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 3000.0
+        units: "RPM"
+        modbus_hr: [1000, 1001]
+        modbus_type: "float32"
+        modbus_byte_order: "CDAB"
+        params:
+          ramp_duration_s: 30
+
+      torque:
+        model: "correlated_follower"
+        parent: "mixer.speed"
+        transform: "linear"
+        noise_sigma: 1.0
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 100.0
+        units: "%"
+        modbus_hr: [1002, 1003]
+        modbus_type: "float32"
+        modbus_byte_order: "CDAB"
+        params:
+          base: 5.0
+          factor: 0.03
+
+      batch_temp:
+        model: "first_order_lag"
+        noise_sigma: 0.3
+        noise_type: "ar1"
+        noise_phi: 0.7
+        sample_rate_ms: 5000
+        min_clamp: -5.0
+        max_clamp: 95.0
+        units: "C"
+        modbus_hr: [1004, 1005]
+        modbus_type: "float32"
+        modbus_byte_order: "CDAB"
+        params:
+          tau: 300.0
+          initial_value: 4.0
+
+      batch_weight:
+        model: "ramp"
+        noise_sigma: 2.0
+        sample_rate_ms: 5000
+        min_clamp: 0.0
+        max_clamp: 2000.0
+        units: "kg"
+        modbus_hr: [1006, 1007]
+        modbus_type: "float32"
+        modbus_byte_order: "CDAB"
+        params:
+          ramp_duration_s: 60
+
+      state:
+        model: "state_machine"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 5.0
+        units: "enum"
+        opcua_node: "FoodBevLine.Mixer1.State"
+        opcua_type: "UInt16"
+        params:
+          states: ["off", "loading", "mixing", "holding", "discharging", "cip"]
+          initial_state: "off"
+
+      batch_id:
+        model: "steady_state"
+        noise_sigma: 0.0
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 0.0
+        units: ""
+        opcua_node: "FoodBevLine.Mixer1.BatchId"
+        opcua_type: "String"
+        params:
+          target: 0.0
+
+      mix_time_elapsed:
+        model: "counter"
+        sample_rate_ms: 5000
+        min_clamp: 0.0
+        max_clamp: 3600.0
+        units: "s"
+        modbus_hr: [1010, 1011]
+        modbus_type: "uint32"
+        modbus_byte_order: "CDAB"
+        params:
+          rate: 1.0
+          rollover: 3600
+
+      lid_closed:
+        model: "state_machine"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 1.0
+        units: "bool"
+        modbus_coil: 100
+        params:
+          states: ["open", "closed"]
+          initial_state: "closed"
+
+  # --- Oven / Cooking Line: 13 signals (PRD 2b.3) ---
+  # Eurotherm temperature controllers, ABCD byte order
+  # Multi-slave UIDs 11-13 for zone output power (PRD 3.1.6)
+  oven:
+    enabled: true
+    type: "tunnel_oven"
+    tunnel_length: 6.0            # metres
+    signals:
+      zone_1_temp:
+        model: "first_order_lag"
+        noise_sigma: 0.8
+        noise_type: "ar1"
+        noise_phi: 0.7
+        sample_rate_ms: 5000
+        min_clamp: 80.0
+        max_clamp: 280.0
+        units: "C"
+        modbus_hr: [1100, 1101]
+        modbus_type: "float32"
+        modbus_ir: [100]
+        params:
+          tau: 180.0
+          initial_value: 20.0
+
+      zone_2_temp:
+        model: "first_order_lag"
+        noise_sigma: 0.8
+        noise_type: "ar1"
+        noise_phi: 0.7
+        sample_rate_ms: 5000
+        min_clamp: 80.0
+        max_clamp: 280.0
+        units: "C"
+        modbus_hr: [1102, 1103]
+        modbus_type: "float32"
+        modbus_ir: [101]
+        params:
+          tau: 180.0
+          initial_value: 20.0
+
+      zone_3_temp:
+        model: "first_order_lag"
+        noise_sigma: 0.8
+        noise_type: "ar1"
+        noise_phi: 0.7
+        sample_rate_ms: 5000
+        min_clamp: 80.0
+        max_clamp: 280.0
+        units: "C"
+        modbus_hr: [1104, 1105]
+        modbus_type: "float32"
+        modbus_ir: [102]
+        params:
+          tau: 180.0
+          initial_value: 20.0
+
+      zone_1_setpoint:
+        model: "steady_state"
+        noise_sigma: 0.0
+        min_clamp: 80.0
+        max_clamp: 280.0
+        units: "C"
+        modbus_hr: [1110, 1111]
+        modbus_type: "float32"
+        modbus_writable: true
+        modbus_ir: [103]
+        params:
+          target: 160.0
+
+      zone_2_setpoint:
+        model: "steady_state"
+        noise_sigma: 0.0
+        min_clamp: 80.0
+        max_clamp: 280.0
+        units: "C"
+        modbus_hr: [1112, 1113]
+        modbus_type: "float32"
+        modbus_writable: true
+        modbus_ir: [104]
+        params:
+          target: 200.0
+
+      zone_3_setpoint:
+        model: "steady_state"
+        noise_sigma: 0.0
+        min_clamp: 80.0
+        max_clamp: 280.0
+        units: "C"
+        modbus_hr: [1114, 1115]
+        modbus_type: "float32"
+        modbus_writable: true
+        modbus_ir: [105]
+        params:
+          target: 180.0
+
+      belt_speed:
+        model: "steady_state"
+        noise_sigma: 0.05
+        sample_rate_ms: 1000
+        min_clamp: 0.5
+        max_clamp: 5.0
+        units: "m/min"
+        modbus_hr: [1120, 1121]
+        modbus_type: "float32"
+        params:
+          target: 2.0
+
+      product_core_temp:
+        model: "first_order_lag"
+        noise_sigma: 0.5
+        sample_rate_ms: 5000
+        min_clamp: -5.0
+        max_clamp: 95.0
+        units: "C"
+        modbus_hr: [1122, 1123]
+        modbus_type: "float32"
+        modbus_ir: [106]
+        params:
+          tau: 300.0
+          initial_value: 4.0
+
+      humidity_zone_2:
+        model: "steady_state"
+        noise_sigma: 2.0
+        sample_rate_ms: 10000
+        min_clamp: 30.0
+        max_clamp: 90.0
+        units: "%RH"
+        modbus_hr: [1124, 1125]
+        modbus_type: "float32"
+        params:
+          target: 60.0
+
+      state:
+        model: "state_machine"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 4.0
+        units: "enum"
+        opcua_node: "FoodBevLine.Oven1.State"
+        opcua_type: "UInt16"
+        params:
+          states: ["off", "preheat", "running", "idle", "cooldown"]
+          initial_state: "off"
+
+      zone_1_output_power:
+        model: "correlated_follower"
+        parent: "oven.zone_1_temp"
+        transform: "linear"
+        noise_sigma: 1.0
+        sample_rate_ms: 5000
+        min_clamp: 0.0
+        max_clamp: 100.0
+        units: "%"
+        modbus_slave_id: 11
+        modbus_ir: [2]
+        params:
+          base: 50.0
+          factor: -0.3
+
+      zone_2_output_power:
+        model: "correlated_follower"
+        parent: "oven.zone_2_temp"
+        transform: "linear"
+        noise_sigma: 1.0
+        sample_rate_ms: 5000
+        min_clamp: 0.0
+        max_clamp: 100.0
+        units: "%"
+        modbus_slave_id: 12
+        modbus_ir: [2]
+        params:
+          base: 50.0
+          factor: -0.3
+
+      zone_3_output_power:
+        model: "correlated_follower"
+        parent: "oven.zone_3_temp"
+        transform: "linear"
+        noise_sigma: 1.0
+        sample_rate_ms: 5000
+        min_clamp: 0.0
+        max_clamp: 100.0
+        units: "%"
+        modbus_slave_id: 13
+        modbus_ir: [2]
+        params:
+          base: 50.0
+          factor: -0.3
+
+  # --- Filling Station: 8 signals (PRD 2b.4) ---
+  # Siemens S7-1200 PLC. Most signals via OPC-UA; hopper_level on Modbus HR.
+  filler:
+    enabled: true
+    type: "gravimetric_filler"
+    fill_target_g: 400.0
+    fill_giveaway_g: 5.0
+    fill_sigma_g: 3.0
+    fill_tolerance_g: 15.0
+    signals:
+      line_speed:
+        model: "steady_state"
+        noise_sigma: 0.5
+        sample_rate_ms: 1000
+        min_clamp: 10.0
+        max_clamp: 120.0
+        units: "packs/min"
+        opcua_node: "FoodBevLine.Filler1.LineSpeed"
+        opcua_type: "Double"
+        params:
+          target: 60.0
+
+      fill_weight:
+        model: "steady_state"
+        noise_sigma: 3.0
+        sample_rate_ms: 1000
+        min_clamp: 200.0
+        max_clamp: 800.0
+        units: "g"
+        opcua_node: "FoodBevLine.Filler1.FillWeight"
+        opcua_type: "Double"
+        params:
+          target: 405.0        # target + giveaway
+
+      fill_target:
+        model: "steady_state"
+        noise_sigma: 0.0
+        sample_rate_ms: 1000
+        min_clamp: 200.0
+        max_clamp: 800.0
+        units: "g"
+        opcua_node: "FoodBevLine.Filler1.FillTarget"
+        opcua_type: "Double"
+        params:
+          target: 400.0
+
+      fill_deviation:
+        model: "steady_state"
+        noise_sigma: 0.0
+        sample_rate_ms: 1000
+        min_clamp: -20.0
+        max_clamp: 20.0
+        units: "g"
+        opcua_node: "FoodBevLine.Filler1.FillDeviation"
+        opcua_type: "Double"
+        params:
+          target: 5.0
+
+      packs_produced:
+        model: "counter"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 999999.0
+        units: "count"
+        opcua_node: "FoodBevLine.Filler1.PacksProduced"
+        opcua_type: "UInt32"
+        params:
+          rate: 1.0
+          rollover: 999999
+
+      reject_count:
+        model: "counter"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 9999.0
+        units: "count"
+        opcua_node: "FoodBevLine.Filler1.RejectCount"
+        opcua_type: "UInt32"
+        params:
+          rate: 0.01
+          rollover: 9999
+
+      state:
+        model: "state_machine"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 4.0
+        units: "enum"
+        opcua_node: "FoodBevLine.Filler1.State"
+        opcua_type: "UInt16"
+        params:
+          states: ["off", "setup", "running", "starved", "fault"]
+          initial_state: "off"
+
+      hopper_level:
+        model: "depletion"
+        noise_sigma: 1.0
+        sample_rate_ms: 10000
+        min_clamp: 0.0
+        max_clamp: 100.0
+        units: "%"
+        modbus_hr: [1200, 1201]
+        modbus_type: "float32"
+        params:
+          initial_value: 80.0
+          consumption_rate: 0.1
+          refill_threshold: 10.0
+          refill_value: 90.0
+
+  # --- Sealing and Lidding: 6 signals (PRD 2b.5) ---
+  # Siemens S7-1200 / integrated sealer controller, ABCD byte order
+  sealer:
+    enabled: true
+    type: "tray_sealer"
+    signals:
+      seal_temp:
+        model: "steady_state"
+        noise_sigma: 1.5
+        noise_type: "ar1"
+        noise_phi: 0.6
+        sample_rate_ms: 5000
+        min_clamp: 100.0
+        max_clamp: 250.0
+        units: "C"
+        modbus_hr: [1300, 1301]
+        modbus_type: "float32"
+        params:
+          target: 180.0
+
+      seal_pressure:
+        model: "steady_state"
+        noise_sigma: 0.1
+        sample_rate_ms: 5000
+        min_clamp: 1.0
+        max_clamp: 6.0
+        units: "bar"
+        modbus_hr: [1302, 1303]
+        modbus_type: "float32"
+        params:
+          target: 3.5
+
+      seal_dwell:
+        model: "steady_state"
+        noise_sigma: 0.05
+        sample_rate_ms: 5000
+        min_clamp: 0.5
+        max_clamp: 5.0
+        units: "s"
+        modbus_hr: [1304, 1305]
+        modbus_type: "float32"
+        params:
+          target: 2.0
+
+      gas_co2_pct:
+        model: "steady_state"
+        noise_sigma: 0.5
+        sample_rate_ms: 10000
+        min_clamp: 20.0
+        max_clamp: 80.0
+        units: "%"
+        modbus_hr: [1306, 1307]
+        modbus_type: "float32"
+        params:
+          target: 30.0
+
+      gas_n2_pct:
+        model: "steady_state"
+        noise_sigma: 0.5
+        sample_rate_ms: 10000
+        min_clamp: 20.0
+        max_clamp: 80.0
+        units: "%"
+        modbus_hr: [1308, 1309]
+        modbus_type: "float32"
+        params:
+          target: 70.0
+
+      vacuum_level:
+        model: "steady_state"
+        noise_sigma: 0.02
+        sample_rate_ms: 5000
+        min_clamp: -0.9
+        max_clamp: 0.0
+        units: "bar"
+        modbus_hr: [1310, 1311]
+        modbus_type: "float32"
+        params:
+          target: -0.7
+
+  # --- Checkweigher and Metal Detection (QC): 6 signals (PRD 2b.6) ---
+  # All signals via OPC-UA
+  qc:
+    enabled: true
+    type: "checkweigher"
+    tray_weight_g: 10.0           # Tray + lid weight offset
+    overweight_threshold_g: 30.0  # Above target + this = overweight
+    underweight_threshold_g: 15.0 # Below target - this = underweight (TNE)
+    signals:
+      actual_weight:
+        model: "steady_state"
+        noise_sigma: 2.0
+        sample_rate_ms: 1000
+        min_clamp: 100.0
+        max_clamp: 1000.0
+        units: "g"
+        opcua_node: "FoodBevLine.QC1.ActualWeight"
+        opcua_type: "Double"
+        params:
+          target: 415.0        # fill_weight + tray_weight
+
+      overweight_count:
+        model: "counter"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 9999.0
+        units: "count"
+        opcua_node: "FoodBevLine.QC1.OverweightCount"
+        opcua_type: "UInt32"
+        params:
+          rate: 0.001
+          rollover: 9999
+
+      underweight_count:
+        model: "counter"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 9999.0
+        units: "count"
+        opcua_node: "FoodBevLine.QC1.UnderweightCount"
+        opcua_type: "UInt32"
+        params:
+          rate: 0.0005
+          rollover: 9999
+
+      metal_detect_trips:
+        model: "counter"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 99.0
+        units: "count"
+        opcua_node: "FoodBevLine.QC1.MetalDetectTrips"
+        opcua_type: "UInt32"
+        params:
+          rate: 0.0001
+          rollover: 99
+
+      throughput:
+        model: "correlated_follower"
+        parent: "filler.line_speed"
+        transform: "linear"
+        noise_sigma: 0.3
+        sample_rate_ms: 1000
+        min_clamp: 10.0
+        max_clamp: 120.0
+        units: "items/min"
+        opcua_node: "FoodBevLine.QC1.Throughput"
+        opcua_type: "Double"
+        params:
+          base: 0.0
+          factor: 1.0
+
+      reject_total:
+        model: "counter"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 9999.0
+        units: "count"
+        opcua_node: "FoodBevLine.QC1.RejectTotal"
+        opcua_type: "UInt32"
+        params:
+          rate: 0.002
+          rollover: 9999
+
+  # --- Refrigeration: 7 signals (PRD 2b.7) ---
+  # Danfoss controller, ABCD byte order
+  chiller:
+    enabled: true
+    type: "cold_room"
+    signals:
+      room_temp:
+        model: "steady_state"
+        noise_sigma: 0.2
+        sample_rate_ms: 30000
+        min_clamp: -5.0
+        max_clamp: 15.0
+        units: "C"
+        modbus_hr: [1400, 1401]
+        modbus_type: "float32"
+        modbus_ir: [110]
+        params:
+          target: 2.0
+
+      setpoint:
+        model: "steady_state"
+        noise_sigma: 0.0
+        min_clamp: -5.0
+        max_clamp: 15.0
+        units: "C"
+        modbus_hr: [1402, 1403]
+        modbus_type: "float32"
+        modbus_writable: true
+        modbus_ir: [111]
+        params:
+          target: 2.0
+
+      compressor_state:
+        model: "state_machine"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 1.0
+        units: "bool"
+        modbus_coil: 101
+        params:
+          states: ["off", "on"]
+          initial_state: "on"
+
+      suction_pressure:
+        model: "steady_state"
+        noise_sigma: 0.1
+        sample_rate_ms: 30000
+        min_clamp: 0.0
+        max_clamp: 10.0
+        units: "bar"
+        modbus_hr: [1404, 1405]
+        modbus_type: "float32"
+        params:
+          target: 3.5
+
+      discharge_pressure:
+        model: "steady_state"
+        noise_sigma: 0.3
+        sample_rate_ms: 30000
+        min_clamp: 5.0
+        max_clamp: 25.0
+        units: "bar"
+        modbus_hr: [1406, 1407]
+        modbus_type: "float32"
+        params:
+          target: 15.0
+
+      defrost_active:
+        model: "state_machine"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 1.0
+        units: "bool"
+        modbus_coil: 102
+        params:
+          states: ["inactive", "active"]
+          initial_state: "inactive"
+
+      door_open:
+        model: "state_machine"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 1.0
+        units: "bool"
+        modbus_di: 100
+        params:
+          states: ["closed", "open"]
+          initial_state: "closed"
+
+  # --- CIP (Clean-in-Place): 5 signals (PRD 2b.8) ---
+  # Siemens S7-1200 PLC, ABCD byte order
+  cip:
+    enabled: true
+    type: "cip_skid"
+    signals:
+      state:
+        model: "state_machine"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 5.0
+        units: "enum"
+        opcua_node: "FoodBevLine.CIP1.State"
+        opcua_type: "UInt16"
+        params:
+          states: ["idle", "pre_rinse", "caustic_wash", "intermediate_rinse", "acid_wash", "final_rinse"]
+          initial_state: "idle"
+
+      wash_temp:
+        model: "first_order_lag"
+        noise_sigma: 0.5
+        noise_type: "ar1"
+        noise_phi: 0.7
+        sample_rate_ms: 5000
+        min_clamp: 15.0
+        max_clamp: 85.0
+        units: "C"
+        modbus_hr: [1500, 1501]
+        modbus_type: "float32"
+        modbus_ir: [115]
+        params:
+          tau: 60.0
+          initial_value: 20.0
+
+      flow_rate:
+        model: "steady_state"
+        noise_sigma: 2.0
+        sample_rate_ms: 5000
+        min_clamp: 0.0
+        max_clamp: 100.0
+        units: "L/min"
+        modbus_hr: [1502, 1503]
+        modbus_type: "float32"
+        params:
+          target: 0.0
+
+      conductivity:
+        model: "steady_state"
+        noise_sigma: 1.0
+        sample_rate_ms: 10000
+        min_clamp: 0.0
+        max_clamp: 200.0
+        units: "mS/cm"
+        modbus_hr: [1504, 1505]
+        modbus_type: "float32"
+        params:
+          target: 0.0
+
+      cycle_time_elapsed:
+        model: "counter"
+        sample_rate_ms: 5000
+        min_clamp: 0.0
+        max_clamp: 7200.0
+        units: "s"
+        modbus_hr: [1506, 1507]
+        modbus_type: "uint32"
+        params:
+          rate: 1.0
+          rollover: 7200
+
+  # --- Coding and Marking: 11 signals (PRD 2b.9, same as packaging 2.5) ---
+  # Shared equipment. Follows filler.state for F&B (not press.machine_state).
+  coder:
+    enabled: true
+    type: "cij_printer"
+    coupling_state_signal: "filler.state"
+    coupling_speed_signal: "filler.line_speed"
+    coupling_running_state: 2
+    signals:
+      state:
+        model: "state_machine"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 4.0
+        units: "enum"
+        mqtt_topic: "coder/state"
+        params:
+          states: ["off", "ready", "printing", "fault", "standby"]
+          initial_state: "ready"
+
+      prints_total:
+        model: "counter"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 999999999.0
+        units: "count"
+        mqtt_topic: "coder/prints_total"
+        params:
+          rate: 1.0
+          rollover: 999999999
+
+      ink_level:
+        model: "depletion"
+        sample_rate_ms: 60000
+        min_clamp: 0.0
+        max_clamp: 100.0
+        units: "%"
+        mqtt_topic: "coder/ink_level"
+        params:
+          initial_value: 100.0
+          consumption_rate: 0.005
+          refill_threshold: 5.0
+          refill_value: 100.0
+
+      printhead_temp:
+        model: "steady_state"
+        noise_sigma: 2.0
+        noise_type: "ar1"
+        noise_phi: 0.7
+        sample_rate_ms: 30000
+        min_clamp: 25.0
+        max_clamp: 50.0
+        units: "C"
+        mqtt_topic: "coder/printhead_temp"
+        params:
+          target: 35.0
+
+      ink_pump_speed:
+        model: "correlated_follower"
+        parent: "filler.line_speed"
+        transform: "linear"
+        noise_sigma: 10.0
+        sample_rate_ms: 5000
+        min_clamp: 0.0
+        max_clamp: 500.0
+        units: "RPM"
+        mqtt_topic: "coder/ink_pump_speed"
+        params:
+          base: 50.0
+          factor: 3.0
+
+      ink_pressure:
+        model: "steady_state"
+        noise_sigma: 10.0
+        noise_type: "student_t"
+        noise_df: 6
+        sample_rate_ms: 5000
+        min_clamp: 0.0
+        max_clamp: 900.0
+        units: "mbar"
+        mqtt_topic: "coder/ink_pressure"
+        params:
+          target: 835.0
+
+      ink_viscosity_actual:
+        model: "steady_state"
+        noise_sigma: 0.5
+        sample_rate_ms: 30000
+        min_clamp: 2.0
+        max_clamp: 15.0
+        units: "cP"
+        mqtt_topic: "coder/ink_viscosity_actual"
+        params:
+          target: 8.0
+
+      supply_voltage:
+        model: "steady_state"
+        noise_sigma: 0.2
+        sample_rate_ms: 60000
+        min_clamp: 22.0
+        max_clamp: 26.0
+        units: "V"
+        mqtt_topic: "coder/supply_voltage"
+        params:
+          target: 24.0
+
+      ink_consumption_ml:
+        model: "counter"
+        sample_rate_ms: 60000
+        min_clamp: 0.0
+        max_clamp: 999999.0
+        units: "ml"
+        mqtt_topic: "coder/ink_consumption_ml"
+        params:
+          rate: 0.01
+          rollover: 999999
+
+      nozzle_health:
+        model: "depletion"
+        sample_rate_ms: 60000
+        min_clamp: 0.0
+        max_clamp: 100.0
+        units: "%"
+        mqtt_topic: "coder/nozzle_health"
+        params:
+          initial_value: 100.0
+          consumption_rate: 0.001
+          refill_threshold: 70.0
+          refill_value: 100.0
+
+      gutter_fault:
+        model: "state_machine"
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 1.0
+        units: "bool"
+        mqtt_topic: "coder/gutter_fault"
+        params:
+          states: ["clear", "fault"]
+          initial_state: "clear"
+
+  # --- Environmental Sensors: 2 signals (PRD 2b.10) ---
+  # Shared equipment. Tighter ranges for food factories (12-18 C).
+  environment:
+    enabled: true
+    type: "iolink_sensor"
+    signals:
+      ambient_temp:
+        model: "sinusoidal"
+        noise_sigma: 0.2
+        sample_rate_ms: 60000
+        min_clamp: 5.0
+        max_clamp: 30.0
+        units: "C"
+        mqtt_topic: "env/ambient_temp"
+        params:
+          center: 15.0
+          amplitude: 2.0
+          period: 86400.0
+          hvac_period_minutes: 20
+          hvac_amplitude_c: 0.5
+          perturbation_rate_per_shift: 3
+          perturbation_magnitude_c: 1.5
+          perturbation_decay_tau_minutes: 7
+
+      ambient_humidity:
+        model: "sinusoidal"
+        noise_sigma: 1.0
+        sample_rate_ms: 60000
+        min_clamp: 30.0
+        max_clamp: 80.0
+        units: "%RH"
+        mqtt_topic: "env/ambient_humidity"
+        params:
+          center: 55.0
+          amplitude: 8.0
+          period: 86400.0
+          phase: 3.14159
+
+  # --- Energy Monitoring: 2 signals (PRD 2b.11) ---
+  # Shared registers (HR 600-603). Higher base from refrigeration.
+  energy:
+    enabled: true
+    type: "power_meter"
+    coupling_speed_signal: "filler.line_speed"
+    signals:
+      line_power:
+        model: "correlated_follower"
+        parent: "filler.line_speed"
+        transform: "linear"
+        noise_sigma: 3.0
+        sample_rate_ms: 1000
+        min_clamp: 0.0
+        max_clamp: 300.0
+        units: "kW"
+        modbus_hr: [600, 601]
+        modbus_type: "float32"
+        modbus_ir: [120, 121]
+        opcua_node: "FoodBevLine.Energy.LinePower"
+        opcua_type: "Double"
+        params:
+          base: 25.0              # Higher base from refrigeration (vs 10 packaging)
+          factor: 0.8
+
+      cumulative_kwh:
+        model: "counter"
+        sample_rate_ms: 60000
+        min_clamp: 0.0
+        max_clamp: 999999.0
+        units: "kWh"
+        modbus_hr: [602, 603]
+        modbus_type: "float32"
+        opcua_node: "FoodBevLine.Energy.CumulativeKwh"
+        opcua_type: "Double"
+        params:
+          rate: 0.000278              # 1/3600: kWh = kW * hours, dt in seconds
+          rollover: 999999
+
+# ---------------------------------------------------------------------------
+# Scenarios (PRD Section 5.14 — F&B scenarios)
+# ---------------------------------------------------------------------------
+
+scenarios:
+  # Packaging scenarios — disabled for F&B profile
+  job_changeover:
+    enabled: false
+  web_break:
+    enabled: false
+  dryer_drift:
+    enabled: false
+  bearing_wear:
+    enabled: false
+  ink_viscosity_excursion:
+    enabled: false
+  registration_drift:
+    enabled: false
+  unplanned_stop:
+    enabled: false
+  shift_change:
+    enabled: true
+    times: ["06:00", "14:00", "22:00"]
+    changeover_seconds: [300, 900]
+    night_shift_speed_factor: 0.9
+    weekend_enabled: false
+  cold_start_spike:
+    enabled: false
+
+  # F&B scenarios (PRD 5.14)
+  batch_cycle:
+    enabled: true
+    frequency_per_shift: [8, 16]
+    batch_duration_seconds: [1200, 2700]
+
+  oven_thermal_excursion:
+    enabled: true
+    frequency_per_shift: [1, 2]
+    duration_seconds: [1800, 5400]
+    max_drift_c: [3.0, 10.0]
+
+  fill_weight_drift:
+    enabled: true
+    frequency_per_shift: [1, 3]
+    duration_seconds: [600, 3600]
+    drift_rate: [0.05, 0.2]
+
+  seal_integrity_failure:
+    enabled: true
+    frequency_per_week: [1, 2]
+    duration_seconds: [300, 1800]
+
+  chiller_door_alarm:
+    enabled: true
+    frequency_per_week: [1, 3]
+    duration_seconds: [300, 1200]
+
+  cip_cycle:
+    enabled: true
+    frequency_per_day: [1, 3]
+    cycle_duration_seconds: [1800, 3600]
+
+  cold_chain_break:
+    enabled: true
+    frequency_per_month: [1, 2]
+    duration_seconds: [1800, 7200]
+
+# ---------------------------------------------------------------------------
+# Shifts (PRD Section 6.2)
+# ---------------------------------------------------------------------------
+
+shifts:
+  pattern: "3x8"
+  day_start: "06:00"
+  operators:
+    morning:
+      speed_bias: 1.0
+      waste_rate_bias: 1.0
+    afternoon:
+      speed_bias: 0.95
+      waste_rate_bias: 1.05
+    night:
+      speed_bias: 0.90
+      waste_rate_bias: 1.10
