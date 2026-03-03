@@ -1,8 +1,10 @@
 # Phase 3: Acceptance Test — Both Profiles
 
+> **STATUS: DEFERRED TO PHASE 5 COMPLETION.** The simulator has no CLI entry point or Dockerfile yet (Phase 5 scope). The programmatic acceptance test script (`scripts/acceptance_test.py`) tests simulator internals without Docker/CLI. Full Edge-vs-Simulator smoke testing requires the Phase 5 Docker Compose setup. The `configs/collatr-edge-foodbev.toml` is ready for that integration.
+
 **Purpose:** Verify the factory simulator serves correct data across all three protocols for BOTH profiles (packaging 47 signals + F&B 68 signals). Phase 3 gate.
 
-**When:** After Phase 3 implementation is complete.
+**When:** After Phase 5 implementation is complete (CLI + Docker).
 
 **How:** Programmatic acceptance test (`scripts/acceptance_test.py`) — runs the simulator engine in-process, starts protocol servers, connects as a client, and verifies everything automatically. No Docker (except Mosquitto for MQTT). No CollatrEdge. No CLI.
 
