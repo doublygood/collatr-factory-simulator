@@ -150,7 +150,7 @@
       "description": "Batch cycle drives mixer through Loading→Mixing→Holding→Discharging sequence. 20-45 min per batch, 8-16 per shift. Batch-to-batch variation. Ground truth batch events.",
       "prd_refs": ["prd/05-scenario-system.md (5.14.1)"],
       "depends_on": ["3.4"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.16",

@@ -17,7 +17,7 @@
 - [x] 3.12: F&B Modbus — CDAB Encoding + Dynamic Block Sizing
 - [x] 3.13: F&B Modbus — Multi-Slave Oven Eurotherm UIDs
 - [x] 3.14: F&B OPC-UA + MQTT Validation Tests
-- [ ] 3.15: Batch Cycle Scenario (Mixer)
+- [x] 3.15: Batch Cycle Scenario (Mixer)
 - [ ] 3.16: Oven Thermal Excursion Scenario
 - [ ] 3.17: Fill Weight Drift Scenario
 - [ ] 3.18: Seal Integrity Failure Scenario
@@ -285,3 +285,25 @@ Existing output_power signals keep `modbus_slave_id` + `modbus_ir: [2]` (no `mod
 **Also fixed**: Pre-existing E501 ruff violation in `test_config.py:763` (line too long in assertion).
 
 All 1820 tests pass.
+
+### Task 3.15: Batch Cycle Scenario (Mixer)
+
+**File**: `src/factory_simulator/scenarios/batch_cycle.py`
+
+**Design**: One scenario instance = one batch cycle (Loading → Mixing → Holding → Discharging). The scheduler creates 8-16 per shift. This matches the existing pattern (e.g., dryer_drift = one anomaly occurrence).
+
+**Implementation**:
+- `BatchCycle(Scenario)` with internal `_Phase` enum (LOADING/MIXING/HOLDING/DISCHARGING)
+- Phase durations drawn at construction from configured `[min, max]` ranges — batch-to-batch variation
+- Default ranges from PRD 5.14.1: loading 2-5 min, mixing 10-25 min, holding 5-10 min, discharging 2-5 min (total 19-45 min ≈ 20-45 min requirement)
+- `_on_activate`: finds MixerGenerator, calls `force_state("Loading")`, logs `scenario_start` + `state_change` events
+- `_on_tick`: tracks `_phase_elapsed`, calls `_transition()` at each threshold
+- `_on_complete`: calls `force_state("Off")`, logs `state_change` + `scenario_end`
+- Graceful completion if no MixerGenerator found (packaging profile protection)
+
+**Tests** (`tests/unit/test_scenarios/test_batch_cycle.py`):
+- 14 tests in 4 classes: Lifecycle, StateTransitions, Variation, NoMixer
+- Key tests: full phase sequence in order, mixer returns to Off after completion, durations within PRD range, different seeds produce different durations, graceful exit without mixer
+- Uses F&B config (factory-foodbev.yaml); packages config used for NoMixer test
+
+All 1865 tests pass.
