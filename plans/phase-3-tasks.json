@@ -30,7 +30,7 @@
       "description": "Implement truncated Fourier series thermal diffusion model (PRD 4.2.10) for product core temperature. Adaptive term count, reset capability, noise injection. S-curve heat penetration profile for food products.",
       "prd_refs": ["prd/04-data-generation-engine.md (4.2.10)"],
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.4",

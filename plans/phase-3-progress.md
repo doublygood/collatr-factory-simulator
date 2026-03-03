@@ -5,7 +5,7 @@
 ## Tasks
 - [x] 3.1: F&B Equipment Config Models
 - [x] 3.2: F&B Factory Config (factory-foodbev.yaml)
-- [ ] 3.3: Thermal Diffusion Signal Model
+- [x] 3.3: Thermal Diffusion Signal Model
 - [ ] 3.4: Mixer Generator
 - [ ] 3.5: Oven Generator
 - [ ] 3.6: Filler Generator
@@ -61,3 +61,16 @@ Created `config/factory-foodbev.yaml` with all 68 signals across 10 equipment gr
 All 7 F&B scenarios enabled; packaging scenarios disabled except shift_change.
 All Modbus addresses cross-referenced against PRD Appendix A. OPC-UA nodes match Appendix B. MQTT topics match Appendix C (13 total: 11 coder + 2 env, no vibration).
 22 new tests in `TestFnbConfigLoading`. All 1538 tests pass.
+
+### Task 3.3: Thermal Diffusion Signal Model
+`ThermalDiffusionModel` in `src/factory_simulator/models/thermal_diffusion.py` — already implemented in prior session but task JSON not updated.
+- Truncated Fourier series for 1D heat conduction in a slab (PRD 4.2.10)
+- Uses `4*L^2` in decay denominator (standard physics for slab with half-thickness L)
+- Adaptive term count: sums until `|T(0) - T_initial| < 1.0°C`
+- `generate(sim_time, dt)` advances elapsed time and returns core temp
+- `reset()` clears elapsed time; `restart(T_initial, T_oven)` updates params and recomputes terms
+- `set_oven_temp(T_oven)` changes oven temp mid-run without resetting elapsed
+- Noise injection via optional `NoiseGenerator`
+- 62 tests covering convergence, monotonicity, physical correctness (72°C in ~8-9 min), determinism, time compression, edge cases, Hypothesis property-based tests
+- Exported from `factory_simulator.models` package
+- All 1538 tests pass.
