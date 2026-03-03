@@ -160,7 +160,7 @@
       "description": "One oven zone drifts from setpoint (0.1-0.3 C/min). Adjacent zones respond via thermal coupling (0.05 factor). Product core temp deviates. Recovery after 30-90 min. Analogous to DryerDrift.",
       "prd_refs": ["prd/05-scenario-system.md (5.14.2)"],
       "depends_on": ["3.5"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.17",

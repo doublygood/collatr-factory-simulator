@@ -18,7 +18,7 @@
 - [x] 3.13: F&B Modbus — Multi-Slave Oven Eurotherm UIDs
 - [x] 3.14: F&B OPC-UA + MQTT Validation Tests
 - [x] 3.15: Batch Cycle Scenario (Mixer)
-- [ ] 3.16: Oven Thermal Excursion Scenario
+- [x] 3.16: Oven Thermal Excursion Scenario
 - [ ] 3.17: Fill Weight Drift Scenario
 - [ ] 3.18: Seal Integrity Failure Scenario
 - [ ] 3.19: Chiller Door Alarm Scenario
