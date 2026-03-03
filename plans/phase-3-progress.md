@@ -8,7 +8,7 @@
 - [x] 3.3: Thermal Diffusion Signal Model
 - [x] 3.4: Mixer Generator
 - [x] 3.5: Oven Generator
-- [ ] 3.6: Filler Generator
+- [x] 3.6: Filler Generator
 - [ ] 3.7: Sealer Generator
 - [ ] 3.8: Checkweigher (QC) Generator
 - [ ] 3.9: Chiller Generator
@@ -105,3 +105,19 @@ All Modbus addresses cross-referenced against PRD Appendix A. OPC-UA nodes match
 - Properties exposed: state_machine, zone_temp_models, zone_setpoint_models, thermal_diffusion_model, thermal_coupling
 - 29 tests covering: signal IDs, initial state, all state transitions, belt speed behavior, product core temp (rise during Running, hold during Off, trend), output power bounds and direction, all 13 signals per tick, determinism, protocol mappings
 - All 1594 tests pass (1565 existing + 29 new).
+
+### Task 3.6: Filler Generator
+`FillerGenerator` in `src/factory_simulator/generators/filler.py` — 8 signals, 5-state machine.
+- **State machine**: Off(0)/Setup(1)/Running(2)/Starved(3)/Fault(4) via `StateMachineModel`
+- **Line speed** (SteadyStateModel): target 60 ppm during Running; 0 when not Running
+- **Per-item fill weight**: Gaussian(mean=fill_target+fill_giveaway, sigma=fill_sigma). One value per item arrival (interval = 60/line_speed seconds). Between arrivals, last value is held.
+- **fill_deviation**: = fill_weight - fill_target, always consistent (no separate model)
+- **packs_produced**: simple float counter, incremented by 1 on each item arrival, capped at 999999
+- **reject_count**: incremented by 1 when |deviation| > fill_tolerance, capped at 9999
+- **fill_target** (SteadyStateModel): steady setpoint from config
+- **hopper_level** (DepletionModel): depletes proportional to packs/s (line_speed/60); auto-refills at threshold; sawtooth pattern
+- Fill parameters from config extras: fill_target_g=400, fill_giveaway_g=5, fill_sigma_g=3, fill_tolerance_g=15
+- Registered in `data_engine.py` as `"gravimetric_filler": FillerGenerator`
+- Properties exposed for scenarios: state_machine, hopper_model, packs_produced, reject_count, last_fill_weight, line_speed_model
+- 28 tests covering: signal IDs, initial state, line speed per state, per-item timing, packs counting, fill deviation consistency, reject counting, hopper depletion, fill target output, output completeness, determinism, state machine access
+- All 1622 tests pass (1594 existing + 28 new).

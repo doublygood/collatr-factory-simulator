@@ -60,7 +60,7 @@
       "description": "Filler equipment generator: 8 signals, 5-state machine. Per-item fill weight (Gaussian around target + giveaway), item arrival gated by line_speed, hopper sawtooth depletion, reject counting on tolerance violation. Register in data_engine.py.",
       "prd_refs": ["prd/02b-factory-layout-food-and-beverage.md (2b.4)", "prd/04-data-generation-engine.md (4.6)"],
       "depends_on": ["3.1", "3.2"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.7",
