@@ -26,6 +26,7 @@ from factory_simulator.config import (
     ElectricalIntermittentConfig,
     EquipmentConfig,
     ErrorInjectionConfig,
+    FactoryConfig,
     FactoryInfo,
     FillWeightDriftConfig,
     IntermittentFaultConfig,
@@ -1188,3 +1189,140 @@ class TestDataQualityConfig:
         dq = cfg.data_quality
         assert dq.sensor_disconnect.enabled is True
         assert dq.stuck_sensor.enabled is True
+
+
+class TestNoiseCalibrationPackaging:
+    """Verify packaging profile noise params match PRD Section 10.3 table.
+
+    PRD Reference: Section 10.3 Sensor Noise table.
+    """
+
+    @pytest.fixture(scope="class")
+    def cfg(self) -> FactoryConfig:
+        return load_config("config/factory.yaml", apply_env=False)
+
+    # -- Press signals -------------------------------------------------------
+
+    def test_press_line_speed_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["press"].signals["line_speed"]
+        assert sig.noise_sigma == pytest.approx(0.5)
+        assert sig.noise_type == "gaussian"
+
+    def test_press_web_tension_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["press"].signals["web_tension"]
+        assert sig.noise_sigma == pytest.approx(5.0)
+        assert sig.noise_type == "gaussian"
+
+    def test_press_registration_error_x_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["press"].signals["registration_error_x"]
+        assert sig.noise_sigma == pytest.approx(0.01)  # PRD 10.3: camera resolution
+
+    def test_press_registration_error_y_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["press"].signals["registration_error_y"]
+        assert sig.noise_sigma == pytest.approx(0.01)
+
+    def test_press_ink_viscosity_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["press"].signals["ink_viscosity"]
+        assert sig.noise_sigma == pytest.approx(0.5)  # PRD 10.3: measurement variability
+
+    def test_press_ink_temperature_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["press"].signals["ink_temperature"]
+        assert sig.noise_sigma == pytest.approx(0.2)  # PRD 10.3: thermocouple noise
+
+    def test_press_dryer_zone_noise(self, cfg: FactoryConfig) -> None:
+        """All three dryer zones: 0.3 C, AR(1), phi=0.7 per PRD 10.3."""
+        press_sigs = cfg.equipment["press"].signals
+        for zone in ("dryer_temp_zone_1", "dryer_temp_zone_2", "dryer_temp_zone_3"):
+            sig = press_sigs[zone]
+            assert sig.noise_sigma == pytest.approx(0.3), f"{zone} sigma"
+            assert sig.noise_type == "ar1", f"{zone} type"
+            assert sig.noise_phi == pytest.approx(0.7), f"{zone} phi"
+
+    def test_press_main_drive_current_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["press"].signals["main_drive_current"]
+        assert sig.noise_sigma == pytest.approx(0.5)   # PRD 10.3: CT clamp noise
+        assert sig.noise_type == "student_t"
+        assert sig.noise_df == pytest.approx(8.0)
+
+    def test_press_main_drive_speed_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["press"].signals["main_drive_speed"]
+        assert sig.noise_sigma == pytest.approx(2.0)   # PRD 10.3: encoder resolution
+        assert sig.noise_type == "gaussian"
+
+    def test_press_nip_pressure_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["press"].signals["nip_pressure"]
+        assert sig.noise_sigma == pytest.approx(0.05)  # PRD 10.3: transducer noise
+
+    # -- Laminator signals ---------------------------------------------------
+
+    def test_laminator_nip_temp_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["laminator"].signals["nip_temp"]
+        assert sig.noise_sigma == pytest.approx(0.3)   # PRD 10.3: similar to press dryer
+        assert sig.noise_type == "ar1"
+        assert sig.noise_phi == pytest.approx(0.7)
+
+    def test_laminator_nip_pressure_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["laminator"].signals["nip_pressure"]
+        assert sig.noise_sigma == pytest.approx(0.05)  # PRD 10.3: similar to press.nip_pressure
+
+    def test_laminator_tunnel_temp_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["laminator"].signals["tunnel_temp"]
+        assert sig.noise_sigma == pytest.approx(0.3)   # PRD 10.3: laminator.*(other) Gaussian
+        assert sig.noise_type == "gaussian"            # PRD 10.3: not AR(1) per table
+
+    def test_laminator_web_speed_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["laminator"].signals["web_speed"]
+        assert sig.noise_sigma == pytest.approx(0.5)   # PRD 10.3: similar to press.line_speed
+
+    # -- Coder signals -------------------------------------------------------
+
+    def test_coder_printhead_temp_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["coder"].signals["printhead_temp"]
+        assert sig.noise_sigma == pytest.approx(0.5)   # PRD 10.3: PID-controlled
+        assert sig.noise_type == "ar1"
+        assert sig.noise_phi == pytest.approx(0.7)
+
+    def test_coder_ink_pump_speed_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["coder"].signals["ink_pump_speed"]
+        assert sig.noise_sigma == pytest.approx(0.5)   # PRD 10.3: pump encoder noise
+
+    def test_coder_ink_pressure_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["coder"].signals["ink_pressure"]
+        assert sig.noise_sigma == pytest.approx(60.0)  # PRD 10.3: pneumatic transients
+        assert sig.noise_type == "student_t"
+        assert sig.noise_df == pytest.approx(6.0)
+
+    def test_coder_ink_viscosity_actual_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["coder"].signals["ink_viscosity_actual"]
+        assert sig.noise_sigma == pytest.approx(0.3)   # PRD 10.3: viscosity sensor noise
+
+    def test_coder_supply_voltage_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["coder"].signals["supply_voltage"]
+        assert sig.noise_sigma == pytest.approx(0.1)   # PRD 10.3: PSU ripple
+
+    # -- Environment signals -------------------------------------------------
+
+    def test_env_ambient_temp_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["environment"].signals["ambient_temp"]
+        assert sig.noise_sigma == pytest.approx(0.1)   # PRD 10.3: IOLink resolution
+
+    def test_env_ambient_humidity_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["environment"].signals["ambient_humidity"]
+        assert sig.noise_sigma == pytest.approx(0.5)   # PRD 10.3: IOLink resolution
+
+    # -- Energy signals ------------------------------------------------------
+
+    def test_energy_line_power_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["energy"].signals["line_power"]
+        assert sig.noise_sigma == pytest.approx(0.2)   # PRD 10.3: power meter resolution
+
+    # -- Vibration signals ---------------------------------------------------
+
+    def test_vibration_noise(self, cfg: FactoryConfig) -> None:
+        """All three vibration axes: 0.3 mm/s, Student-t df=5 per PRD 10.3."""
+        vib_sigs = cfg.equipment["vibration"].signals
+        for axis in ("main_drive_x", "main_drive_y", "main_drive_z"):
+            sig = vib_sigs[axis]
+            assert sig.noise_sigma == pytest.approx(0.3), f"{axis} sigma"
+            assert sig.noise_type == "student_t", f"{axis} type"
+            assert sig.noise_df == pytest.approx(5.0), f"{axis} df"

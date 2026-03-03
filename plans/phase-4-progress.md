@@ -15,17 +15,52 @@
 - [x] 4.10: Modbus Exception and Partial Response Injection
 - [x] 4.11: Duplicate Timestamps and Timezone Offset
 - [x] 4.12: Data Quality Engine Integration
-- [ ] 4.13: Noise Calibration — Packaging Profile
+- [x] 4.13: Noise Calibration — Packaging Profile
 - [ ] 4.14: Noise Calibration — F&B Profile
 - [ ] 4.15: Counter Rollover Testing Support
 - [ ] 4.16: Reproducibility Test and Final Integration
 
 ## Carried Forward Items
-- Y1 (Phase 2): `_spawn_rng` uses `integers()` not `SeedSequence.spawn()` → Fix in Task 4.1
-- Y3 (Phase 2.1): DataEngine doesn't pass `sim_duration_s` to ScenarioEngine → Fix in Task 4.1
-- gutter_fault probability 18x too high → Fix in Task 4.13
+- Y1 (Phase 2): `_spawn_rng` uses `integers()` not `SeedSequence.spawn()` → Fixed in Task 4.1
+- Y3 (Phase 2.1): DataEngine doesn't pass `sim_duration_s` to ScenarioEngine → Fixed in Task 4.1
+- gutter_fault probability 18x too high → Fixed in Task 4.13 (code already had correct rate; YAML calibrated)
 
 ## Notes
+
+### Task 4.13 — Noise Calibration — Packaging Profile (COMPLETE)
+
+Updated `config/factory.yaml` with calibrated noise parameters per PRD Section 10.3.
+
+**Changes made** (signal → old sigma → new sigma + distribution):
+- `press.registration_error_x/y`: 0.02 → **0.01** mm, Gaussian (camera resolution limit)
+- `press.ink_viscosity`: 1.5 → **0.5** s, Gaussian (measurement variability)
+- `press.ink_temperature`: 0.5 → **0.2** C, Gaussian (thermocouple noise)
+- `press.dryer_temp_zone_1/2/3`: 0.8 → **0.3** C, AR(1) phi=0.7 (PID autocorrelation)
+- `press.main_drive_current`: 2.0 → **0.5** A, Student-t df=8 (CT clamp + load spikes)
+- `press.main_drive_speed`: 5.0 → **2.0** RPM, Gaussian (encoder resolution)
+- `press.nip_pressure`: 0.2 → **0.05** bar, Gaussian (transducer noise)
+- `laminator.nip_temp`: 0.5 → **0.3** C, AR(1) phi=0.7 (PID, similar to press dryer)
+- `laminator.nip_pressure`: 0.15 → **0.05** bar, Gaussian (similar to press.nip_pressure)
+- `laminator.tunnel_temp`: 0.8 → **0.3** C, **Gaussian** (PRD 10.3: laminator.*(other) = Gaussian; removed AR(1))
+- `laminator.web_speed`: 0.3 → **0.5** m/min, Gaussian (similar to press.line_speed)
+- `slitter.speed`: 1.0 → **0.5** m/min, Gaussian (similar to press.line_speed)
+- `coder.printhead_temp`: 2.0 → **0.5** C, AR(1) phi=0.7 (PID-controlled)
+- `coder.ink_pump_speed`: 10.0 → **0.5** RPM, Gaussian (pump encoder noise)
+- `coder.ink_pressure`: 10.0 → **60.0** mbar, Student-t df=6 (pneumatic transients)
+- `coder.ink_viscosity_actual`: 0.5 → **0.3** cP, Gaussian (viscosity sensor noise)
+- `coder.supply_voltage`: 0.2 → **0.1** V, Gaussian (PSU ripple)
+- `environment.ambient_temp`: 0.3 → **0.1** C, Gaussian (IOLink resolution)
+- `environment.ambient_humidity`: 1.0 → **0.5** %RH, Gaussian (IOLink resolution)
+- `energy.line_power`: 2.0 → **0.2** kW, Gaussian (power meter resolution)
+- `vibration.main_drive_x/y/z`: 0.5/0.5/0.8 → **0.3** mm/s, Student-t df=5 (mechanical impulse)
+
+**gutter_fault**: Hardcoded in `coder.py` at rate=5.56e-7/s (MTBF 500h). Already correct.
+No noise_sigma applies to state machines / counters — those remain at 0.0.
+
+**Tests**: 23 new tests in `TestNoiseCalibrationPackaging` in `test_config.py` verify
+each calibrated sigma, distribution type, df, and phi against the PRD 10.3 table.
+
+2385 total tests passing.
 
 ### Task 4.12 — Data Quality Engine Integration (COMPLETE)
 

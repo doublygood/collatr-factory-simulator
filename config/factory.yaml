@@ -104,7 +104,7 @@ equipment:
 
       registration_error_x:
         model: "random_walk"
-        noise_sigma: 0.02
+        noise_sigma: 0.01               # PRD 10.3: camera resolution limit
         sigma_base: 0.005               # PRD 4.2.11: speed-dependent sigma
         sigma_scale: 0.00005            # mm per m/min
         sigma_parent: "press.line_speed"
@@ -121,7 +121,7 @@ equipment:
 
       registration_error_y:
         model: "random_walk"
-        noise_sigma: 0.02
+        noise_sigma: 0.01               # PRD 10.3: camera resolution limit
         sigma_base: 0.005               # PRD 4.2.11: speed-dependent sigma
         sigma_scale: 0.00005            # mm per m/min
         sigma_parent: "press.line_speed"
@@ -138,7 +138,7 @@ equipment:
 
       ink_viscosity:
         model: "steady_state"
-        noise_sigma: 1.5
+        noise_sigma: 0.5                # PRD 10.3: measurement method variability
         sample_rate_ms: 30000
         min_clamp: 15.0
         max_clamp: 60.0
@@ -152,7 +152,7 @@ equipment:
 
       ink_temperature:
         model: "steady_state"
-        noise_sigma: 0.5
+        noise_sigma: 0.2                # PRD 10.3: thermocouple noise
         sample_rate_ms: 10000
         min_clamp: 18.0
         max_clamp: 35.0
@@ -167,7 +167,7 @@ equipment:
 
       dryer_temp_zone_1:
         model: "first_order_lag"
-        noise_sigma: 0.8
+        noise_sigma: 0.3                # PRD 10.3: PID control loop autocorrelation
         noise_type: "ar1"
         noise_phi: 0.7
         sample_rate_ms: 5000
@@ -185,7 +185,7 @@ equipment:
 
       dryer_temp_zone_2:
         model: "first_order_lag"
-        noise_sigma: 0.8
+        noise_sigma: 0.3                # PRD 10.3: PID control loop autocorrelation
         noise_type: "ar1"
         noise_phi: 0.7
         sample_rate_ms: 5000
@@ -203,7 +203,7 @@ equipment:
 
       dryer_temp_zone_3:
         model: "first_order_lag"
-        noise_sigma: 0.8
+        noise_sigma: 0.3                # PRD 10.3: PID control loop autocorrelation
         noise_type: "ar1"
         noise_phi: 0.7
         sample_rate_ms: 5000
@@ -335,8 +335,8 @@ equipment:
         model: "correlated_follower"
         parent: "press.line_speed"
         transform: "linear"
-        noise_sigma: 2.0
-        noise_type: "student_t"         # PRD 4.2.11: heavy-tail outliers
+        noise_sigma: 0.5                # PRD 10.3: CT clamp resolution + load spikes
+        noise_type: "student_t"         # PRD 10.3: heavy-tail outliers
         noise_df: 8
         sigma_base: 0.3                 # PRD 4.2.11: speed-dependent sigma
         sigma_scale: 0.002              # A per m/min
@@ -357,7 +357,7 @@ equipment:
         model: "correlated_follower"
         parent: "press.line_speed"
         transform: "linear"
-        noise_sigma: 5.0
+        noise_sigma: 2.0                # PRD 10.3: encoder resolution
         sample_rate_ms: 1000
         min_clamp: 0.0
         max_clamp: 3000.0
@@ -372,7 +372,7 @@ equipment:
 
       nip_pressure:
         model: "steady_state"
-        noise_sigma: 0.2
+        noise_sigma: 0.05               # PRD 10.3: pressure transducer noise
         sample_rate_ms: 5000
         min_clamp: 0.0
         max_clamp: 10.0
@@ -424,8 +424,8 @@ equipment:
     signals:
       nip_temp:
         model: "first_order_lag"
-        noise_sigma: 0.5
-        noise_type: "ar1"               # PRD 4.2.11: PID-controlled temp
+        noise_sigma: 0.3                # PRD 10.3: similar to press dryer zones
+        noise_type: "ar1"               # PRD 10.3: PID-controlled temperature
         noise_phi: 0.7
         sample_rate_ms: 5000
         min_clamp: 20.0
@@ -442,7 +442,7 @@ equipment:
 
       nip_pressure:
         model: "steady_state"
-        noise_sigma: 0.15
+        noise_sigma: 0.05               # PRD 10.3: similar to press.nip_pressure
         sample_rate_ms: 5000
         min_clamp: 1.0
         max_clamp: 8.0
@@ -456,9 +456,7 @@ equipment:
 
       tunnel_temp:
         model: "first_order_lag"
-        noise_sigma: 0.8
-        noise_type: "ar1"               # PRD 4.2.11: PID-controlled temp
-        noise_phi: 0.7
+        noise_sigma: 0.3                # PRD 10.3: laminator.*(other) Gaussian, similar to press dryer zones
         sample_rate_ms: 5000
         min_clamp: 20.0
         max_clamp: 120.0
@@ -476,7 +474,7 @@ equipment:
         model: "correlated_follower"
         parent: "press.line_speed"
         transform: "linear"
-        noise_sigma: 0.3
+        noise_sigma: 0.5                # PRD 10.3: similar to press.line_speed encoder noise
         sample_rate_ms: 1000
         min_clamp: 0.0
         max_clamp: 400.0
@@ -512,7 +510,7 @@ equipment:
     signals:
       speed:
         model: "ramp"
-        noise_sigma: 1.0
+        noise_sigma: 0.5                # PRD 10.3: similar to press.line_speed encoder noise
         sample_rate_ms: 1000
         min_clamp: 0.0
         max_clamp: 800.0
@@ -597,8 +595,8 @@ equipment:
 
       printhead_temp:
         model: "steady_state"
-        noise_sigma: 2.0
-        noise_type: "ar1"               # PRD 4.2.11: PID-controlled temp
+        noise_sigma: 0.5                # PRD 10.3: PID-controlled, sigma=0.5C
+        noise_type: "ar1"               # PRD 10.3: PID control loop autocorrelation
         noise_phi: 0.7
         sample_rate_ms: 30000
         min_clamp: 25.0
@@ -612,7 +610,7 @@ equipment:
         model: "correlated_follower"
         parent: "press.line_speed"
         transform: "linear"
-        noise_sigma: 10.0
+        noise_sigma: 0.5                # PRD 10.3: pump motor encoder noise
         sample_rate_ms: 5000
         min_clamp: 0.0
         max_clamp: 500.0
@@ -624,8 +622,8 @@ equipment:
 
       ink_pressure:
         model: "steady_state"
-        noise_sigma: 10.0
-        noise_type: "student_t"         # PRD 4.2.11: heavy-tail outliers
+        noise_sigma: 60.0               # PRD 10.3: pneumatic transient outliers
+        noise_type: "student_t"         # PRD 10.3: heavy-tail outliers
         noise_df: 6
         sample_rate_ms: 5000
         min_clamp: 0.0
@@ -637,7 +635,7 @@ equipment:
 
       ink_viscosity_actual:
         model: "steady_state"
-        noise_sigma: 0.5
+        noise_sigma: 0.3                # PRD 10.3: viscosity sensor measurement noise
         sample_rate_ms: 30000
         min_clamp: 2.0
         max_clamp: 15.0
@@ -648,7 +646,7 @@ equipment:
 
       supply_voltage:
         model: "steady_state"
-        noise_sigma: 0.2
+        noise_sigma: 0.1                # PRD 10.3: PSU ripple and measurement noise
         sample_rate_ms: 60000
         min_clamp: 22.0
         max_clamp: 26.0
@@ -699,7 +697,7 @@ equipment:
     signals:
       ambient_temp:
         model: "sinusoidal"
-        noise_sigma: 0.3
+        noise_sigma: 0.1                # PRD 10.3: IOLink sensor resolution
         sample_rate_ms: 60000
         min_clamp: 15.0
         max_clamp: 35.0
@@ -718,7 +716,7 @@ equipment:
 
       ambient_humidity:
         model: "sinusoidal"
-        noise_sigma: 1.0
+        noise_sigma: 0.5                # PRD 10.3: IOLink sensor resolution
         sample_rate_ms: 60000
         min_clamp: 30.0
         max_clamp: 80.0
@@ -739,7 +737,7 @@ equipment:
         model: "correlated_follower"
         parent: "press.line_speed"
         transform: "linear"
-        noise_sigma: 2.0
+        noise_sigma: 0.2                # PRD 10.3: power meter resolution
         sample_rate_ms: 1000
         min_clamp: 0.0
         max_clamp: 200.0
@@ -774,8 +772,8 @@ equipment:
     signals:
       main_drive_x:
         model: "steady_state"
-        noise_sigma: 0.5
-        noise_type: "student_t"         # PRD 4.2.11: heavy-tail outliers
+        noise_sigma: 0.3                # PRD 10.3: mechanical impulse outliers
+        noise_type: "student_t"         # PRD 10.3: heavy-tail outliers
         noise_df: 5
         sigma_base: 0.2                 # PRD 4.2.11: speed-dependent sigma
         sigma_scale: 0.015              # mm/s per m/min
@@ -790,8 +788,8 @@ equipment:
 
       main_drive_y:
         model: "steady_state"
-        noise_sigma: 0.5
-        noise_type: "student_t"         # PRD 4.2.11
+        noise_sigma: 0.3                # PRD 10.3: mechanical impulse outliers
+        noise_type: "student_t"         # PRD 10.3
         noise_df: 5
         sigma_base: 0.2                 # PRD 4.2.11: speed-dependent sigma
         sigma_scale: 0.015
@@ -806,8 +804,8 @@ equipment:
 
       main_drive_z:
         model: "steady_state"
-        noise_sigma: 0.8
-        noise_type: "student_t"         # PRD 4.2.11
+        noise_sigma: 0.3                # PRD 10.3: mechanical impulse outliers
+        noise_type: "student_t"         # PRD 10.3
         noise_df: 5
         sigma_base: 0.2                 # PRD 4.2.11: speed-dependent sigma
         sigma_scale: 0.015
