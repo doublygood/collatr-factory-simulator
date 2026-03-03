@@ -360,7 +360,8 @@ class OpcuaServer:
         Phase 2 — Store → OPC-UA push (PRD 3.2.3):
             For every registered node, read from the store and write to the
             OPC-UA node.  Maps quality to StatusCode:
-              - ``"good"`` / ``"uncertain"`` → ``StatusCode.Good``
+              - ``"good"`` → ``StatusCode.Good``
+              - ``"uncertain"`` → ``StatusCode.UncertainLastUsableValue``
               - ``"bad"`` → ``StatusCode.BadSensorFailure``
             If the signal is not yet in the store the node keeps its last
             value (or initial zero) until the engine populates the store.
@@ -420,6 +421,14 @@ class OpcuaServer:
                     dv = ua.DataValue(
                         ua.Variant(cast_val, vtype),
                         ua.StatusCode(ua.StatusCodes.BadSensorFailure),
+                    )
+                    await var_node.write_value(dv)
+                elif sv.quality == "uncertain":
+                    dv = ua.DataValue(
+                        ua.Variant(cast_val, vtype),
+                        ua.StatusCode(
+                            ua.StatusCodes.UncertainLastUsableValue,
+                        ),
                     )
                     await var_node.write_value(dv)
                 else:

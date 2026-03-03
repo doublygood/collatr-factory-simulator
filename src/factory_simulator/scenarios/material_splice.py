@@ -386,6 +386,18 @@ class MaterialSplice(Scenario):
         # --- 4. Unwind diameter reset to full reel ---
         press._unwind_diameter.refill(self._refill_diameter)
 
+        # Ground truth: tension spike + reel change (PRD 4.7)
+        gt = engine.ground_truth
+        if gt is not None:
+            gt.log_signal_anomaly(
+                sim_time, "press.web_tension", "spike",
+                tension_model._base, [60.0, 400.0],
+            )
+            gt.log_consumable(
+                sim_time, "press.unwind_diameter", self._refill_diameter,
+                "material reel replaced",
+            )
+
         # --- 5. Speed dip ---
         current_speed = press._line_speed_model.value
         if current_speed > 0.0:

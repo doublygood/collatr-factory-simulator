@@ -194,6 +194,15 @@ class RegistrationDrift(Scenario):
         # Suppress mean-reversion so the drift is not pulled back
         model._reversion_rate = 0.0
 
+        # Ground truth: registration drift anomaly (PRD 4.7)
+        gt = engine.ground_truth
+        if gt is not None:
+            signal = f"press.registration_error_{self._axis}"
+            gt.log_signal_anomaly(
+                sim_time, signal, "drift",
+                self._start_value, [-0.3, 0.3],
+            )
+
     def _on_tick(
         self, sim_time: float, dt: float, engine: DataEngine,
     ) -> None:

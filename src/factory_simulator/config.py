@@ -461,6 +461,37 @@ class ColdStartSpikeConfig(BaseModel):
         return self
 
 
+class CoderDepletionConfig(BaseModel):
+    """PRD 5.12: Coder consumable depletion scenario."""
+
+    enabled: bool = True
+    low_ink_threshold: float = 10.0
+    empty_threshold: float = 2.0
+    recovery_duration_seconds: list[float] = Field(
+        default_factory=lambda: [300.0, 1800.0]
+    )
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> CoderDepletionConfig:
+        _validate_range_pair(self.recovery_duration_seconds, "recovery_duration_seconds")
+        return self
+
+
+class MaterialSpliceConfig(BaseModel):
+    """PRD 5.13a: Material splice scenario."""
+
+    enabled: bool = True
+    trigger_diameter_mm: float = 150.0
+    splice_duration_seconds: list[float] = Field(
+        default_factory=lambda: [10.0, 30.0]
+    )
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> MaterialSpliceConfig:
+        _validate_range_pair(self.splice_duration_seconds, "splice_duration_seconds")
+        return self
+
+
 class ScenariosConfig(BaseModel):
     """Container for all scenario configurations."""
 
@@ -477,6 +508,8 @@ class ScenariosConfig(BaseModel):
     unplanned_stop: UnplannedStopConfig = Field(default_factory=UnplannedStopConfig)
     shift_change: ShiftChangeConfig = Field(default_factory=ShiftChangeConfig)
     cold_start_spike: ColdStartSpikeConfig = Field(default_factory=ColdStartSpikeConfig)
+    coder_depletion: CoderDepletionConfig = Field(default_factory=CoderDepletionConfig)
+    material_splice: MaterialSpliceConfig = Field(default_factory=MaterialSpliceConfig)
 
 
 # ---------------------------------------------------------------------------

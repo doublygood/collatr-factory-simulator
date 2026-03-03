@@ -287,7 +287,7 @@ _AFFECTED_SIGNALS: dict[str, list[str]] = {
         "press.registration_error_x", "press.registration_error_y",
         "press.waste_count",
     ],
-    "ColdStartSpike": [
+    "ColdStart": [
         "energy.line_power", "press.main_drive_current",
     ],
     "CoderDepletion": [

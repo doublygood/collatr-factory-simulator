@@ -202,6 +202,14 @@ class InkExcursion(Scenario):
         # Increase waste rate (PRD 5.6 step 3: 10-30%)
         press._waste_count._rate = self._saved_waste_rate * self._waste_multiplier
 
+        # Ground truth: viscosity excursion anomaly (PRD 4.7)
+        gt = engine.ground_truth
+        if gt is not None:
+            gt.log_signal_anomaly(
+                sim_time, "press.ink_viscosity", "excursion",
+                self._excursion_target, [18.0, 45.0],
+            )
+
     def _on_tick(
         self, sim_time: float, dt: float, engine: DataEngine,
     ) -> None:

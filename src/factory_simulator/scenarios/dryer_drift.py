@@ -173,6 +173,16 @@ class DryerDrift(Scenario):
         dryer_model = self._get_dryer_model(press)
         self._original_setpoint = dryer_model.setpoint
 
+        # Ground truth: temperature drift anomaly (PRD 4.7)
+        gt = engine.ground_truth
+        if gt is not None:
+            signal = f"press.dryer_zone{self._zone}_temp"
+            gt.log_signal_anomaly(
+                sim_time, signal, "drift",
+                self._original_setpoint,
+                [self._original_setpoint - 5.0, self._original_setpoint + 5.0],
+            )
+
     def _on_tick(
         self, sim_time: float, dt: float, engine: DataEngine,
     ) -> None:

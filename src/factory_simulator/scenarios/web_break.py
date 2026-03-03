@@ -177,6 +177,14 @@ class WebBreak(Scenario):
         if sig_cfg is not None:
             sig_cfg.max_clamp = 1000.0
 
+        # Ground truth: tension spike anomaly (PRD 4.7)
+        gt = engine.ground_truth
+        if gt is not None:
+            gt.log_signal_anomaly(
+                sim_time, "press.web_tension", "spike",
+                self._spike_tension, [60.0, 400.0],
+            )
+
     def _on_tick(
         self, sim_time: float, dt: float, engine: DataEngine,
     ) -> None:
@@ -249,6 +257,11 @@ class WebBreak(Scenario):
         # its default 30s ramp (we use a custom 5-10s emergency decel)
         press.state_machine.force_state("Fault")
         press._prev_state = STATE_FAULT
+
+        # Ground truth: state change Running(2) -> Fault(4) (PRD 4.7)
+        gt = engine.ground_truth
+        if gt is not None:
+            gt.log_state_change(sim_time, "press.machine_state", 2, 4)
 
         # Start custom emergency deceleration (5-10 s, faster than default 30s)
         speed = press._line_speed_model.value

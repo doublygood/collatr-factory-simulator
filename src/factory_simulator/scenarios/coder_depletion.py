@@ -186,6 +186,14 @@ class CoderDepletion(Scenario):
         # Refill ink to configured level
         self._coder._ink_level.refill(self._refill_level)
 
+        # Ground truth: ink cartridge replacement (PRD 4.7)
+        gt = engine.ground_truth
+        if gt is not None:
+            gt.log_consumable(
+                sim_time, "coder.ink_level", self._refill_level,
+                "ink cartridge replaced",
+            )
+
         # Clear quality override
         self._coder._quality_overrides.pop("ink_level", None)
 
@@ -223,6 +231,14 @@ class CoderDepletion(Scenario):
             self._coder._quality_overrides["ink_level"] = "uncertain"
             self._low_ink_flagged = True
 
+            # Ground truth: low ink anomaly (PRD 4.7)
+            gt = engine.ground_truth
+            if gt is not None:
+                gt.log_signal_anomaly(
+                    sim_time, "coder.ink_level", "low_ink",
+                    ink_level, [self._low_ink_threshold, 100.0],
+                )
+
     def _depleted_tick(
         self, sim_time: float, dt: float, engine: DataEngine,
     ) -> None:
@@ -246,8 +262,22 @@ class CoderDepletion(Scenario):
             self._coder._quality_overrides["ink_level"] = "uncertain"
             self._low_ink_flagged = True
 
+            # Ground truth: low ink anomaly (PRD 4.7)
+            gt = engine.ground_truth
+            if gt is not None:
+                gt.log_signal_anomaly(
+                    sim_time, "coder.ink_level", "low_ink",
+                    self._coder._ink_level.value,
+                    [self._low_ink_threshold, 100.0],
+                )
+
         # Force coder to Fault state
         self._coder._state_machine.force_state("Fault")
+
+        # Ground truth: coder state change to Fault (PRD 4.7)
+        gt = engine.ground_truth
+        if gt is not None:
+            gt.log_state_change(sim_time, "coder.state", "Ready", "Fault")
 
         # Prevent the Fault->Ready timer from firing during recovery:
         # find the transition and set its min/max duration to a large value

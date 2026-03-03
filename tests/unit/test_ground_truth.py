@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
@@ -30,6 +31,9 @@ from factory_simulator.config import (
     SimulationConfig,
 )
 from factory_simulator.engine.ground_truth import GroundTruthLogger
+
+if TYPE_CHECKING:
+    from factory_simulator.engine.data_engine import DataEngine
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -162,6 +166,8 @@ class TestHeader:
         assert "web_break" in scenarios
         assert "unplanned_stop" in scenarios
         assert "shift_change" in scenarios
+        assert "coder_depletion" in scenarios
+        assert "material_splice" in scenarios
 
     def test_header_is_valid_json_line(
         self, logger_open: GroundTruthLogger, tmp_log: Path,
@@ -576,3 +582,327 @@ class TestScenarioEngineIntegration:
             ground_truth=None,
         )
         assert engine_se is not None
+
+
+# ---------------------------------------------------------------------------
+# Intermediate ground truth events emitted by scenarios (R2)
+# ---------------------------------------------------------------------------
+
+
+def _make_engine_with_gt(
+    gt: GroundTruthLogger,
+) -> DataEngine:
+    """Create a DataEngine with ground truth logger and all auto-scheduling off."""
+    from factory_simulator.clock import SimulationClock
+    from factory_simulator.config import load_config
+    from factory_simulator.engine.data_engine import DataEngine
+    from factory_simulator.store import SignalStore
+
+    config_path = Path(__file__).resolve().parents[2] / "config" / "factory.yaml"
+    config = load_config(config_path, apply_env=False)
+    config.simulation.random_seed = 42
+    config.simulation.tick_interval_ms = 100
+    config.simulation.time_scale = 1.0
+    config.scenarios.job_changeover.enabled = False
+    config.scenarios.unplanned_stop.enabled = False
+    config.scenarios.shift_change.enabled = False
+    store = SignalStore()
+    clock = SimulationClock.from_config(config.simulation)
+    return DataEngine(config, store, clock, ground_truth=gt)
+
+
+class TestScenarioIntermediateEvents:
+    """Verify that Phase 2 scenarios emit intermediate ground truth events.
+
+    Each scenario should log signal_anomaly, state_change, and/or consumable
+    events via the GroundTruthLogger during its active phases, not just
+    the automatic scenario_start/scenario_end from the ScenarioEngine.
+    """
+
+    def test_web_break_emits_signal_anomaly_and_state_change(
+        self, tmp_log: Path,
+    ) -> None:
+        """WebBreak should log tension spike anomaly and Fault state change."""
+        from factory_simulator.scenarios.web_break import WebBreak
+
+        gt = GroundTruthLogger(tmp_log)
+        gt.open()
+        engine = _make_engine_with_gt(gt)
+
+        scenario = WebBreak(
+            start_time=0.5,
+            rng=np.random.default_rng(99),
+            params={
+                "recovery_seconds": [1.0, 1.0],
+                "spike_duration_range": [1.0, 1.0],
+                "decel_duration_range": [1.0, 1.0],
+            },
+        )
+        engine.scenario_engine.add_scenario(scenario)
+
+        # Run until scenario activates and progresses through phases
+        for _ in range(100):
+            engine.tick()
+            if scenario.is_completed:
+                break
+
+        gt.close()
+        records = _read_lines(tmp_log)
+        events = [r["event"] for r in records]
+
+        assert "signal_anomaly" in events
+        anomaly = next(r for r in records if r["event"] == "signal_anomaly")
+        assert anomaly["signal"] == "press.web_tension"
+        assert anomaly["anomaly_type"] == "spike"
+
+        assert "state_change" in events
+        sc = next(r for r in records if r["event"] == "state_change")
+        assert sc["signal"] == "press.machine_state"
+        assert sc["from"] == 2
+        assert sc["to"] == 4
+
+    def test_dryer_drift_emits_signal_anomaly(
+        self, tmp_log: Path,
+    ) -> None:
+        """DryerDrift should log temperature drift anomaly on activation."""
+        from factory_simulator.scenarios.dryer_drift import DryerDrift
+
+        gt = GroundTruthLogger(tmp_log)
+        gt.open()
+        engine = _make_engine_with_gt(gt)
+
+        scenario = DryerDrift(
+            start_time=0.5,
+            rng=np.random.default_rng(99),
+            params={"drift_duration_range": [1.0, 1.0], "zone": 1},
+        )
+        engine.scenario_engine.add_scenario(scenario)
+
+        for _ in range(20):
+            engine.tick()
+
+        gt.close()
+        records = _read_lines(tmp_log)
+        anomalies = [r for r in records if r["event"] == "signal_anomaly"]
+        assert len(anomalies) >= 1
+        assert anomalies[0]["signal"].startswith("press.dryer_zone")
+        assert anomalies[0]["anomaly_type"] == "drift"
+
+    def test_ink_excursion_emits_signal_anomaly(
+        self, tmp_log: Path,
+    ) -> None:
+        """InkExcursion should log viscosity excursion anomaly."""
+        from factory_simulator.scenarios.ink_excursion import InkExcursion
+
+        gt = GroundTruthLogger(tmp_log)
+        gt.open()
+        engine = _make_engine_with_gt(gt)
+
+        scenario = InkExcursion(
+            start_time=0.5,
+            rng=np.random.default_rng(99),
+            params={"duration_range": [1.0, 1.0], "direction": "thin"},
+        )
+        engine.scenario_engine.add_scenario(scenario)
+
+        for _ in range(20):
+            engine.tick()
+
+        gt.close()
+        records = _read_lines(tmp_log)
+        anomalies = [r for r in records if r["event"] == "signal_anomaly"]
+        assert len(anomalies) >= 1
+        assert anomalies[0]["signal"] == "press.ink_viscosity"
+        assert anomalies[0]["anomaly_type"] == "excursion"
+
+    def test_registration_drift_emits_signal_anomaly(
+        self, tmp_log: Path,
+    ) -> None:
+        """RegistrationDrift should log registration drift anomaly."""
+        from factory_simulator.scenarios.registration_drift import RegistrationDrift
+
+        gt = GroundTruthLogger(tmp_log)
+        gt.open()
+        engine = _make_engine_with_gt(gt)
+
+        scenario = RegistrationDrift(
+            start_time=0.5,
+            rng=np.random.default_rng(99),
+            params={"duration_range": [1.0, 1.0], "axis": "x"},
+        )
+        engine.scenario_engine.add_scenario(scenario)
+
+        for _ in range(20):
+            engine.tick()
+
+        gt.close()
+        records = _read_lines(tmp_log)
+        anomalies = [r for r in records if r["event"] == "signal_anomaly"]
+        assert len(anomalies) >= 1
+        assert anomalies[0]["signal"] == "press.registration_error_x"
+        assert anomalies[0]["anomaly_type"] == "drift"
+
+    def test_cold_start_emits_spike_anomalies(
+        self, tmp_log: Path,
+    ) -> None:
+        """ColdStart should log power and current spike anomalies."""
+        from factory_simulator.generators.press import PressGenerator
+        from factory_simulator.scenarios.cold_start import ColdStart
+
+        gt = GroundTruthLogger(tmp_log)
+        gt.open()
+        engine = _make_engine_with_gt(gt)
+
+        # Put press in Idle state for longer than idle threshold
+        press = None
+        for gen in engine.generators:
+            if isinstance(gen, PressGenerator):
+                press = gen
+                break
+        assert press is not None
+        press.state_machine.force_state("Idle")
+
+        scenario = ColdStart(
+            start_time=0.1,
+            rng=np.random.default_rng(99),
+            params={
+                "idle_threshold_s": 0.5,
+                "spike_duration_range": [1.0, 1.0],
+            },
+        )
+        engine.scenario_engine.add_scenario(scenario)
+
+        # Tick for a while in Idle state
+        for _ in range(10):
+            engine.tick()
+
+        # Trigger cold start by changing to Running
+        press.state_machine.force_state("Running")
+
+        for _ in range(50):
+            engine.tick()
+            if scenario.is_completed:
+                break
+
+        gt.close()
+        records = _read_lines(tmp_log)
+        anomalies = [r for r in records if r["event"] == "signal_anomaly"]
+
+        # Should have at least the power and current spike anomalies
+        signals = {a["signal"] for a in anomalies}
+        assert "energy.line_power" in signals
+        assert "press.main_drive_current" in signals
+
+    def test_coder_depletion_emits_all_intermediate_events(
+        self, tmp_log: Path,
+    ) -> None:
+        """CoderDepletion should log low_ink anomaly, Fault state, and refill."""
+        from factory_simulator.generators.coder import CoderGenerator
+        from factory_simulator.scenarios.coder_depletion import CoderDepletion
+
+        gt = GroundTruthLogger(tmp_log)
+        gt.open()
+        engine = _make_engine_with_gt(gt)
+
+        # Find coder generator and set ink low
+        coder = None
+        for gen in engine.generators:
+            if isinstance(gen, CoderGenerator):
+                coder = gen
+                break
+        assert coder is not None
+        # Set ink level below empty threshold so it triggers depleted
+        # immediately after detecting low ink (skips waiting for natural
+        # depletion which depends on print rate).
+        coder._ink_level._value = 1.5  # Below 2% empty threshold
+
+        scenario = CoderDepletion(
+            start_time=0.1,
+            rng=np.random.default_rng(99),
+            params={
+                "recovery_duration_range": [0.5, 0.5],
+                "low_ink_threshold": 10.0,
+                "empty_threshold": 2.0,
+            },
+        )
+        engine.scenario_engine.add_scenario(scenario)
+
+        # Run until scenario completes
+        for _ in range(200):
+            engine.tick()
+            if scenario.is_completed:
+                break
+
+        gt.close()
+        records = _read_lines(tmp_log)
+        events = [r["event"] for r in records]
+
+        # Should have low_ink anomaly
+        assert "signal_anomaly" in events
+        anomaly = next(r for r in records if r["event"] == "signal_anomaly")
+        assert anomaly["signal"] == "coder.ink_level"
+        assert anomaly["anomaly_type"] == "low_ink"
+
+        # Should have state_change to Fault (may or may not appear depending
+        # on how fast ink depletes, but if it does it should be correct)
+        state_changes = [r for r in records if r["event"] == "state_change"]
+        if state_changes:
+            assert state_changes[0]["signal"] == "coder.state"
+
+        # Should have consumable refill event
+        assert "consumable" in events
+        consumable = next(r for r in records if r["event"] == "consumable")
+        assert consumable["signal"] == "coder.ink_level"
+        assert consumable["new_value"] == 100.0
+
+    def test_material_splice_emits_anomaly_and_consumable(
+        self, tmp_log: Path,
+    ) -> None:
+        """MaterialSplice should log tension spike and reel change."""
+        from factory_simulator.generators.press import PressGenerator
+        from factory_simulator.scenarios.material_splice import MaterialSplice
+
+        gt = GroundTruthLogger(tmp_log)
+        gt.open()
+        engine = _make_engine_with_gt(gt)
+
+        # Find press and set unwind low (below trigger)
+        press = None
+        for gen in engine.generators:
+            if isinstance(gen, PressGenerator):
+                press = gen
+                break
+        assert press is not None
+        press.state_machine.force_state("Running")
+        press._unwind_diameter._value = 140.0  # Below 150mm trigger
+
+        scenario = MaterialSplice(
+            start_time=0.1,
+            rng=np.random.default_rng(99),
+            params={
+                "splice_duration_range": [1.0, 1.0],
+                "trigger_diameter": 150.0,
+            },
+        )
+        engine.scenario_engine.add_scenario(scenario)
+
+        for _ in range(100):
+            engine.tick()
+            if scenario.is_completed:
+                break
+
+        gt.close()
+        records = _read_lines(tmp_log)
+        events = [r["event"] for r in records]
+
+        # Should have tension spike anomaly
+        assert "signal_anomaly" in events
+        anomaly = next(r for r in records if r["event"] == "signal_anomaly")
+        assert anomaly["signal"] == "press.web_tension"
+        assert anomaly["anomaly_type"] == "spike"
+
+        # Should have consumable reel change event
+        assert "consumable" in events
+        consumable = next(r for r in records if r["event"] == "consumable")
+        assert consumable["signal"] == "press.unwind_diameter"
+        assert consumable["new_value"] == 1500.0

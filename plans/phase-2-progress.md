@@ -1,6 +1,6 @@
 # Phase 2: OPC-UA, MQTT, and Packaging Scenarios - Progress
 
-## Status: All 16 tasks complete — awaiting code review
+## Status: PHASE COMPLETE — all tasks done, code review findings addressed
 
 ## Tasks
 - [x] 2.1: OPC-UA Server Adapter — Node Tree
@@ -479,3 +479,41 @@ Test classes:
 - Store change propagation test verifies the full path: `store.set()` -> Modbus sync (50ms) -> OPC-UA sync (500ms) -> both protocols show updated value.
 
 **Test results:** 12/12 integration tests pass. 1474 total tests pass (no regressions).
+
+---
+
+## Code Review
+
+Review performed after all 16 tasks completed. See `plans/phase-2-review.md` for full findings.
+
+### RED findings (fixed)
+
+**R1: Missing scenario configs in ground truth header**
+- Added `CoderDepletionConfig` and `MaterialSpliceConfig` Pydantic models to `config.py`
+- Added them to `ScenariosConfig` with `Field(default_factory=...)`
+- Added enumeration checks in `ground_truth.py` `write_header()` so both appear in the scenarios list
+- Fixed `ColdStartSpike` → `ColdStart` key mismatch in `_AFFECTED_SIGNALS` dict in `scenario_engine.py`
+- Updated `test_header_scenarios_list` test to assert both new scenarios appear
+
+**R2: No intermediate ground truth events from scenarios**
+- All 7 Phase 2 scenarios now emit intermediate GT events at the correct lifecycle points:
+  - `web_break.py`: `signal_anomaly` (tension spike) on activate, `state_change` (Running→Fault) on deceleration
+  - `dryer_drift.py`: `signal_anomaly` (temperature drift) on activate
+  - `ink_excursion.py`: `signal_anomaly` (viscosity excursion) on activate
+  - `registration_drift.py`: `signal_anomaly` (registration drift) on activate
+  - `cold_start.py`: `signal_anomaly` (power spike + current spike) on spike start
+  - `coder_depletion.py`: `signal_anomaly` (low ink) on threshold crossing, `state_change` (Ready→Fault) on depletion, `consumable` (ink refill) on completion
+  - `material_splice.py`: `signal_anomaly` (tension spike) + `consumable` (reel replaced) on splice start
+- Added 7 new unit tests in `TestScenarioIntermediateEvents` class
+
+### YELLOW findings (partially addressed)
+
+**Y2: OPC-UA uncertain quality mapping** (fixed)
+- Changed `opcua_server.py` to map `quality="uncertain"` to `ua.StatusCodes.UncertainLastUsableValue` instead of `StatusCode.Good`
+
+**Y1, Y3, Y4**: Deferred (MQTT wall-clock timestamps, test threading.Lock, inconsistent complete() guards) — not blocking for Phase 2 completion.
+
+### Final CI results after fixes
+- `ruff check src tests`: All checks passed
+- `mypy src`: Success, no issues found in 48 source files
+- `pytest`: 1481 passed (7 new tests from code review fixes)

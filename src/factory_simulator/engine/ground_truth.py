@@ -102,6 +102,10 @@ class GroundTruthLogger:
             scenarios_list.append("shift_change")
         if scfg.cold_start_spike.enabled:
             scenarios_list.append("cold_start_spike")
+        if scfg.coder_depletion.enabled:
+            scenarios_list.append("coder_depletion")
+        if scfg.material_splice.enabled:
+            scenarios_list.append("material_splice")
 
         header = {
             "event_type": "config",
