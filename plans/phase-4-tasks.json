@@ -50,7 +50,7 @@
                 "prd/05-scenario-system.md (5.5)"
             ],
             "depends_on": ["4.1", "4.2", "4.3"],
-            "passes": false
+            "passes": true
         },
         {
             "id": "4.5",

@@ -47,6 +47,7 @@ import numpy as np
 
 from factory_simulator.scenarios.base import Scenario, ScenarioPhase
 from factory_simulator.scenarios.batch_cycle import BatchCycle
+from factory_simulator.scenarios.bearing_wear import BearingWear
 from factory_simulator.scenarios.chiller_door_alarm import ChillerDoorAlarm
 from factory_simulator.scenarios.cip_cycle import CipCycle
 from factory_simulator.scenarios.coder_depletion import CoderDepletion
@@ -321,6 +322,9 @@ class ScenarioEngine:
         # Phase 2 condition-triggered scenarios (monitoring windows, not Poisson)
         self._schedule_coder_depletions()
         self._schedule_material_splices()
+
+        # Phase 4 advanced scenarios (bearing wear, micro-stops, etc.)
+        self._schedule_bearing_wear()
 
         # Phase 3 F&B time-based scenarios (only scheduled when F&B config present)
         self._schedule_batch_cycles()
@@ -684,6 +688,32 @@ class ScenarioEngine:
                 )
             )
 
+    # -- Phase 4 scenario scheduling -------------------------------------------
+
+    def _schedule_bearing_wear(self) -> None:
+        """Schedule one bearing wear event starting after start_after_hours (PRD 5.5)."""
+        cfg = self._config.bearing_wear
+        if not cfg.enabled:
+            return
+
+        start_s = cfg.start_after_hours * 3600.0
+        if start_s >= self._sim_duration_s:
+            return
+
+        params: dict[str, object] = {
+            "base_rate": list(cfg.base_rate),
+            "acceleration_k": list(cfg.acceleration_k),
+            "warning_threshold": cfg.warning_threshold,
+            "alarm_threshold": cfg.alarm_threshold,
+            "current_increase_percent": list(cfg.current_increase_percent),
+            "culminate_in_failure": cfg.culminate_in_failure,
+            "failure_vibration": list(cfg.failure_vibration),
+            "duration_hours": cfg.duration_hours,
+        }
+        self._scenarios.append(
+            BearingWear(start_time=start_s, rng=self._spawn_rng(), params=params)
+        )
+
     # -- Child RNG creation ----------------------------------------------------
 
     def _spawn_rng(self) -> np.random.Generator:
@@ -699,6 +729,11 @@ class ScenarioEngine:
 # Scenario class name -> list of affected signal IDs.
 # These are the signals the PRD says each scenario type modifies.
 _AFFECTED_SIGNALS: dict[str, list[str]] = {
+    # -- Phase 4 advanced scenarios -------------------------------------------
+    "BearingWear": [
+        "vibration.main_drive_x", "vibration.main_drive_y",
+        "vibration.main_drive_z", "press.main_drive_current",
+    ],
     # -- Packaging scenarios (Phase 1 & 2) ------------------------------------
     "WebBreak": [
         "press.web_tension", "press.line_speed",

@@ -6,7 +6,7 @@
 - [x] 4.1: Poisson Scheduling Engine
 - [x] 4.2: Scenario Priority and Conflict Resolution
 - [x] 4.3: Phase 4 Config Models
-- [ ] 4.4: Motor Bearing Wear Scenario
+- [x] 4.4: Motor Bearing Wear Scenario
 - [ ] 4.5: Micro-Stops Scenario
 - [ ] 4.6: Contextual Anomalies Scenario
 - [ ] 4.7: Intermittent Faults Scenario
@@ -26,6 +26,33 @@
 - gutter_fault probability 18x too high → Fix in Task 4.13
 
 ## Notes
+
+### Task 4.4 — Motor Bearing Wear Scenario (COMPLETE)
+
+New file: `src/factory_simulator/scenarios/bearing_wear.py`.
+
+`BearingWear` implements PRD 5.5 with:
+- `priority = "background"` (never preempted, never deferred)
+- Exponential vibration model: `vibration_increase = base_rate * exp(k * elapsed_hours)` applied
+  each tick to `VibrationGenerator._models["main_drive_x/y/z"]._target`
+- Current increase: `saved_base * current_factor * exp(k * elapsed_hours)` added to
+  `PressGenerator._main_drive_current._base`
+- Warning / alarm threshold flags (`_warning_logged`, `_alarm_logged`) set once each;
+  ground truth `log_signal_anomaly` fired independently of `engine.ground_truth` being None
+- Optional failure culmination: `force_state("Fault")` + `press._prev_state = STATE_FAULT`
+  when `culminate_in_failure=True` and `vib_increase >= failure_vibration`
+- On completion, original `_target` and `_base` values are restored
+
+Engine wiring:
+- Added `from factory_simulator.scenarios.bearing_wear import BearingWear` to `scenario_engine.py`
+- `_schedule_bearing_wear()` creates one BearingWear at `start_after_hours * 3600` (single event,
+  not Poisson, per PRD — bearing wear is a one-shot event, not recurring)
+- `_generate_timeline()` calls `_schedule_bearing_wear()` in the Phase 4 section
+- Added `"BearingWear"` entry to `_AFFECTED_SIGNALS` dict
+
+Tests: 28 new tests in `test_bearing_wear.py` covering priority, defaults, lifecycle,
+vibration exponential shape, current formula, failure culmination, threshold logging,
+and auto-scheduling. 2146 total tests passing.
 
 ### Task 4.3 — Phase 4 Config Models (COMPLETE)
 
