@@ -7,7 +7,7 @@
 - [x] 3.2: F&B Factory Config (factory-foodbev.yaml)
 - [x] 3.3: Thermal Diffusion Signal Model
 - [x] 3.4: Mixer Generator
-- [ ] 3.5: Oven Generator
+- [x] 3.5: Oven Generator
 - [ ] 3.6: Filler Generator
 - [ ] 3.7: Sealer Generator
 - [ ] 3.8: Checkweigher (QC) Generator
@@ -90,3 +90,18 @@ All Modbus addresses cross-referenced against PRD Appendix A. OPC-UA nodes match
 - Registered in `data_engine.py` as `"high_shear_mixer": MixerGenerator`
 - 27 tests covering: signal IDs, initial state, all state transitions, torque correlation, batch temperature lag, batch ID string generation, mix time counting, signal bounds, determinism, protocol mappings
 - All 1565 tests pass (1538 existing + 27 new).
+
+### Task 3.5: Oven Generator
+`OvenGenerator` in `src/factory_simulator/generators/oven.py` — 13 signals, 5-state machine.
+- **State machine**: Off(0)/Preheat(1)/Running(2)/Idle(3)/Cooldown(4) via `StateMachineModel`
+- **Zone temperatures** (3×, FirstOrderLagModel): start at ambient (20°C); setpoints set to configured targets (160/200/180°C) on Preheat/Running/Idle entry, reset to ambient on Off/Cooldown
+- **Zone setpoints** (3×, SteadyStateModel): output configured targets each tick (modbus_writable=True for operator override)
+- **Thermal coupling**: adjacent zones influence each other with factor 0.05 using previous-tick zone temps to avoid circular deps
+- **Product core temp** (ThermalDiffusionModel): restarts from 4°C (chilled entry) on Running entry; advances only in Running; held constant in other states; T_oven driven by zone_2_temp
+- **Belt speed** (SteadyStateModel): target 2.0 m/min during Preheat/Running/Idle; 0 when Off/Cooldown
+- **Humidity zone 2** (SteadyStateModel): steady ambient humidity in cooking zone
+- **Output powers** (3×, CorrelatedFollowerModel): base=50%, gain=-0.3 of zone temp; clamped to [0, 100]%; high when cold, low at setpoint
+- Registered in `data_engine.py` as `"tunnel_oven": OvenGenerator`
+- Properties exposed: state_machine, zone_temp_models, zone_setpoint_models, thermal_diffusion_model, thermal_coupling
+- 29 tests covering: signal IDs, initial state, all state transitions, belt speed behavior, product core temp (rise during Running, hold during Off, trend), output power bounds and direction, all 13 signals per tick, determinism, protocol mappings
+- All 1594 tests pass (1565 existing + 29 new).

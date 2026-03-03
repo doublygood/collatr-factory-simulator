@@ -50,7 +50,7 @@
       "description": "Oven equipment generator: 13 signals, 5-state machine. 3-zone PID temps with thermal coupling, product core temp via ThermalDiffusionModel, output power as correlated follower of temp error, belt speed determines product dwell. Register in data_engine.py.",
       "prd_refs": ["prd/02b-factory-layout-food-and-beverage.md (2b.3)", "prd/04-data-generation-engine.md (4.2.3, 4.2.10, 4.3.1, 4.6)"],
       "depends_on": ["3.3", "3.1", "3.2"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.6",
