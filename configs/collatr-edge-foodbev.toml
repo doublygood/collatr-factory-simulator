@@ -1,0 +1,551 @@
+# CollatrEdge Configuration — Factory Simulator (F&B Profile)
+#
+# Connects to the Collatr Factory Simulator and collects all 68 F&B
+# signals across Modbus TCP, OPC-UA, and MQTT simultaneously.
+#
+# Prerequisites:
+#   1. Factory simulator running with F&B config:
+#      python3 scripts/run-simulator.py --config config/factory-foodbev.yaml
+#   2. Mosquitto broker healthy: docker compose ps (mqtt-broker should be healthy)
+#   3. CollatrEdge binary available on the dev machine
+#
+# Usage:
+#   collatr-edge --config configs/collatr-edge-foodbev.toml
+#
+# PRD Reference: Section 2b, Appendix A/B/C (F&B sections)
+
+[agent]
+  hostname = "factory-sim-test"
+  interval = "1s"
+  round_interval = true
+  flush_interval = "5s"
+  precision = "1ms"
+  log_level = "info"
+
+[global_tags]
+  environment = "simulator"
+  profile = "foodbev"
+  source = "factory-simulator"
+
+# ==========================================================================
+# MODBUS TCP — Mixer (CDAB byte order, Allen-Bradley CompactLogix)
+# Slave ID 1. HR 1000-1011. PRD: Appendix A, Section 2b.2
+# ==========================================================================
+
+[[inputs.modbus]]
+  alias = "fnb_mixer"
+  controller = "tcp://localhost:502"
+  slave_id = 1
+  byte_order = "CDAB"
+  timeout = "5s"
+
+  # --- Mixer holding registers (CDAB float32/uint32) ---
+  [[inputs.modbus.registers]]
+    address = 1000
+    name = "mixer.speed"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1002
+    name = "mixer.torque"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1004
+    name = "mixer.batch_temp"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1006
+    name = "mixer.batch_weight"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1010
+    name = "mixer.mix_time_elapsed"
+    type = "holding"
+    data_type = "uint32"
+
+# ==========================================================================
+# MODBUS TCP — Main F&B (ABCD byte order, Slave ID 1)
+# Oven, filler, sealer, chiller, CIP, energy
+# PRD: Appendix A (F&B Holding/Input Registers, Coils, DI)
+# ==========================================================================
+
+[[inputs.modbus]]
+  alias = "fnb_main"
+  controller = "tcp://localhost:502"
+  slave_id = 1
+  byte_order = "ABCD"
+  timeout = "5s"
+
+  # --- Oven holding registers (HR 1100-1125) ---
+  [[inputs.modbus.registers]]
+    address = 1100
+    name = "oven.zone_1_temp"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1102
+    name = "oven.zone_2_temp"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1104
+    name = "oven.zone_3_temp"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1110
+    name = "oven.zone_1_setpoint"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1112
+    name = "oven.zone_2_setpoint"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1114
+    name = "oven.zone_3_setpoint"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1120
+    name = "oven.belt_speed"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1122
+    name = "oven.product_core_temp"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1124
+    name = "oven.humidity_zone_2"
+    type = "holding"
+    data_type = "float32"
+
+  # --- Filler holding registers (HR 1200-1201) ---
+  [[inputs.modbus.registers]]
+    address = 1200
+    name = "filler.hopper_level"
+    type = "holding"
+    data_type = "float32"
+
+  # --- Sealer holding registers (HR 1300-1311) ---
+  [[inputs.modbus.registers]]
+    address = 1300
+    name = "sealer.seal_temp"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1302
+    name = "sealer.seal_pressure"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1304
+    name = "sealer.seal_dwell"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1306
+    name = "sealer.gas_co2_pct"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1308
+    name = "sealer.gas_n2_pct"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1310
+    name = "sealer.vacuum_level"
+    type = "holding"
+    data_type = "float32"
+
+  # --- Chiller holding registers (HR 1400-1407) ---
+  [[inputs.modbus.registers]]
+    address = 1400
+    name = "chiller.room_temp"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1402
+    name = "chiller.setpoint"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1404
+    name = "chiller.suction_pressure"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1406
+    name = "chiller.discharge_pressure"
+    type = "holding"
+    data_type = "float32"
+
+  # --- CIP holding registers (HR 1500-1507) ---
+  [[inputs.modbus.registers]]
+    address = 1500
+    name = "cip.wash_temp"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1502
+    name = "cip.flow_rate"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1504
+    name = "cip.conductivity"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 1506
+    name = "cip.cycle_time_elapsed"
+    type = "holding"
+    data_type = "uint32"
+
+  # --- Shared energy holding registers (HR 600-603) ---
+  [[inputs.modbus.registers]]
+    address = 600
+    name = "energy.line_power"
+    type = "holding"
+    data_type = "float32"
+  [[inputs.modbus.registers]]
+    address = 602
+    name = "energy.cumulative_kwh"
+    type = "holding"
+    data_type = "float32"
+
+  # --- F&B Input Registers (int16 x10 temperatures) ---
+  [[inputs.modbus.registers]]
+    address = 100
+    name = "oven.zone_1_temp_ir"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 101
+    name = "oven.zone_2_temp_ir"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 102
+    name = "oven.zone_3_temp_ir"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 103
+    name = "oven.zone_1_setpoint_ir"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 104
+    name = "oven.zone_2_setpoint_ir"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 105
+    name = "oven.zone_3_setpoint_ir"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 106
+    name = "oven.product_core_temp_ir"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 110
+    name = "chiller.room_temp_ir"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 111
+    name = "chiller.setpoint_ir"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 115
+    name = "cip.wash_temp_ir"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 120
+    name = "energy.line_power_ir"
+    type = "input"
+    data_type = "float32"
+
+  # --- F&B Coils (FC01) ---
+  [[inputs.modbus.registers]]
+    address = 100
+    name = "mixer.lid_closed"
+    type = "coil"
+    data_type = "bool"
+  [[inputs.modbus.registers]]
+    address = 101
+    name = "chiller.compressor_state"
+    type = "coil"
+    data_type = "bool"
+  [[inputs.modbus.registers]]
+    address = 102
+    name = "chiller.defrost_active"
+    type = "coil"
+    data_type = "bool"
+
+  # --- F&B Discrete Inputs (FC02) ---
+  [[inputs.modbus.registers]]
+    address = 100
+    name = "chiller.door_open"
+    type = "discrete"
+    data_type = "bool"
+
+# ==========================================================================
+# MODBUS TCP — Eurotherm Oven Zone 1 Controller (UID 11)
+# PRD: Section 3.1.6, Appendix A (Multi-slave)
+# IR 0 = zone PV (int16 x10), IR 1 = zone SP (int16 x10), IR 2 = output power (int16 x10)
+# ==========================================================================
+
+[[inputs.modbus]]
+  alias = "fnb_oven_zone1"
+  controller = "tcp://localhost:502"
+  slave_id = 11
+  byte_order = "ABCD"
+  timeout = "5s"
+
+  [[inputs.modbus.registers]]
+    address = 0
+    name = "oven.zone_1_temp_eurotherm"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 1
+    name = "oven.zone_1_setpoint_eurotherm"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 2
+    name = "oven.zone_1_output_power"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+
+# ==========================================================================
+# MODBUS TCP — Eurotherm Oven Zone 2 Controller (UID 12)
+# ==========================================================================
+
+[[inputs.modbus]]
+  alias = "fnb_oven_zone2"
+  controller = "tcp://localhost:502"
+  slave_id = 12
+  byte_order = "ABCD"
+  timeout = "5s"
+
+  [[inputs.modbus.registers]]
+    address = 0
+    name = "oven.zone_2_temp_eurotherm"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 1
+    name = "oven.zone_2_setpoint_eurotherm"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 2
+    name = "oven.zone_2_output_power"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+
+# ==========================================================================
+# MODBUS TCP — Eurotherm Oven Zone 3 Controller (UID 13)
+# ==========================================================================
+
+[[inputs.modbus]]
+  alias = "fnb_oven_zone3"
+  controller = "tcp://localhost:502"
+  slave_id = 13
+  byte_order = "ABCD"
+  timeout = "5s"
+
+  [[inputs.modbus.registers]]
+    address = 0
+    name = "oven.zone_3_temp_eurotherm"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 1
+    name = "oven.zone_3_setpoint_eurotherm"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+  [[inputs.modbus.registers]]
+    address = 2
+    name = "oven.zone_3_output_power"
+    type = "input"
+    data_type = "int16"
+    scale = 0.1
+
+# ==========================================================================
+# OPC-UA — 19 F&B signals (FoodBevLine node tree)
+# PRD: Appendix B (FoodBevLine section), Section 3.2
+# ==========================================================================
+
+[[inputs.opcua]]
+  alias = "fnb_opcua"
+  endpoint = "opc.tcp://localhost:4840"
+  security_policy = "None"
+  security_mode = "None"
+  auth_method = "anonymous"
+  connect_timeout = "15s"
+  request_timeout = "10s"
+  timestamp = "source"
+
+  [inputs.opcua.subscription]
+    publishing_interval = "1s"
+    queue_size = 10
+
+  # --- Mixer ---
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.Mixer1.State"
+    name = "mixer.state"
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.Mixer1.BatchId"
+    name = "mixer.batch_id"
+
+  # --- Oven ---
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.Oven1.State"
+    name = "oven.state"
+
+  # --- Filler ---
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.Filler1.LineSpeed"
+    name = "filler.line_speed"
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.Filler1.FillWeight"
+    name = "filler.fill_weight"
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.Filler1.FillTarget"
+    name = "filler.fill_target"
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.Filler1.FillDeviation"
+    name = "filler.fill_deviation"
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.Filler1.PacksProduced"
+    name = "filler.packs_produced"
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.Filler1.RejectCount"
+    name = "filler.reject_count"
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.Filler1.State"
+    name = "filler.state"
+
+  # --- QC ---
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.QC1.ActualWeight"
+    name = "qc.actual_weight"
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.QC1.OverweightCount"
+    name = "qc.overweight_count"
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.QC1.UnderweightCount"
+    name = "qc.underweight_count"
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.QC1.MetalDetectTrips"
+    name = "qc.metal_detect_trips"
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.QC1.Throughput"
+    name = "qc.throughput"
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.QC1.RejectTotal"
+    name = "qc.reject_total"
+
+  # --- CIP ---
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.CIP1.State"
+    name = "cip.state"
+
+  # --- Energy ---
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.Energy.LinePower"
+    name = "energy.line_power"
+  [[inputs.opcua.nodes]]
+    node_id = "ns=2;s=FoodBevLine.Energy.CumulativeKwh"
+    name = "energy.cumulative_kwh"
+
+# ==========================================================================
+# MQTT — 13 F&B signals (coder + env, foodbev1 prefix, no vibration)
+# PRD: Appendix C (F&B section), Section 3.3
+# ==========================================================================
+
+[[inputs.mqtt_consumer]]
+  alias = "fnb_mqtt"
+  servers = ["tcp://localhost:1883"]
+  topics = [
+    "collatr/factory/demo/foodbev1/coder/#",
+    "collatr/factory/demo/foodbev1/env/#",
+  ]
+  qos = 1
+  data_format = "json"
+  topic_tag = "topic"
+  tags = { protocol = "mqtt" }
+
+  [inputs.mqtt_consumer.reconnect]
+    initial_delay = "2s"
+    max_delay = "30s"
+
+# ==========================================================================
+# Internal metrics
+# ==========================================================================
+
+[[inputs.internal]]
+  interval = "30s"
+
+# ==========================================================================
+# Outputs
+# ==========================================================================
+
+# Local store for inspection and verification
+[outputs.local_store]
+  enabled = true
+  path = "./data/factory-sim-foodbev"
+  retention_days = 7
+  rotation = "daily"
+
+# JSONL file for the verification script
+[[outputs.file]]
+  alias = "verification_log"
+  path = "./data/factory-sim-foodbev/metrics.jsonl"
+  data_format = "json"
+
+# Console output for watching live
+#[[outputs.stdout]]
+#  data_format = "json"
+
+# ==========================================================================
+# Web UI
+# ==========================================================================
+
+[webui]
+  enabled = true
+  port = 8080
+  bind = "127.0.0.1"
