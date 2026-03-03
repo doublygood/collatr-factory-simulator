@@ -406,6 +406,7 @@ class ScenarioEngine:
             params: dict[str, object] = {
                 "spike_duration_range": list(cfg.spike_duration_seconds),
                 "power_multiplier_range": list(cfg.spike_magnitude),
+                "idle_threshold_s": cfg.idle_threshold_minutes * 60.0,
             }
             self._scenarios.append(
                 ColdStart(start_time=start, rng=self._spawn_rng(), params=params)
