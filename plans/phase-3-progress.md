@@ -21,7 +21,7 @@
 - [x] 3.16: Oven Thermal Excursion Scenario
 - [x] 3.17: Fill Weight Drift Scenario
 - [x] 3.18: Seal Integrity Failure Scenario
-- [ ] 3.19: Chiller Door Alarm Scenario
+- [x] 3.19: Chiller Door Alarm Scenario
 - [ ] 3.20: CIP Cycle Scenario
 - [ ] 3.21: Cold Chain Break Scenario
 - [ ] 3.22: F&B Scenario Auto-Scheduling
@@ -326,3 +326,20 @@ All 1865 tests pass.
 - Key tests: giveaway increases/decreases per direction, drift proportional to rate×elapsed, capped at max_drift, giveaway restored exactly after completion, mid-scenario elevation observed then restored, default ranges match PRD, graceful completion without filler
 
 All 1830 non-integration tests pass (17 new).
+
+### Task 3.19: Chiller Door Alarm Scenario
+
+`ChillerDoorAlarm` in `src/factory_simulator/scenarios/chiller_door_alarm.py` — cold room door open event.
+
+- **Mechanism**: Sets `ChillerGenerator.door_open = True` on activation. The generator's built-in door-open heat rate (1.5 C/min) adds to the background heat gain (0.2 C/min) every tick. The bang-bang compressor works harder trying to compensate.
+- **Duration**: 5-20 min (300-1200 s, PRD 5.14.5). Default: [300.0, 1200.0].
+- **Recovery**: On `_on_complete`, `door_open` is restored to False. The bang-bang controller then brings temperature back to setpoint naturally.
+- **Ground truth**: Logs `signal_anomaly` on `chiller.door_open` (state_change) and `chiller.room_temp` (drift) at activation.
+- **Graceful exit**: If no ChillerGenerator in engine (packaging profile), completes immediately.
+- **Generator timing note**: The chiller generator fires every 1 s (min sample_rate_ms=1000). The `dt=0.1 s` per fire means 30 fires in 30 s of wall time, advancing 3 s of physics per 30 s. Tests account for this with ratio-based or small absolute threshold assertions.
+
+**Tests** (`tests/unit/test_scenarios/test_chiller_door_alarm.py`):
+- 14 tests in 4 classes: Lifecycle (4), DoorOpenEffect (3), Recovery (3), Defaults (3), NoChillerGenerator (1).
+- Key tests: door_open True on activation, room_temp rises faster with door open (at least 4x background), door_open False after completion, no permanent door-open, default 300-1200 s range, graceful exit without chiller.
+
+All 1864 unit tests pass (14 new).

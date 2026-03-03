@@ -190,7 +190,7 @@
       "description": "Door opens, room temp rises 0.5-2 C/min, compressor cycles harder. Door close triggers first_order_lag recovery to setpoint. Duration 5-20 min.",
       "prd_refs": ["prd/05-scenario-system.md (5.14.5)"],
       "depends_on": ["3.9"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.20",
