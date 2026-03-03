@@ -13,7 +13,7 @@
 - [x] 4.8: Communication Drop Injection
 - [x] 4.9: Sensor Disconnect and Stuck Sensor
 - [x] 4.10: Modbus Exception and Partial Response Injection
-- [ ] 4.11: Duplicate Timestamps and Timezone Offset
+- [x] 4.11: Duplicate Timestamps and Timezone Offset
 - [ ] 4.12: Data Quality Engine Integration
 - [ ] 4.13: Noise Calibration — Packaging Profile
 - [ ] 4.14: Noise Calibration — F&B Profile
@@ -26,6 +26,45 @@
 - gutter_fault probability 18x too high → Fix in Task 4.13
 
 ## Notes
+
+### Task 4.11 — Duplicate Timestamps and Timezone Offset (COMPLETE)
+
+**`mqtt_publisher.py`** changes:
+- `_sim_time_to_iso(sim_time, offset_hours=0.0)`: adds `offset_hours` param — shifts the
+  effective timestamp by `offset_hours * 3600` seconds. The string still ends in 'Z'
+  (appears UTC) but the wall-clock value is shifted, replicating camera/PLC timezone bugs
+  (PRD 10.7).
+- `make_payload(..., offset_hours=0.0)`: threads `offset_hours` to `_sim_time_to_iso`.
+  Backward-compatible default of 0.0.
+- `make_batch_vibration_payload(..., offset_hours=0.0)`: same.
+- `MqttPublisher.__init__`: new `duplicate_rng` kwarg. Stores:
+  - `_dup_rng`: the RNG (or None if injection disabled)
+  - `_dup_prob = duplicate_probability / 2.0` (MQTT rate is half Modbus: ~0.005% default)
+  - `_offset_hours = config.data_quality.mqtt_timestamp_offset_hours`
+- `_publish_entry`: applies `_offset_hours` to payload; after each publish, draws from
+  `_dup_rng` and publishes the same payload again if `< _dup_prob` (PRD 10.5).
+- `_publish_batch_vib`: applies `_offset_hours` to batch payload.
+
+**`modbus_server.py`** changes:
+- `ModbusServer.__init__`: new `duplicate_rng` kwarg. Stores `_dup_rng` and
+  `_dup_prob = config.data_quality.duplicate_probability`.
+- `_update_loop`: adds `is_dup` check — if `_dup_rng.random() < _dup_prob`, skips
+  `sync_registers()`. Registers hold their previous values so the next Modbus read returns
+  identical data to the previous read (same value, same effective internal timestamp).
+  Neither comm drop nor duplicate skip interact (both independently suppress sync).
+
+Tests: 30 tests in `test_duplicate_timestamps.py` covering:
+- `_sim_time_to_iso` offset (8 tests): zero offset, +1h BST, -5h US Eastern, Z-suffix,
+  fractional seconds
+- `make_payload` offset propagation (4 tests)
+- `make_batch_vibration_payload` offset propagation (3 tests)
+- `MqttPublisher` timezone (4 tests): config propagation, publish payload, batch payload
+- `MqttPublisher` duplicate (6 tests): no-rng guard, prob=1 always duplicates, prob=0 never,
+  same topic+payload, _dup_prob halving, determinism
+- `ModbusServer` duplicate (5 tests): no-rng always syncs, prob=1 always skips, prob=0 never,
+  config storage, determinism
+
+2343 total tests passing.
 
 ### Task 4.10 — Modbus Exception and Partial Response Injection (COMPLETE)
 

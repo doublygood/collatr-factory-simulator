@@ -616,6 +616,7 @@ class ModbusServer:
         port: int | None = None,
         comm_drop_rng: np.random.Generator | None = None,
         exception_rng: np.random.Generator | None = None,
+        duplicate_rng: np.random.Generator | None = None,
     ) -> None:
         self._config = config
         self._store = store
@@ -636,6 +637,12 @@ class ModbusServer:
             config.data_quality.exception_probability,
             config.data_quality.partial_modbus_response,
         )
+
+        # Duplicate timestamp injection (PRD 10.5): skip register sync at
+        # duplicate_probability so registers hold identical values on the next
+        # client read (same value + effectively same internal timestamp).
+        self._dup_rng: np.random.Generator | None = duplicate_rng
+        self._dup_prob: float = config.data_quality.duplicate_probability
 
         # Machine state transition tracking for 0x06 injection
         self._last_machine_state: int = -1
@@ -1032,12 +1039,23 @@ class ModbusServer:
 
         Skips register synchronisation during an active communication drop
         (PRD 10.2): Modbus register values freeze at their last-synced values.
+
+        At ``duplicate_probability`` (PRD 10.5), also skips synchronisation
+        so registers hold their previous values.  A subsequent client read
+        returns identical data to the previous read — same value with the same
+        effective internal timestamp — replicating the PLC scan-cycle race
+        condition described in PRD 10.5.
         """
         try:
             while True:
                 now = time.monotonic()
                 self._drop_scheduler.update(now)
-                if not self._drop_scheduler.is_active(now):
+                is_drop = self._drop_scheduler.is_active(now)
+                is_dup = (
+                    self._dup_rng is not None
+                    and self._dup_rng.random() < self._dup_prob
+                )
+                if not is_drop and not is_dup:
                     self.sync_registers()
                 await asyncio.sleep(0.05)  # 50ms update interval
         except asyncio.CancelledError:

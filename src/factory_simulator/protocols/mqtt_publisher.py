@@ -146,20 +146,32 @@ def _is_event_driven(relative: str) -> bool:
     return relative in _EVENT_DRIVEN_SUFFIXES
 
 
-def _sim_time_to_iso(sim_time: float) -> str:
+def _sim_time_to_iso(sim_time: float, offset_hours: float = 0.0) -> str:
     """Convert sim_time (seconds from simulation start) to ISO 8601 UTC.
 
     Uses the same reference epoch (2026-01-01T00:00:00Z) as the ground
     truth logger, ensuring cross-protocol timestamp consistency.
 
+    Parameters
+    ----------
+    sim_time:
+        Simulated time in seconds from simulation start.
+    offset_hours:
+        Timezone offset to apply to the timestamp (PRD 10.7).  A non-zero
+        value simulates a device reporting timestamps in a wrong timezone.
+        The string still ends in 'Z' (looks like UTC) but the underlying
+        time is shifted, replicating the Site B / camera clock bug.
+
     Rule 6: all timestamps in signal payloads use simulated time.
     """
-    dt_obj = datetime.fromtimestamp(_REFERENCE_EPOCH_TS + sim_time, tz=UTC)
+    effective_ts = _REFERENCE_EPOCH_TS + sim_time + offset_hours * 3600.0
+    dt_obj = datetime.fromtimestamp(effective_ts, tz=UTC)
     return dt_obj.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt_obj.microsecond // 1000:03d}Z"
 
 
 def make_payload(
     value: float | str, quality: str, unit: str, sim_time: float,
+    offset_hours: float = 0.0,
 ) -> bytes:
     """Build a JSON payload per PRD Section 3.3.4.
 
@@ -174,6 +186,9 @@ def make_payload(
     sim_time:
         Simulated time in seconds (from SignalValue.timestamp).
         Converted to ISO 8601 using the reference epoch (Rule 6).
+    offset_hours:
+        Timezone offset applied to the timestamp (PRD 10.7).  Default 0.0
+        (no offset).
 
     Returns
     -------
@@ -181,7 +196,7 @@ def make_payload(
         UTF-8 encoded JSON with fields: ``timestamp``, ``value``,
         ``unit``, ``quality``.
     """
-    ts = _sim_time_to_iso(sim_time)
+    ts = _sim_time_to_iso(sim_time, offset_hours)
     payload_dict = {
         "timestamp": ts,
         "value": value,
@@ -193,6 +208,7 @@ def make_payload(
 
 def make_batch_vibration_payload(
     x: float, y: float, z: float, quality: str, unit: str, sim_time: float,
+    offset_hours: float = 0.0,
 ) -> bytes:
     """Build a batch vibration JSON payload per PRD Section 3.3.6.
 
@@ -207,6 +223,9 @@ def make_batch_vibration_payload(
     sim_time:
         Simulated time in seconds (from SignalValue.timestamp).
         Converted to ISO 8601 using the reference epoch (Rule 6).
+    offset_hours:
+        Timezone offset applied to the timestamp (PRD 10.7).  Default 0.0
+        (no offset).
 
     Returns
     -------
@@ -214,7 +233,7 @@ def make_batch_vibration_payload(
         UTF-8 encoded JSON with fields: ``timestamp``, ``x``, ``y``, ``z``,
         ``unit``, ``quality``.
     """
-    ts = _sim_time_to_iso(sim_time)
+    ts = _sim_time_to_iso(sim_time, offset_hours)
     payload_dict = {
         "timestamp": ts,
         "x": x,
@@ -393,6 +412,7 @@ class MqttPublisher:
         port: int | None = None,
         client: mqtt.Client | None = None,
         comm_drop_rng: np.random.Generator | None = None,
+        duplicate_rng: np.random.Generator | None = None,
     ) -> None:
         self._config = config
         self._store = store
@@ -417,6 +437,13 @@ class MqttPublisher:
         self._drop_scheduler = CommDropScheduler(
             config.data_quality.mqtt_drop, _rng,
         )
+
+        # Duplicate timestamp injection (PRD 10.5)
+        self._dup_rng: np.random.Generator | None = duplicate_rng
+        self._dup_prob: float = config.data_quality.duplicate_probability / 2.0
+
+        # Timezone offset for MQTT timestamps (PRD 10.7)
+        self._offset_hours: float = config.data_quality.mqtt_timestamp_offset_hours
 
     # -- Properties -----------------------------------------------------------
 
@@ -466,14 +493,28 @@ class MqttPublisher:
     # -- Publish helpers ------------------------------------------------------
 
     def _publish_entry(self, entry: TopicEntry, sv: SignalValue) -> None:
-        """Publish one signal value to its MQTT topic."""
-        payload = make_payload(sv.value, sv.quality, entry.unit, sv.timestamp)
+        """Publish one signal value to its MQTT topic.
+
+        Applies timezone offset to the timestamp (PRD 10.7).  Occasionally
+        publishes the same message twice within 1 ms to simulate sensor
+        gateway double-publish (PRD 10.5).
+        """
+        payload = make_payload(sv.value, sv.quality, entry.unit, sv.timestamp,
+                               self._offset_hours)
         self._client.publish(
             entry.topic,
             payload=payload,
             qos=entry.qos,
             retain=entry.retain,
         )
+        # Duplicate publish (PRD 10.5): same payload, same topic, within 1 ms
+        if self._dup_rng is not None and self._dup_rng.random() < self._dup_prob:
+            self._client.publish(
+                entry.topic,
+                payload=payload,
+                qos=entry.qos,
+                retain=entry.retain,
+            )
 
     def _publish_batch_vib(self, now: float) -> None:
         """Publish the batch vibration topic when due (PRD 3.3.6).
@@ -503,7 +544,7 @@ class MqttPublisher:
         sim_time = max(sv_x.timestamp, sv_y.timestamp, sv_z.timestamp)
         payload = make_batch_vibration_payload(
             float(sv_x.value), float(sv_y.value), float(sv_z.value),
-            quality, entry.unit, sim_time,
+            quality, entry.unit, sim_time, self._offset_hours,
         )
         self._client.publish(
             entry.topic, payload=payload, qos=entry.qos, retain=entry.retain
