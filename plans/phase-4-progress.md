@@ -11,7 +11,7 @@
 - [x] 4.6: Contextual Anomalies Scenario
 - [x] 4.7: Intermittent Faults Scenario
 - [x] 4.8: Communication Drop Injection
-- [ ] 4.9: Sensor Disconnect and Stuck Sensor
+- [x] 4.9: Sensor Disconnect and Stuck Sensor
 - [ ] 4.10: Modbus Exception and Partial Response Injection
 - [ ] 4.11: Duplicate Timestamps and Timezone Offset
 - [ ] 4.12: Data Quality Engine Integration
@@ -26,6 +26,43 @@
 - gutter_fault probability 18x too high → Fix in Task 4.13
 
 ## Notes
+
+### Task 4.9 — Sensor Disconnect and Stuck Sensor (COMPLETE)
+
+New file: `src/factory_simulator/engine/data_quality.py`.
+
+Two classes implement PRD 10.9 and 10.10:
+
+**`SensorDisconnectInjector`** (PRD 10.9):
+- Poisson inter-arrival scheduling per signal using `frequency_per_24h_per_signal`
+- Sentinel value resolution priority: `per_signal_overrides` → name-based type detection
+  (`"temp"` → 6553.5, `"pressure"` → 0.0, `"voltage"` → -32768.0) → 0.0 default
+- During active disconnect: `store.set(sig_id, sentinel, sim_time, "bad")`
+- OPC-UA reads `quality="bad"` → `BadSensorFailure` (via existing OpcuaServer mapping)
+- MQTT publishes `quality` field from store (existing MqttPublisher behaviour)
+- Ground truth: `log_sensor_disconnect()` called at event start (not each tick)
+- State machine per signal: `_next_event`, `_event_ends` dicts
+- Initialized lazily on first `tick()` call; first event always starts after a gap
+
+**`StuckSensorInjector`** (PRD 10.10):
+- Poisson inter-arrival scheduling per signal using `frequency_per_week_per_signal`
+- At event start: captures `store.get(sig_id).value` as frozen value
+- During stuck: `store.set(sig_id, frozen_value, sim_time, "good")` — quality stays Good
+- Deferred start if signal absent from store (rescheduled from current sim_time)
+- String signals: GT log receives `frozen_value=0.0` (numeric fallback)
+- Ground truth: `log_stuck_sensor()` called at event start with frozen_value and duration
+
+Helper: `_sentinel_for_signal(sig_id, cfg)` resolves sentinel value (module-level,
+exported for testing).
+
+Both injectors use simulation time (not wall-clock) — sensor events are tied to the
+simulated factory timeline, not the host machine. Deterministic for same-seed RNG.
+
+Tests: 39 tests in `tests/unit/test_sensor_disconnect.py` covering sentinel resolution
+(8 cases), disabled/zero-frequency guards, sentinel value written, quality flag, active
+duration, resumption after event, multiple independent signals, ground truth logging
+(called-once, not-called, per-event), determinism, deferred start, string signal GT
+handling. 2275 total tests passing.
 
 ### Task 4.8 — Communication Drop Injection (COMPLETE)
 
