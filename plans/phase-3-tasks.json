@@ -220,7 +220,7 @@
       "description": "Add scheduling methods for all 7 F&B scenarios to ScenarioEngine._generate_timeline(). Update _AFFECTED_SIGNALS with F&B signal sets. Config-to-param mapping for each F&B scenario type.",
       "prd_refs": ["prd/05-scenario-system.md (5.14)"],
       "depends_on": ["3.15", "3.16", "3.17", "3.18", "3.19", "3.20", "3.21", "3.1"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.23",

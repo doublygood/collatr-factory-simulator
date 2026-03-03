@@ -24,7 +24,7 @@
 - [x] 3.19: Chiller Door Alarm Scenario
 - [x] 3.20: CIP Cycle Scenario
 - [x] 3.21: Cold Chain Break Scenario
-- [ ] 3.22: F&B Scenario Auto-Scheduling
+- [x] 3.22: F&B Scenario Auto-Scheduling
 - [ ] 3.23: F&B Modbus Integration Test
 - [ ] 3.24: F&B OPC-UA + MQTT Integration Test
 - [ ] 3.25: F&B Cross-Protocol Consistency Test
@@ -379,3 +379,37 @@ All 1953 tests pass (18 new).
 - Key tests: compressor_forced_off True on activation, store shows compressor_state=0.0, room_temp rises with compressor locked, rises faster than bang-bang baseline, forced_off released after completion, no permanent lock (temp recovers to <10°C), default 1800-7200 s range, graceful exit without chiller.
 
 All 1968 tests pass (15 new).
+
+### Task 3.22: F&B Scenario Auto-Scheduling
+
+**Files changed**: `src/factory_simulator/engine/scenario_engine.py`, `tests/unit/test_scenario_engine.py`
+
+**scenario_engine.py**:
+- Added imports for all 7 F&B scenario classes: `BatchCycle`, `OvenThermalExcursion`, `FillWeightDrift`, `SealIntegrityFailure`, `ChillerDoorAlarm`, `CipCycle`, `ColdChainBreak`
+- Promoted `_WEEK_SECONDS` from local variable in `_schedule_web_breaks` to module-level constant
+- Added module-level constants: `_DAY_SECONDS = 86400`, `_WEEK_SECONDS = 7 * _DAY_SECONDS`, `_MONTH_SECONDS = 30 * _DAY_SECONDS`
+- Added 7 scheduling methods: `_schedule_batch_cycles`, `_schedule_oven_thermal_excursions`, `_schedule_fill_weight_drifts`, `_schedule_seal_integrity_failures`, `_schedule_chiller_door_alarms`, `_schedule_cip_cycles`, `_schedule_cold_chain_breaks`
+- All follow `if cfg is None or not cfg.enabled: return` guard pattern for optional F&B configs
+- Frequency periods: batch/oven/fill drift = per shift; seal/door = per week; CIP = per day; cold chain = per month
+- Updated `_generate_timeline()` to call all 7 new methods after Phase 2 methods
+- Updated `_AFFECTED_SIGNALS` dict with 7 F&B scenario entries (signals verified against factory-foodbev.yaml)
+
+**Config-to-param mapping used**:
+- BatchCycle: `batch_duration_seconds` → `batch_duration_range`
+- OvenThermalExcursion: `duration_seconds` → `drift_duration_range`, `max_drift_c` → `drift_range`
+- FillWeightDrift: `duration_seconds` → `drift_duration_range`, `drift_rate` → `drift_rate_range`
+- SealIntegrityFailure: `duration_seconds` → `duration_range`
+- ChillerDoorAlarm: `duration_seconds` → `duration_range`
+- CipCycle: `cycle_duration_seconds` → `cycle_duration_range`
+- ColdChainBreak: `duration_seconds` → `duration_range`
+
+**test_scenario_engine.py**:
+- Added `_FNB_CONFIG_PATH` and `_make_fnb_engine()` helper
+- Added `_FNB_ONLY_SCENARIOS` set to `TestAffectedSignalsValid`
+- Updated `test_all_affected_signal_ids_in_store` to skip F&B-only scenarios for packaging store
+- Added `test_fnb_affected_signal_ids_in_store` validating F&B signal IDs against F&B store
+- Added `TestFnbAutoSchedulingIntegration` class with 2 tests:
+  - `test_all_fnb_scenario_types_scheduled`: 1-month sim with F&B config schedules all 7 types
+  - `test_fnb_scenarios_not_scheduled_without_fnb_config`: F&B types absent when packaging config used
+
+All 1868 unit tests pass (10 new in test_scenario_engine.py).

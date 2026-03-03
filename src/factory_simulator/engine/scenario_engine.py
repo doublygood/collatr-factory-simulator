@@ -11,7 +11,7 @@ On each tick it:
 2. Advances active scenarios (calling their ``evaluate()``).
 3. Removes completed scenarios from the active set.
 
-Ten scenario types are auto-scheduled across two categories:
+Ten packaging scenario types are auto-scheduled across two categories:
 
 **Phase 1 (time-based):**
   UnplannedStop, JobChangeover, ShiftChange
@@ -22,6 +22,10 @@ Ten scenario types are auto-scheduled across two categories:
 **Phase 2 condition-triggered:**
   CoderDepletion (monitors ink level), MaterialSplice (monitors unwind diameter)
 
+Seven F&B scenario types are auto-scheduled (Phase 3):
+  BatchCycle, OvenThermalExcursion, FillWeightDrift, SealIntegrityFailure,
+  ChillerDoorAlarm, CipCycle, ColdChainBreak
+
 Scheduling uses simple frequency-based uniform-random start times.
 Full Poisson inter-arrival times with priority rules are deferred to
 Phase 4 per PRD Appendix F.
@@ -30,7 +34,7 @@ The DataEngine calls ``scenario_engine.tick()`` *before* running
 generators so that state changes from scenarios are visible to the
 current tick's signal generation (PRD 8.2 step 3).
 
-PRD Reference: Section 5.13 (Scenario Scheduling)
+PRD Reference: Section 5.13 (Scenario Scheduling), 5.14 (F&B Scenarios)
 """
 
 from __future__ import annotations
@@ -41,13 +45,20 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from factory_simulator.scenarios.base import Scenario, ScenarioPhase
+from factory_simulator.scenarios.batch_cycle import BatchCycle
+from factory_simulator.scenarios.chiller_door_alarm import ChillerDoorAlarm
+from factory_simulator.scenarios.cip_cycle import CipCycle
 from factory_simulator.scenarios.coder_depletion import CoderDepletion
+from factory_simulator.scenarios.cold_chain_break import ColdChainBreak
 from factory_simulator.scenarios.cold_start import ColdStart
 from factory_simulator.scenarios.dryer_drift import DryerDrift
+from factory_simulator.scenarios.fill_weight_drift import FillWeightDrift
 from factory_simulator.scenarios.ink_excursion import InkExcursion
 from factory_simulator.scenarios.job_changeover import JobChangeover
 from factory_simulator.scenarios.material_splice import MaterialSplice
+from factory_simulator.scenarios.oven_thermal_excursion import OvenThermalExcursion
 from factory_simulator.scenarios.registration_drift import RegistrationDrift
+from factory_simulator.scenarios.seal_integrity import SealIntegrityFailure
 from factory_simulator.scenarios.shift_change import ShiftChange
 from factory_simulator.scenarios.unplanned_stop import UnplannedStop
 from factory_simulator.scenarios.web_break import WebBreak
@@ -59,8 +70,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# 8-hour shift in seconds
-_SHIFT_SECONDS = 8 * 3600
+# Time constants used for scheduling frequency calculations
+_SHIFT_SECONDS = 8 * 3600       # 8-hour shift
+_DAY_SECONDS = 86400             # 24-hour day
+_WEEK_SECONDS = 7 * _DAY_SECONDS  # 7-day week
+_MONTH_SECONDS = 30 * _DAY_SECONDS  # 30-day month (approximate)
 
 
 class ScenarioEngine:
@@ -194,6 +208,15 @@ class ScenarioEngine:
         self._schedule_coder_depletions()
         self._schedule_material_splices()
 
+        # Phase 3 F&B time-based scenarios (only scheduled when F&B config present)
+        self._schedule_batch_cycles()
+        self._schedule_oven_thermal_excursions()
+        self._schedule_fill_weight_drifts()
+        self._schedule_seal_integrity_failures()
+        self._schedule_chiller_door_alarms()
+        self._schedule_cip_cycles()
+        self._schedule_cold_chain_breaks()
+
         # Sort by start time for orderly evaluation
         self._scenarios.sort(key=lambda s: s.start_time)
 
@@ -309,7 +332,6 @@ class ScenarioEngine:
         if not cfg.enabled:
             return
 
-        _WEEK_SECONDS = 7 * 86400
         n_weeks = max(1.0, self._sim_duration_s / _WEEK_SECONDS)
 
         min_f, max_f = cfg.frequency_per_week
@@ -464,6 +486,160 @@ class ScenarioEngine:
                 )
             )
 
+    # -- Phase 3: F&B scenario scheduling methods -----------------------------
+
+    def _schedule_batch_cycles(self) -> None:
+        """Schedule batch cycle scenarios based on config frequency (PRD 5.14.1)."""
+        cfg = self._config.batch_cycle
+        if cfg is None or not cfg.enabled:
+            return
+
+        n_shifts = max(1.0, self._sim_duration_s / _SHIFT_SECONDS)
+
+        min_f, max_f = cfg.frequency_per_shift
+        n_cycles = round(self._rng.uniform(min_f, max_f) * n_shifts)
+
+        for _ in range(n_cycles):
+            start = float(self._rng.uniform(0, self._sim_duration_s))
+            params: dict[str, object] = {
+                "batch_duration_range": list(cfg.batch_duration_seconds),
+            }
+            self._scenarios.append(
+                BatchCycle(start_time=start, rng=self._spawn_rng(), params=params)
+            )
+
+    def _schedule_oven_thermal_excursions(self) -> None:
+        """Schedule oven thermal excursion scenarios (PRD 5.14.2)."""
+        cfg = self._config.oven_thermal_excursion
+        if cfg is None or not cfg.enabled:
+            return
+
+        n_shifts = max(1.0, self._sim_duration_s / _SHIFT_SECONDS)
+
+        min_f, max_f = cfg.frequency_per_shift
+        n_excursions = round(self._rng.uniform(min_f, max_f) * n_shifts)
+
+        for _ in range(n_excursions):
+            start = float(self._rng.uniform(0, self._sim_duration_s))
+            params: dict[str, object] = {
+                "drift_duration_range": list(cfg.duration_seconds),
+                "drift_range": list(cfg.max_drift_c),
+            }
+            self._scenarios.append(
+                OvenThermalExcursion(
+                    start_time=start, rng=self._spawn_rng(), params=params
+                )
+            )
+
+    def _schedule_fill_weight_drifts(self) -> None:
+        """Schedule fill weight drift scenarios (PRD 5.14.3)."""
+        cfg = self._config.fill_weight_drift
+        if cfg is None or not cfg.enabled:
+            return
+
+        n_shifts = max(1.0, self._sim_duration_s / _SHIFT_SECONDS)
+
+        min_f, max_f = cfg.frequency_per_shift
+        n_drifts = round(self._rng.uniform(min_f, max_f) * n_shifts)
+
+        for _ in range(n_drifts):
+            start = float(self._rng.uniform(0, self._sim_duration_s))
+            params: dict[str, object] = {
+                "drift_duration_range": list(cfg.duration_seconds),
+                "drift_rate_range": list(cfg.drift_rate),
+            }
+            self._scenarios.append(
+                FillWeightDrift(
+                    start_time=start, rng=self._spawn_rng(), params=params
+                )
+            )
+
+    def _schedule_seal_integrity_failures(self) -> None:
+        """Schedule seal integrity failure scenarios (PRD 5.14.4)."""
+        cfg = self._config.seal_integrity_failure
+        if cfg is None or not cfg.enabled:
+            return
+
+        n_weeks = max(1.0, self._sim_duration_s / _WEEK_SECONDS)
+
+        min_f, max_f = cfg.frequency_per_week
+        n_failures = round(self._rng.uniform(min_f, max_f) * n_weeks)
+
+        for _ in range(n_failures):
+            start = float(self._rng.uniform(0, self._sim_duration_s))
+            params: dict[str, object] = {
+                "duration_range": list(cfg.duration_seconds),
+            }
+            self._scenarios.append(
+                SealIntegrityFailure(
+                    start_time=start, rng=self._spawn_rng(), params=params
+                )
+            )
+
+    def _schedule_chiller_door_alarms(self) -> None:
+        """Schedule chiller door alarm scenarios (PRD 5.14.5)."""
+        cfg = self._config.chiller_door_alarm
+        if cfg is None or not cfg.enabled:
+            return
+
+        n_weeks = max(1.0, self._sim_duration_s / _WEEK_SECONDS)
+
+        min_f, max_f = cfg.frequency_per_week
+        n_alarms = round(self._rng.uniform(min_f, max_f) * n_weeks)
+
+        for _ in range(n_alarms):
+            start = float(self._rng.uniform(0, self._sim_duration_s))
+            params: dict[str, object] = {
+                "duration_range": list(cfg.duration_seconds),
+            }
+            self._scenarios.append(
+                ChillerDoorAlarm(
+                    start_time=start, rng=self._spawn_rng(), params=params
+                )
+            )
+
+    def _schedule_cip_cycles(self) -> None:
+        """Schedule CIP cycle scenarios (PRD 5.14.6)."""
+        cfg = self._config.cip_cycle
+        if cfg is None or not cfg.enabled:
+            return
+
+        n_days = max(1.0, self._sim_duration_s / _DAY_SECONDS)
+
+        min_f, max_f = cfg.frequency_per_day
+        n_cycles = round(self._rng.uniform(min_f, max_f) * n_days)
+
+        for _ in range(n_cycles):
+            start = float(self._rng.uniform(0, self._sim_duration_s))
+            params: dict[str, object] = {
+                "cycle_duration_range": list(cfg.cycle_duration_seconds),
+            }
+            self._scenarios.append(
+                CipCycle(start_time=start, rng=self._spawn_rng(), params=params)
+            )
+
+    def _schedule_cold_chain_breaks(self) -> None:
+        """Schedule cold chain break scenarios (PRD 5.14.7)."""
+        cfg = self._config.cold_chain_break
+        if cfg is None or not cfg.enabled:
+            return
+
+        n_months = max(1.0, self._sim_duration_s / _MONTH_SECONDS)
+
+        min_f, max_f = cfg.frequency_per_month
+        n_breaks = round(self._rng.uniform(min_f, max_f) * n_months)
+
+        for _ in range(n_breaks):
+            start = float(self._rng.uniform(0, self._sim_duration_s))
+            params: dict[str, object] = {
+                "duration_range": list(cfg.duration_seconds),
+            }
+            self._scenarios.append(
+                ColdChainBreak(
+                    start_time=start, rng=self._spawn_rng(), params=params
+                )
+            )
+
     def _spawn_rng(self) -> np.random.Generator:
         """Create a child RNG from the parent (Rule 13)."""
         return np.random.default_rng(self._rng.integers(0, 2**63))
@@ -476,6 +652,7 @@ class ScenarioEngine:
 # Scenario class name -> list of affected signal IDs.
 # These are the signals the PRD says each scenario type modifies.
 _AFFECTED_SIGNALS: dict[str, list[str]] = {
+    # -- Packaging scenarios (Phase 1 & 2) ------------------------------------
     "WebBreak": [
         "press.web_tension", "press.line_speed",
         "press.machine_state", "press.web_break", "press.fault_active",
@@ -512,6 +689,34 @@ _AFFECTED_SIGNALS: dict[str, list[str]] = {
     ],
     "ShiftChange": [
         "press.machine_state", "press.line_speed",
+    ],
+    # -- F&B scenarios (Phase 3) ----------------------------------------------
+    "BatchCycle": [
+        "mixer.state", "mixer.speed", "mixer.torque",
+        "mixer.batch_temp", "mixer.batch_weight", "mixer.batch_id",
+        "mixer.mix_time_elapsed", "mixer.lid_closed",
+    ],
+    "OvenThermalExcursion": [
+        "oven.zone_1_temp", "oven.zone_2_temp", "oven.zone_3_temp",
+        "oven.product_core_temp",
+    ],
+    "FillWeightDrift": [
+        "filler.fill_weight", "filler.fill_deviation", "filler.reject_count",
+    ],
+    "SealIntegrityFailure": [
+        "sealer.seal_temp", "sealer.seal_pressure",
+        "sealer.vacuum_level", "qc.reject_total",
+    ],
+    "ChillerDoorAlarm": [
+        "chiller.door_open", "chiller.room_temp", "chiller.compressor_state",
+    ],
+    "CipCycle": [
+        "cip.state", "cip.wash_temp", "cip.conductivity",
+        "cip.flow_rate", "cip.cycle_time_elapsed",
+        "mixer.state", "filler.state",
+    ],
+    "ColdChainBreak": [
+        "chiller.compressor_state", "chiller.room_temp",
     ],
 }
 
