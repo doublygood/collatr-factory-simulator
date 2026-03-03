@@ -12,7 +12,7 @@
 - [x] 3.7: Sealer Generator
 - [x] 3.8: Checkweigher (QC) Generator
 - [x] 3.9: Chiller Generator
-- [ ] 3.10: CIP Generator
+- [x] 3.10: CIP Generator
 - [ ] 3.11: Shared Generator Coupling for F&B
 - [ ] 3.12: F&B Modbus — CDAB Encoding + Dynamic Block Sizing
 - [ ] 3.13: F&B Modbus — Multi-Slave Oven Eurotherm UIDs
@@ -162,3 +162,17 @@ All Modbus addresses cross-referenced against PRD Appendix A. OPC-UA nodes match
 - Properties exposed for scenarios: room_temp (R/W), compressor_on (R), compressor_forced_off (R/W), door_open (R/W), defrost_active (R), setpoint (R).
 - 37 tests covering: signal count/IDs, initial state, bang-bang cycling (ON→OFF, OFF→ON, sawtooth), defrost activation/duration/compressor-force/heat-rate, door open heat gain, pressure tracking, compressor_forced_off lock/release, signal clamp bounds, compressor binary, determinism, protocol mappings, setpoint writability.
 - All 1705 tests pass (1668 existing + 37 new).
+
+### Task 3.10: CIP Generator
+`CipGenerator` in `src/factory_simulator/generators/cip.py` — 5 signals, 6-state phase sequence (Idle/Pre-rinse/Caustic/Intermediate/Acid/Final-rinse).
+- **State machine**: integer state (0-5) with internal timers for auto-phase progression. Default phase durations: Pre-rinse 300s, Caustic 1080s, Intermediate 300s, Acid 750s, Final rinse 420s. `force_state()` used by CIP scenario (task 3.20) to kick off cycles.
+- **Wash temperature**: first-order lag (τ=90s) tracking phase-specific setpoints: Idle 20°C, Pre-rinse/Intermediate/Final 45°C, Caustic 75°C, Acid 65°C.
+- **Flow rate**: first-order lag (τ=15s) with phase-specific targets: 0 L/min (Idle), 60-80 L/min (active phases).
+- **Conductivity**: asymmetric first-order lag — fast rise (τ=60s) when target > current (caustic injection, acid), slow decay (τ=120s) when target < current (rinse phases). Caustic target 120 mS/cm, Acid 40 mS/cm, rinse/idle 0 mS/cm.
+- **cycle_time_elapsed**: monotonically increments while not Idle; resets to 0 when entering Idle.
+- **final_rinse_passed**: True if conductivity < 5 mS/cm at end of final rinse phase (PRD 2b.8 acceptance criterion).
+- **Auto-progression**: each phase auto-advances to the next after its configured duration via `_NEXT_PHASE` dict. Generator is self-contained once triggered.
+- Registered in `data_engine.py` as `"cip_skid": CipGenerator`.
+- Properties exposed for scenarios: state (R), cycle_time_elapsed (R), conductivity (R), wash_temp (R), flow_rate (R), final_rinse_passed (R).
+- 58 tests covering: signal count/IDs, initial Idle state, force_state (all phases, case-insensitive, same-state noop), auto-progression through all phases, wash_temp lag, flow_rate active/idle, conductivity rise/decay, cycle_time_elapsed increment/reset, final_rinse_passed flag, signal clamp bounds, determinism, _parse_state (valid/invalid inputs), protocol mappings (HR + OPC-UA state).
+- All 1660 unit tests pass (1602 existing + 58 new; note: integration tests not run in unit-only suite).
