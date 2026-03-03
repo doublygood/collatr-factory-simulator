@@ -24,10 +24,12 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from factory_simulator.scenarios.base import Scenario, ScenarioPhase
+from factory_simulator.scenarios.coder_depletion import CoderDepletion
 from factory_simulator.scenarios.cold_start import ColdStart
 from factory_simulator.scenarios.dryer_drift import DryerDrift
 from factory_simulator.scenarios.ink_excursion import InkExcursion
 from factory_simulator.scenarios.job_changeover import JobChangeover
+from factory_simulator.scenarios.material_splice import MaterialSplice
 from factory_simulator.scenarios.registration_drift import RegistrationDrift
 from factory_simulator.scenarios.shift_change import ShiftChange
 from factory_simulator.scenarios.unplanned_stop import UnplannedStop
@@ -170,6 +172,10 @@ class ScenarioEngine:
         self._schedule_ink_excursions()
         self._schedule_registration_drifts()
         self._schedule_cold_starts()
+
+        # Phase 2 condition-triggered scenarios
+        self._schedule_coder_depletions()
+        self._schedule_material_splices()
 
         # Sort by start time for orderly evaluation
         self._scenarios.sort(key=lambda s: s.start_time)
@@ -386,6 +392,58 @@ class ScenarioEngine:
             }
             self._scenarios.append(
                 ColdStart(start_time=start, rng=self._spawn_rng(), params=params)
+            )
+
+    def _schedule_coder_depletions(self) -> None:
+        """Schedule coder depletion monitoring instances (PRD 5.12).
+
+        CoderDepletion monitors ink level continuously.  We schedule one
+        monitoring instance per ~24h of sim time at evenly spaced start
+        times; each watches for one depletion-refill cycle.
+        """
+        cfg = self._config.coder_depletion
+        if not cfg.enabled:
+            return
+
+        n_instances = max(1, round(self._sim_duration_s / 86400))
+
+        for i in range(n_instances):
+            start = float(i * self._sim_duration_s / n_instances)
+            params: dict[str, object] = {
+                "low_ink_threshold": cfg.low_ink_threshold,
+                "empty_threshold": cfg.empty_threshold,
+                "recovery_duration_range": list(cfg.recovery_duration_seconds),
+            }
+            self._scenarios.append(
+                CoderDepletion(
+                    start_time=start, rng=self._spawn_rng(), params=params
+                )
+            )
+
+    def _schedule_material_splices(self) -> None:
+        """Schedule material splice monitoring instances (PRD 5.13a).
+
+        MaterialSplice monitors unwind diameter.  We schedule one
+        monitoring instance per ~3h of sim time at evenly spaced start
+        times; each watches for one splice event.
+        """
+        cfg = self._config.material_splice
+        if not cfg.enabled:
+            return
+
+        _SPLICE_INTERVAL_S = 3 * 3600
+        n_instances = max(1, round(self._sim_duration_s / _SPLICE_INTERVAL_S))
+
+        for i in range(n_instances):
+            start = float(i * self._sim_duration_s / n_instances)
+            params: dict[str, object] = {
+                "trigger_diameter": cfg.trigger_diameter_mm,
+                "splice_duration_range": list(cfg.splice_duration_seconds),
+            }
+            self._scenarios.append(
+                MaterialSplice(
+                    start_time=start, rng=self._spawn_rng(), params=params
+                )
             )
 
     def _spawn_rng(self) -> np.random.Generator:

@@ -22,13 +22,23 @@ import numpy as np
 import pytest
 
 from factory_simulator.config import (
+    CoderDepletionConfig,
+    ColdStartSpikeConfig,
+    DryerDriftConfig,
     EquipmentConfig,
     FactoryConfig,
     FactoryInfo,
+    InkViscosityExcursionConfig,
+    JobChangoverConfig,
+    MaterialSpliceConfig,
+    RegistrationDriftConfig,
     ScenariosConfig,
+    ShiftChangeConfig,
     ShiftsConfig,
     SignalConfig,
     SimulationConfig,
+    UnplannedStopConfig,
+    WebBreakConfig,
 )
 from factory_simulator.engine.ground_truth import GroundTruthLogger
 
@@ -484,15 +494,16 @@ class TestScenarioEngineIntegration:
         rng = np.random.default_rng(42)
         scenarios_cfg = ScenariosConfig(
             # Disable auto-scheduling so we control the timeline
-            unplanned_stop=ScenariosConfig().unplanned_stop.model_copy(
-                update={"enabled": False},
-            ),
-            job_changeover=ScenariosConfig().job_changeover.model_copy(
-                update={"enabled": False},
-            ),
-            shift_change=ScenariosConfig().shift_change.model_copy(
-                update={"enabled": False},
-            ),
+            unplanned_stop=UnplannedStopConfig(enabled=False),
+            job_changeover=JobChangoverConfig(enabled=False),
+            shift_change=ShiftChangeConfig(enabled=False),
+            web_break=WebBreakConfig(enabled=False),
+            dryer_drift=DryerDriftConfig(enabled=False),
+            ink_viscosity_excursion=InkViscosityExcursionConfig(enabled=False),
+            registration_drift=RegistrationDriftConfig(enabled=False),
+            cold_start_spike=ColdStartSpikeConfig(enabled=False),
+            coder_depletion=CoderDepletionConfig(enabled=False),
+            material_splice=MaterialSpliceConfig(enabled=False),
         )
 
         engine_se = ScenarioEngine(
@@ -563,15 +574,16 @@ class TestScenarioEngineIntegration:
 
         rng = np.random.default_rng(42)
         scenarios_cfg = ScenariosConfig(
-            unplanned_stop=ScenariosConfig().unplanned_stop.model_copy(
-                update={"enabled": False},
-            ),
-            job_changeover=ScenariosConfig().job_changeover.model_copy(
-                update={"enabled": False},
-            ),
-            shift_change=ScenariosConfig().shift_change.model_copy(
-                update={"enabled": False},
-            ),
+            unplanned_stop=UnplannedStopConfig(enabled=False),
+            job_changeover=JobChangoverConfig(enabled=False),
+            shift_change=ShiftChangeConfig(enabled=False),
+            web_break=WebBreakConfig(enabled=False),
+            dryer_drift=DryerDriftConfig(enabled=False),
+            ink_viscosity_excursion=InkViscosityExcursionConfig(enabled=False),
+            registration_drift=RegistrationDriftConfig(enabled=False),
+            cold_start_spike=ColdStartSpikeConfig(enabled=False),
+            coder_depletion=CoderDepletionConfig(enabled=False),
+            material_splice=MaterialSpliceConfig(enabled=False),
         )
 
         # Should not raise when ground_truth is None
