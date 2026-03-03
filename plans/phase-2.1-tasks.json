@@ -40,7 +40,7 @@
       "file": "plans/phase-2-acceptance-test.md",
       "description": "Update Scenario Evidence section with specific Phase 2 scenario expectations for Medium and Full tiers.",
       "prd_refs": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "2.1.6",
@@ -48,7 +48,7 @@
       "file": "src/factory_simulator/engine/scenario_engine.py",
       "description": "Update module docstring and _generate_timeline() docstring. Create plans/phase-2.1-progress.md.",
       "prd_refs": [],
-      "passes": false
+      "passes": true
     }
   ]
 }

@@ -1,14 +1,14 @@
 # Phase 2.1: Scenario Auto-Scheduling - Progress
 
-## Status: IN PROGRESS (tasks 2.1.1-2.1.4 complete, 2.1.5-2.1.6 remaining)
+## Status: ALL TASKS COMPLETE
 
 ## Tasks
 - [x] 2.1.1: Schedule time-based Phase 2 scenarios (WebBreak, DryerDrift, InkExcursion, RegistrationDrift, ColdStart)
 - [x] 2.1.2: Schedule condition-triggered Phase 2 scenarios (CoderDepletion, MaterialSplice)
 - [x] 2.1.3: Signal name validation test
 - [x] 2.1.4: Auto-scheduling integration test
-- [ ] 2.1.5: Update acceptance test procedure
-- [ ] 2.1.6: Update docstrings and create progress file
+- [x] 2.1.5: Update acceptance test procedure — commit 77b95fe
+- [x] 2.1.6: Update docstrings and progress file
 
 ## Notes
 
@@ -25,3 +25,7 @@ Local agent completed all 3 tasks in a single session (before PROMPT_build.md wa
 ### PROMPT_build.md fix (commit 78bd5fa)
 
 The original Phase 2.1 PROMPT_build.md said "for each task... move to the next task" which caused the local agent to do all tasks in one session without updating bookkeeping. Fixed to match Phase 2 pattern: "ONE TASK PER SESSION", TASK_COMPLETE signal, explicit stopping rules.
+
+### Task 2.1.6
+
+Updated module docstring in `scenario_engine.py` to document all 10 auto-scheduled scenario types across two categories (time-based and condition-triggered). The `_generate_timeline()` docstring was already updated in the earlier session.

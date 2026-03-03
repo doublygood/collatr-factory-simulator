@@ -1,13 +1,30 @@
 """Scenario engine -- schedules and evaluates scenarios per tick.
 
-The ScenarioEngine owns the scenario timeline.  On each tick it:
+The ScenarioEngine owns the scenario timeline.  On construction it
+auto-schedules all enabled scenario types using config-driven frequency
+profiles, so a default simulator run produces realistic scenario data
+without manual ``add_scenario()`` calls.
+
+On each tick it:
 
 1. Checks whether any pending scenarios should activate.
 2. Advances active scenarios (calling their ``evaluate()``).
 3. Removes completed scenarios from the active set.
 
-It can also generate a random scenario timeline from config-driven
-statistical profiles (frequency, duration ranges).
+Ten scenario types are auto-scheduled across two categories:
+
+**Phase 1 (time-based):**
+  UnplannedStop, JobChangeover, ShiftChange
+
+**Phase 2 time-based:**
+  WebBreak, DryerDrift, InkExcursion, RegistrationDrift, ColdStart
+
+**Phase 2 condition-triggered:**
+  CoderDepletion (monitors ink level), MaterialSplice (monitors unwind diameter)
+
+Scheduling uses simple frequency-based uniform-random start times.
+Full Poisson inter-arrival times with priority rules are deferred to
+Phase 4 per PRD Appendix F.
 
 The DataEngine calls ``scenario_engine.tick()`` *before* running
 generators so that state changes from scenarios are visible to the

@@ -12,10 +12,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import ClassVar
 
+import numpy as np
+
 from factory_simulator.clock import SimulationClock
-from factory_simulator.config import load_config
+from factory_simulator.config import ScenariosConfig, ShiftsConfig, load_config
 from factory_simulator.engine.data_engine import DataEngine
-from factory_simulator.engine.scenario_engine import _AFFECTED_SIGNALS
+from factory_simulator.engine.scenario_engine import _AFFECTED_SIGNALS, ScenarioEngine
 from factory_simulator.store import SignalStore
 
 _CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "factory.yaml"
@@ -84,4 +86,98 @@ class TestAffectedSignalsValid:
         for scenario_type, signal_ids in _AFFECTED_SIGNALS.items():
             assert len(signal_ids) == len(set(signal_ids)), (
                 f"{scenario_type} has duplicate signal IDs: {signal_ids}"
+            )
+
+
+# All 10 scenario types expected in a full auto-scheduled run.
+_ALL_SCENARIO_TYPES = {
+    # Phase 1
+    "UnplannedStop",
+    "JobChangeover",
+    "ShiftChange",
+    # Phase 2
+    "WebBreak",
+    "DryerDrift",
+    "InkExcursion",
+    "RegistrationDrift",
+    "ColdStart",
+    "CoderDepletion",
+    "MaterialSplice",
+}
+
+
+class TestAutoSchedulingIntegration:
+    """Verify auto-scheduling produces all 10 scenario types."""
+
+    def test_all_scenario_types_scheduled(self) -> None:
+        """A 1-week sim with all scenarios enabled should produce
+        at least one instance of each of the 10 scenario types."""
+        rng = np.random.default_rng(42)
+        scenarios_cfg = ScenariosConfig()  # all enabled by default
+        shifts_cfg = ShiftsConfig()
+
+        se = ScenarioEngine(
+            scenarios_config=scenarios_cfg,
+            shifts_config=shifts_cfg,
+            rng=rng,
+            sim_duration_s=7 * 86400,  # 1 week
+        )
+
+        scheduled_types = {type(s).__name__ for s in se.scenarios}
+        missing = _ALL_SCENARIO_TYPES - scheduled_types
+        assert missing == set(), (
+            f"Missing scenario types in auto-scheduled timeline: {missing}"
+        )
+
+    def test_reasonable_scenario_count(self) -> None:
+        """Total scheduled scenarios should be reasonable (not 0, not 10000)."""
+        rng = np.random.default_rng(42)
+        scenarios_cfg = ScenariosConfig()
+        shifts_cfg = ShiftsConfig()
+
+        se = ScenarioEngine(
+            scenarios_config=scenarios_cfg,
+            shifts_config=shifts_cfg,
+            rng=rng,
+            sim_duration_s=7 * 86400,
+        )
+
+        count = len(se.scenarios)
+        assert count > 10, f"Too few scenarios scheduled: {count}"
+        assert count < 5000, f"Too many scenarios scheduled: {count}"
+
+    def test_scenarios_sorted_by_start_time(self) -> None:
+        """All auto-scheduled scenarios must be sorted by start_time."""
+        rng = np.random.default_rng(42)
+        scenarios_cfg = ScenariosConfig()
+        shifts_cfg = ShiftsConfig()
+
+        se = ScenarioEngine(
+            scenarios_config=scenarios_cfg,
+            shifts_config=shifts_cfg,
+            rng=rng,
+            sim_duration_s=7 * 86400,
+        )
+
+        times = [s.start_time for s in se.scenarios]
+        assert times == sorted(times), "Scenarios are not sorted by start_time"
+
+    def test_start_times_within_sim_duration(self) -> None:
+        """All scenario start times must be within [0, sim_duration_s)."""
+        sim_duration = 7 * 86400
+        rng = np.random.default_rng(42)
+        scenarios_cfg = ScenariosConfig()
+        shifts_cfg = ShiftsConfig()
+
+        se = ScenarioEngine(
+            scenarios_config=scenarios_cfg,
+            shifts_config=shifts_cfg,
+            rng=rng,
+            sim_duration_s=sim_duration,
+        )
+
+        for s in se.scenarios:
+            assert 0.0 <= s.start_time < sim_duration, (
+                f"{type(s).__name__} has start_time={s.start_time} "
+                f"outside [0, {sim_duration})"
             )
