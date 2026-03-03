@@ -120,7 +120,7 @@
       "description": "Add CDAB float32/uint32 encode/decode, byte_order field on HoldingRegisterEntry, dynamic block sizing from config, F&B coils (100-102) and DI (100) support. Sync respects per-entry byte order.",
       "prd_refs": ["prd/03-protocol-endpoints.md (3.1)", "prd/appendix-a-modbus-register-map.md"],
       "depends_on": ["3.2"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.13",

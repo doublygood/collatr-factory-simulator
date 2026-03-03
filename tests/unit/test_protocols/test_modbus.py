@@ -29,11 +29,15 @@ from factory_simulator.protocols.modbus_server import (
     ModbusServer,
     build_register_map,
     decode_float32_abcd,
+    decode_float32_cdab,
     decode_int16_x10,
     decode_uint32_abcd,
+    decode_uint32_cdab,
     encode_float32_abcd,
+    encode_float32_cdab,
     encode_int16_x10,
     encode_uint32_abcd,
+    encode_uint32_cdab,
 )
 from factory_simulator.store import SignalStore
 
@@ -692,3 +696,305 @@ class TestPackagingRegisterMap:
         # Energy (float32)
         assert 10 in ir_addrs  # energy.line_power
         assert ir_addrs[10].data_type == "float32"
+
+
+# ---------------------------------------------------------------------------
+# CDAB encoding tests (F&B Allen-Bradley byte order)
+# ---------------------------------------------------------------------------
+
+
+class TestFloat32CdabEncoding:
+    """Test float32 CDAB (Allen-Bradley word-swap) encoding and decoding."""
+
+    def test_round_trip_positive(self) -> None:
+        lo, hi = encode_float32_cdab(150.0)
+        decoded = decode_float32_cdab([lo, hi])
+        assert abs(decoded - 150.0) < 0.01
+
+    def test_round_trip_zero(self) -> None:
+        lo, hi = encode_float32_cdab(0.0)
+        assert lo == 0 and hi == 0
+        assert decode_float32_cdab([lo, hi]) == 0.0
+
+    def test_round_trip_negative(self) -> None:
+        lo, hi = encode_float32_cdab(-42.5)
+        decoded = decode_float32_cdab([lo, hi])
+        assert abs(decoded - (-42.5)) < 0.01
+
+    def test_cdab_word_order_differs_from_abcd(self) -> None:
+        """CDAB must swap the two 16-bit words compared to ABCD."""
+        value = 85.5
+        abcd_hi, abcd_lo = encode_float32_abcd(value)
+        cdab_lo, cdab_hi = encode_float32_cdab(value)
+        # CDAB: register[0] = low word, register[1] = high word
+        assert cdab_lo == abcd_lo  # low word is in position 0
+        assert cdab_hi == abcd_hi  # high word is in position 1
+        # So the two registers are swapped: CDAB[0] == ABCD[1]
+        assert cdab_lo == abcd_lo
+        assert cdab_hi == abcd_hi
+
+    def test_cdab_not_equal_to_abcd_for_nonzero(self) -> None:
+        """For a non-trivial value, CDAB and ABCD produce different register sequences."""
+        value = 3.14
+        abcd_hi, abcd_lo = encode_float32_abcd(value)
+        cdab_r0, cdab_r1 = encode_float32_cdab(value)
+        # CDAB[0] (low word) != ABCD[0] (high word) for 3.14
+        assert (cdab_r0, cdab_r1) != (abcd_hi, abcd_lo)
+
+    def test_round_trip_mixer_range(self) -> None:
+        """Spot-check values in the mixer RPM range."""
+        for rpm in [0.0, 500.0, 2000.0, 2999.9]:
+            lo, hi = encode_float32_cdab(rpm)
+            assert abs(decode_float32_cdab([lo, hi]) - rpm) < 0.01
+
+
+class TestUint32CdabEncoding:
+    """Test uint32 CDAB (Allen-Bradley word-swap) encoding and decoding."""
+
+    def test_round_trip_small(self) -> None:
+        lo, hi = encode_uint32_cdab(42)
+        assert hi == 0
+        assert lo == 42
+        assert decode_uint32_cdab([lo, hi]) == 42
+
+    def test_round_trip_large(self) -> None:
+        value = 1_000_000
+        lo, hi = encode_uint32_cdab(value)
+        assert decode_uint32_cdab([lo, hi]) == value
+
+    def test_round_trip_max(self) -> None:
+        lo, hi = encode_uint32_cdab(0xFFFFFFFF)
+        assert lo == 0xFFFF
+        assert hi == 0xFFFF
+        assert decode_uint32_cdab([lo, hi]) == 0xFFFFFFFF
+
+    def test_clamp_negative(self) -> None:
+        lo, hi = encode_uint32_cdab(-5)
+        assert decode_uint32_cdab([lo, hi]) == 0
+
+    def test_word_order_vs_abcd(self) -> None:
+        """CDAB register[0] = low word, ABCD register[0] = high word."""
+        value = 0x00010002  # high=0x0001, low=0x0002
+        abcd_hi, abcd_lo = encode_uint32_abcd(value)
+        cdab_lo, cdab_hi = encode_uint32_cdab(value)
+        assert abcd_hi == 0x0001  # ABCD: high word first
+        assert cdab_lo == 0x0002  # CDAB: low word first
+
+
+# ---------------------------------------------------------------------------
+# Dynamic block sizing tests
+# ---------------------------------------------------------------------------
+
+
+class TestDynamicBlockSizing:
+    """Verify data blocks resize correctly for packaging vs F&B profiles."""
+
+    def test_packaging_profile_uses_small_blocks(self) -> None:
+        """Packaging profile max HR address is ~602: block must fit it."""
+        config = load_config(_CONFIG_PATH, apply_env=False)
+        store = SignalStore()
+        server = ModbusServer(config, store, port=15507)
+        # The HR block must accommodate HR address 602-603 (energy)
+        # With +1 offset, that's indices 603-604, so block size >= 605
+        regs = server._hr_block.getValues(604, 1)
+        assert regs is not None
+
+    def test_fnb_profile_uses_large_blocks(self) -> None:
+        """F&B profile max HR address is ~1506: block must be large enough."""
+        from pathlib import Path
+        fnb_config_path = Path(__file__).resolve().parents[3] / "config" / "factory-foodbev.yaml"
+        from factory_simulator.config import load_config as lc
+        config = lc(fnb_config_path, apply_env=False)
+        store = SignalStore()
+        server = ModbusServer(config, store, port=15508)
+        # HR 1506-1507: index 1508 must exist in the block
+        regs = server._hr_block.getValues(1508, 1)
+        assert regs is not None
+
+    def test_fnb_coil_block_covers_102(self) -> None:
+        """F&B coil block must accommodate coil 102 (chiller.defrost_active)."""
+        from pathlib import Path
+        fnb_config_path = Path(__file__).resolve().parents[3] / "config" / "factory-foodbev.yaml"
+        from factory_simulator.config import load_config as lc
+        config = lc(fnb_config_path, apply_env=False)
+        store = SignalStore()
+        server = ModbusServer(config, store, port=15509)
+        # Coil 102: index 103 must exist
+        coils = server._coil_block.getValues(103, 1)
+        assert coils is not None
+
+    def test_fnb_di_block_covers_100(self) -> None:
+        """F&B DI block must accommodate DI 100 (chiller.door_open)."""
+        from pathlib import Path
+        fnb_config_path = Path(__file__).resolve().parents[3] / "config" / "factory-foodbev.yaml"
+        from factory_simulator.config import load_config as lc
+        config = lc(fnb_config_path, apply_env=False)
+        store = SignalStore()
+        server = ModbusServer(config, store, port=15510)
+        # DI 100: index 101 must exist
+        dis = server._di_block.getValues(101, 1)
+        assert dis is not None
+
+
+# ---------------------------------------------------------------------------
+# CDAB sync tests
+# ---------------------------------------------------------------------------
+
+
+class TestCdabSync:
+    """Verify CDAB byte order is applied correctly during register sync."""
+
+    def _make_cdab_config(self) -> FactoryConfig:
+        return FactoryConfig(
+            simulation=SimulationConfig(tick_interval_ms=100, random_seed=42),
+            protocols=ProtocolsConfig(
+                modbus=ModbusProtocolConfig(port=15511),
+            ),
+            equipment={
+                "mixer": EquipmentConfig(
+                    enabled=True,
+                    type="test",
+                    signals={
+                        "speed": SignalConfig(
+                            model="steady_state",
+                            modbus_hr=[1000, 1001],
+                            modbus_type="float32",
+                            modbus_byte_order="CDAB",
+                        ),
+                        "mix_time": SignalConfig(
+                            model="counter",
+                            modbus_hr=[1010, 1011],
+                            modbus_type="uint32",
+                            modbus_byte_order="CDAB",
+                        ),
+                    },
+                ),
+            },
+        )
+
+    def test_float32_cdab_sync(self) -> None:
+        """float32 CDAB signal syncs with word-swapped register layout."""
+        config = self._make_cdab_config()
+        store = SignalStore()
+        store.set("mixer.speed", 2000.0, 0.0)
+
+        server = ModbusServer(config, store, port=15512)
+        server.sync_registers()
+
+        # +1 offset: address 1000 -> index 1001
+        regs = server._hr_block.getValues(1001, 2)
+        decoded = decode_float32_cdab(list(regs))  # type: ignore[arg-type]
+        assert abs(decoded - 2000.0) < 0.01
+
+    def test_uint32_cdab_sync(self) -> None:
+        """uint32 CDAB signal syncs with word-swapped register layout."""
+        config = self._make_cdab_config()
+        store = SignalStore()
+        store.set("mixer.mix_time", 3600.0, 0.0)
+
+        server = ModbusServer(config, store, port=15512)
+        server.sync_registers()
+
+        # +1 offset: address 1010 -> index 1011
+        regs = server._hr_block.getValues(1011, 2)
+        decoded = decode_uint32_cdab(list(regs))  # type: ignore[arg-type]
+        assert decoded == 3600
+
+    def test_cdab_not_interpreted_as_abcd(self) -> None:
+        """CDAB-encoded registers must not decode correctly as ABCD."""
+        config = self._make_cdab_config()
+        store = SignalStore()
+        store.set("mixer.speed", 2000.0, 0.0)
+
+        server = ModbusServer(config, store, port=15512)
+        server.sync_registers()
+
+        regs = server._hr_block.getValues(1001, 2)
+        # Decoding as ABCD should give a wrong value (unless the value is 0)
+        wrong_decoded = decode_float32_abcd(list(regs))  # type: ignore[arg-type]
+        assert abs(wrong_decoded - 2000.0) > 1.0  # must differ significantly
+
+
+# ---------------------------------------------------------------------------
+# F&B dynamic coil / DI tests
+# ---------------------------------------------------------------------------
+
+
+class TestFnbDynamicCoilsDI:
+    """Verify F&B coil and DI defs are built from signal config fields."""
+
+    def _make_fnb_coil_config(self) -> FactoryConfig:
+        return FactoryConfig(
+            simulation=SimulationConfig(tick_interval_ms=100, random_seed=42),
+            protocols=ProtocolsConfig(
+                modbus=ModbusProtocolConfig(port=15513),
+            ),
+            equipment={
+                "chiller": EquipmentConfig(
+                    enabled=True,
+                    type="test",
+                    signals={
+                        "compressor_state": SignalConfig(
+                            model="state_machine",
+                            modbus_coil=101,
+                            params={"states": ["off", "on"], "initial_state": "on"},
+                        ),
+                        "door_open": SignalConfig(
+                            model="state_machine",
+                            modbus_di=100,
+                            params={"states": ["closed", "open"], "initial_state": "closed"},
+                        ),
+                    },
+                ),
+            },
+        )
+
+    def test_dynamic_coil_registered(self) -> None:
+        """modbus_coil field creates a coil definition at the specified address."""
+        config = self._make_fnb_coil_config()
+        rmap = build_register_map(config)
+        coil_addrs = {c.address for c in rmap.coil_defs}
+        assert 101 in coil_addrs
+
+    def test_dynamic_di_registered(self) -> None:
+        """modbus_di field creates a DI definition at the specified address."""
+        config = self._make_fnb_coil_config()
+        rmap = build_register_map(config)
+        di_addrs = {d.address for d in rmap.di_defs}
+        assert 100 in di_addrs
+
+    def test_coil_syncs_from_store(self) -> None:
+        """Dynamic coil (gt_zero mode) syncs True when signal > 0."""
+        config = self._make_fnb_coil_config()
+        store = SignalStore()
+        store.set("chiller.compressor_state", 1.0, 0.0)  # on
+
+        server = ModbusServer(config, store, port=15514)
+        server.sync_registers()
+
+        coils = server._coil_block.getValues(102, 1)  # addr 101 + offset 1
+        assert coils[0] is True
+
+    def test_coil_off_when_zero(self) -> None:
+        """Dynamic coil is False when signal == 0."""
+        config = self._make_fnb_coil_config()
+        store = SignalStore()
+        store.set("chiller.compressor_state", 0.0, 0.0)  # off
+
+        server = ModbusServer(config, store, port=15514)
+        server.sync_registers()
+
+        coils = server._coil_block.getValues(102, 1)  # addr 101 + offset 1
+        assert coils[0] is False
+
+    def test_di_syncs_from_store(self) -> None:
+        """Dynamic DI (gt_zero mode) syncs True when signal > 0."""
+        config = self._make_fnb_coil_config()
+        store = SignalStore()
+        store.set("chiller.door_open", 1.0, 0.0)  # open
+
+        server = ModbusServer(config, store, port=15514)
+        server.sync_registers()
+
+        dis = server._di_block.getValues(101, 1)  # addr 100 + offset 1
+        assert dis[0] is True

@@ -1,15 +1,18 @@
 """Modbus TCP server for the Collatr Factory Simulator.
 
 Reads signal values from the SignalStore and serves them over Modbus TCP
-using pymodbus.  Implements the packaging profile register map from PRD
-Appendix A with proper encoding for float32 (ABCD), uint32, uint16, and
-int16 x10 (Eurotherm-style temperature registers).
+using pymodbus.  Implements the packaging and F&B profile register maps from
+PRD Appendix A with proper encoding for float32 (ABCD or CDAB), uint32,
+uint16, and int16 x10 (Eurotherm-style temperature registers).
 
 Features:
 - FC06 rejection for float32 register pairs (PRD 3.1.2)
 - 125-register read limit per request (PRD 3.1.7)
 - Derived coils from machine state (PRD Appendix A)
 - Derived discrete inputs (PRD Appendix A)
+- Dynamic coils/DIs from signal ``modbus_coil``/``modbus_di`` config fields
+- CDAB byte order for Allen-Bradley CompactLogix mixer (PRD 3.1 / Appendix A)
+- Dynamic data block sizing from the register map (no hardcoded limits)
 - Periodic register synchronisation from the SignalStore
 
 PRD Reference: Section 3.1, Appendix A (Modbus Register Map)
@@ -46,17 +49,9 @@ logger = logging.getLogger(__name__)
 
 MAX_READ_REGISTERS = 125  # PRD 3.1.7: Modbus spec limit per FC03/FC04 read
 
-# Data block sizes -- enough to cover all packaging + shared registers.
-# ModbusSequentialDataBlock is 1-indexed internally: address N maps to
-# values[N+1].  Size must be > max_address + 2 for two-register pairs.
-HR_BLOCK_SIZE = 705   # HR 0-703 (packaging 100-603, shared 600-603)
-IR_BLOCK_SIZE = 25    # IR 0-23 (packaging 0-11)
-COIL_BLOCK_SIZE = 15  # Coils 0-13 (packaging 0-5)
-DI_BLOCK_SIZE = 15    # DI 0-13 (packaging 0-2)
-
 
 # ---------------------------------------------------------------------------
-# Encoding helpers
+# Encoding helpers — ABCD (big-endian, default)
 # ---------------------------------------------------------------------------
 
 
@@ -93,6 +88,51 @@ def decode_uint32_abcd(regs: list[int]) -> int:
     return (regs[0] << 16) | regs[1]
 
 
+# ---------------------------------------------------------------------------
+# Encoding helpers — CDAB (Allen-Bradley word-swap)
+# ---------------------------------------------------------------------------
+
+
+def encode_float32_cdab(value: float) -> tuple[int, int]:
+    """Encode a float32 value into two uint16 registers (CDAB / word-swap).
+
+    Allen-Bradley CompactLogix word order: low word first, high word second.
+    Returns ``(low_word, high_word)`` so register[0]=low, register[1]=high.
+    """
+    packed = struct.pack(">f", value)
+    high = int.from_bytes(packed[0:2], "big")
+    low = int.from_bytes(packed[2:4], "big")
+    return low, high  # CDAB: low word in register[0]
+
+
+def decode_float32_cdab(regs: list[int]) -> float:
+    """Decode two uint16 registers (CDAB) back to float32.
+
+    regs[0] = low word, regs[1] = high word (Allen-Bradley convention).
+    """
+    raw = struct.pack(">HH", regs[1], regs[0])
+    return float(struct.unpack(">f", raw)[0])
+
+
+def encode_uint32_cdab(value: int) -> tuple[int, int]:
+    """Encode a uint32 value into two uint16 registers (CDAB / word-swap).
+
+    Returns ``(low_word, high_word)``.
+    """
+    clamped = max(0, min(int(value), 0xFFFFFFFF))
+    high = (clamped >> 16) & 0xFFFF
+    low = clamped & 0xFFFF
+    return low, high  # CDAB: low word in register[0]
+
+
+def decode_uint32_cdab(regs: list[int]) -> int:
+    """Decode two uint16 registers (CDAB) back to uint32.
+
+    regs[0] = low word, regs[1] = high word.
+    """
+    return (regs[1] << 16) | regs[0]
+
+
 def encode_int16_x10(value: float) -> int:
     """Encode a float as int16 with x10 scaling, stored as uint16.
 
@@ -124,6 +164,7 @@ class HoldingRegisterEntry:
     address: int          # Start address of the register(s)
     data_type: str        # "float32", "uint32", "uint16"
     writable: bool = False
+    byte_order: str = "ABCD"  # "ABCD" (default) or "CDAB" (Allen-Bradley)
 
 
 @dataclass(slots=True)
@@ -151,7 +192,7 @@ class DiscreteInputDefinition:
 
     address: int
     signal_id: str | None  # None = always False
-    mode: str = "false"    # "false", "eq", "modulo"
+    mode: str = "false"    # "false", "eq", "modulo", "gt_zero"
     eq_value: int = 0      # For mode="eq": True when int(signal_value) == eq_value
 
 
@@ -220,9 +261,16 @@ class RegisterMap:
 def build_register_map(config: FactoryConfig) -> RegisterMap:
     """Build the complete register map from factory configuration.
 
-    Scans all equipment signal configs for ``modbus_hr`` and ``modbus_ir``
-    fields.  Coils and discrete inputs are hardcoded per PRD Appendix A
-    (packaging profile).
+    Scans all equipment signal configs for ``modbus_hr``, ``modbus_ir``,
+    ``modbus_coil``, and ``modbus_di`` fields.
+
+    Packaging profile coils (0-5) and discrete inputs (0-2) are hardcoded
+    per PRD Appendix A.  F&B profile coils (100-102) and DI (100) are derived
+    dynamically from the ``modbus_coil``/``modbus_di`` signal config fields.
+
+    Signals with ``modbus_slave_id`` set are excluded from the main IR block
+    (they belong to secondary Modbus slaves, handled by multi-slave support
+    in task 3.13).
     """
     rmap = RegisterMap()
 
@@ -236,23 +284,25 @@ def build_register_map(config: FactoryConfig) -> RegisterMap:
             # Holding registers
             if sig_cfg.modbus_hr is not None and len(sig_cfg.modbus_hr) > 0:
                 data_type = sig_cfg.modbus_type or "float32"
+                byte_order = sig_cfg.modbus_byte_order
                 rmap.hr_entries.append(HoldingRegisterEntry(
                     signal_id=signal_id,
                     address=sig_cfg.modbus_hr[0],
                     data_type=data_type,
                     writable=sig_cfg.modbus_writable,
+                    byte_order=byte_order,
                 ))
-                # Track float32 addresses for FC06 rejection
-                if data_type == "float32":
-                    rmap.float32_hr_addresses.add(sig_cfg.modbus_hr[0])
-                    rmap.float32_hr_addresses.add(sig_cfg.modbus_hr[0] + 1)
-                # uint32 also spans two registers: reject FC06 too
-                if data_type == "uint32":
+                # Track float32 and uint32 addresses for FC06 rejection
+                # (both span two registers; FC06 must not write to either word)
+                if data_type in ("float32", "uint32"):
                     rmap.float32_hr_addresses.add(sig_cfg.modbus_hr[0])
                     rmap.float32_hr_addresses.add(sig_cfg.modbus_hr[0] + 1)
 
-            # Input registers
+            # Input registers — skip signals belonging to secondary slaves
             if sig_cfg.modbus_ir is not None and len(sig_cfg.modbus_ir) > 0:
+                if sig_cfg.modbus_slave_id is not None:
+                    # This signal is served on a secondary Modbus slave (task 3.13)
+                    continue
                 # 1 address = int16_x10 (temperature), 2 addresses = float32
                 ir_type = "int16_x10" if len(sig_cfg.modbus_ir) == 1 else "float32"
                 rmap.ir_entries.append(InputRegisterEntry(
@@ -261,17 +311,17 @@ def build_register_map(config: FactoryConfig) -> RegisterMap:
                     data_type=ir_type,
                 ))
 
-    # -- Packaging profile coils (PRD Appendix A) --
+    # -- Packaging profile coils (PRD Appendix A, addresses 0-5) --
     rmap.coil_defs = [
         CoilDefinition(0, "press.machine_state", derive_value=2),   # press.running
         CoilDefinition(1, "press.machine_state", derive_value=4),   # press.fault_active
         CoilDefinition(2, None),                                    # press.emergency_stop
-        CoilDefinition(3, "press.web_break", mode="gt_zero"),         # press.web_break
+        CoilDefinition(3, "press.web_break", mode="gt_zero"),        # press.web_break
         CoilDefinition(4, "press.machine_state", derive_value=2),   # laminator.running
-        CoilDefinition(5, "slitter.speed", mode="gt_zero"),           # slitter.running
+        CoilDefinition(5, "slitter.speed", mode="gt_zero"),          # slitter.running
     ]
 
-    # -- Packaging profile discrete inputs (PRD Appendix A) --
+    # -- Packaging profile discrete inputs (PRD Appendix A, addresses 0-2) --
     rmap.di_defs = [
         DiscreteInputDefinition(0, None, mode="false"),              # guard_door_open
         DiscreteInputDefinition(                                     # material_present
@@ -282,12 +332,44 @@ def build_register_map(config: FactoryConfig) -> RegisterMap:
         ),
     ]
 
+    # -- Dynamic coils and discrete inputs from signal configs (F&B profile) --
+    # Signals with modbus_coil or modbus_di fields (e.g. mixer.lid_closed at
+    # coil 100, chiller.compressor_state at coil 101, chiller.door_open at
+    # DI 100).  Use "gt_zero" mode: value > 0 maps to True.
+    for eq_id, eq_cfg in config.equipment.items():
+        if not eq_cfg.enabled:
+            continue
+        for sig_name, sig_cfg in eq_cfg.signals.items():
+            signal_id = f"{eq_id}.{sig_name}"
+            if sig_cfg.modbus_coil is not None:
+                rmap.coil_defs.append(
+                    CoilDefinition(sig_cfg.modbus_coil, signal_id, mode="gt_zero"),
+                )
+            if sig_cfg.modbus_di is not None:
+                rmap.di_defs.append(
+                    DiscreteInputDefinition(
+                        sig_cfg.modbus_di, signal_id, mode="gt_zero",
+                    ),
+                )
+
     logger.info(
         "Modbus register map built: %d HR, %d IR, %d coils, %d DI",
         len(rmap.hr_entries), len(rmap.ir_entries),
         len(rmap.coil_defs), len(rmap.di_defs),
     )
     return rmap
+
+
+def _compute_block_size(addresses: list[int], min_size: int = 16) -> int:
+    """Compute the data block size needed to hold all register addresses.
+
+    ModbusDeviceContext adds +1 to addresses (Modbus PDU address 0 -> block
+    index 1).  A float32/uint32 entry at address N uses block indices N+1
+    and N+2.  Adding 3 to the maximum start address covers this safely.
+    """
+    if not addresses:
+        return min_size
+    return max(max(addresses) + 3, min_size)
 
 
 class ModbusServer:
@@ -325,11 +407,27 @@ class ModbusServer:
         # Build register map from config
         self._rmap = build_register_map(config)
 
+        # Dynamic block sizes: computed from the actual register map so
+        # both the packaging profile (max HR ~603) and the F&B profile
+        # (max HR ~1507) are accommodated without hardcoded constants.
+        hr_size = _compute_block_size(
+            [e.address for e in self._rmap.hr_entries], min_size=16,
+        )
+        ir_size = _compute_block_size(
+            [e.address for e in self._rmap.ir_entries], min_size=16,
+        )
+        coil_size = _compute_block_size(
+            [c.address for c in self._rmap.coil_defs], min_size=16,
+        )
+        di_size = _compute_block_size(
+            [d.address for d in self._rmap.di_defs], min_size=16,
+        )
+
         # Create pymodbus data blocks (no event loop required)
-        self._hr_block = ModbusSequentialDataBlock(0, [0] * HR_BLOCK_SIZE)  # type: ignore[no-untyped-call]
-        self._ir_block = ModbusSequentialDataBlock(0, [0] * IR_BLOCK_SIZE)  # type: ignore[no-untyped-call]
-        self._coil_block = ModbusSequentialDataBlock(0, [False] * COIL_BLOCK_SIZE)  # type: ignore[no-untyped-call]
-        self._di_block = ModbusSequentialDataBlock(0, [False] * DI_BLOCK_SIZE)  # type: ignore[no-untyped-call]
+        self._hr_block = ModbusSequentialDataBlock(0, [0] * hr_size)  # type: ignore[no-untyped-call]
+        self._ir_block = ModbusSequentialDataBlock(0, [0] * ir_size)  # type: ignore[no-untyped-call]
+        self._coil_block = ModbusSequentialDataBlock(0, [False] * coil_size)  # type: ignore[no-untyped-call]
+        self._di_block = ModbusSequentialDataBlock(0, [False] * di_size)  # type: ignore[no-untyped-call]
 
         # Custom device context with FC06 rejection + register limit
         self._device_context = FactoryDeviceContext(
@@ -390,8 +488,8 @@ class ModbusServer:
         new value is propagated to the store.  Then the normal store ->
         register sync runs (which now contains the client-written value).
 
-        This matches the OPC-UA server's ``_sync_values`` pattern for
-        setpoint write-back (PRD 3.1.7, PRD 3.2.4).
+        The byte order (ABCD or CDAB) is read per-entry from the register map
+        so that Allen-Bradley CDAB registers are encoded and decoded correctly.
 
         Note: ModbusDeviceContext adds +1 to addresses when mapping Modbus PDU
         addresses to data block offsets. We write directly to the data block,
@@ -410,7 +508,9 @@ class ModbusServer:
                 if last_synced is not None and current_regs != last_synced:
                     # Register changed since our last sync -> client FC16 write.
                     # Propagate the new value to the store (PRD 3.1.7).
-                    decoded = self._decode_hr_value(entry.data_type, current_regs)
+                    decoded = self._decode_hr_value(
+                        entry.data_type, current_regs, entry.byte_order,
+                    )
                     if decoded is not None:
                         self._store.set(
                             entry.signal_id, float(decoded), 0.0, "good",
@@ -429,11 +529,19 @@ class ModbusServer:
                 continue
 
             if entry.data_type == "float32":
-                hi, lo = encode_float32_abcd(float(value))
-                regs = [hi, lo]
+                if entry.byte_order == "CDAB":
+                    lo, hi = encode_float32_cdab(float(value))
+                    regs = [lo, hi]
+                else:
+                    hi, lo = encode_float32_abcd(float(value))
+                    regs = [hi, lo]
             elif entry.data_type == "uint32":
-                hi, lo = encode_uint32_abcd(int(value))
-                regs = [hi, lo]
+                if entry.byte_order == "CDAB":
+                    lo, hi = encode_uint32_cdab(int(value))
+                    regs = [lo, hi]
+                else:
+                    hi, lo = encode_uint32_abcd(int(value))
+                    regs = [hi, lo]
             elif entry.data_type == "uint16":
                 regs = [int(value) & 0xFFFF]
             else:
@@ -446,12 +554,24 @@ class ModbusServer:
                 self._last_hr_sync[entry.address] = regs
 
     @staticmethod
-    def _decode_hr_value(data_type: str, regs: list[int]) -> float | int | None:
+    def _decode_hr_value(
+        data_type: str,
+        regs: list[int],
+        byte_order: str = "ABCD",
+    ) -> float | int | None:
         """Decode register values back to a store-compatible numeric value."""
         if data_type == "float32":
-            return decode_float32_abcd(regs)
+            return (
+                decode_float32_cdab(regs)
+                if byte_order == "CDAB"
+                else decode_float32_abcd(regs)
+            )
         if data_type == "uint32":
-            return decode_uint32_abcd(regs)
+            return (
+                decode_uint32_cdab(regs)
+                if byte_order == "CDAB"
+                else decode_uint32_abcd(regs)
+            )
         if data_type == "uint16":
             return regs[0]
         return None
@@ -515,6 +635,8 @@ class ModbusServer:
                 result = int(value) == di_def.eq_value
             elif di_def.mode == "modulo":
                 result = bool(int(value) % 2)
+            elif di_def.mode == "gt_zero":
+                result = float(value) > 0.0
             else:
                 result = False
             self._di_block.setValues(addr, [result])

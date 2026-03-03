@@ -760,8 +760,7 @@ class TestFnbConfigLoading:
         for sig_name in cdab_signals:
             sig = mixer.signals[sig_name]
             assert sig.modbus_hr is not None, f"mixer.{sig_name} should have modbus_hr"
-            byte_order = sig.model_extra.get("modbus_byte_order") if sig.model_extra else None
-            assert byte_order == "CDAB", f"mixer.{sig_name} should be CDAB, got {byte_order}"
+            assert sig.modbus_byte_order == "CDAB", f"mixer.{sig_name} should be CDAB, got {sig.modbus_byte_order}"
 
     def test_mixer_modbus_addresses(self) -> None:
         """Mixer HR addresses per Appendix A."""
@@ -804,8 +803,7 @@ class TestFnbConfigLoading:
         oven = cfg.equipment["oven"]
         for zone, uid in [(1, 11), (2, 12), (3, 13)]:
             sig = oven.signals[f"zone_{zone}_output_power"]
-            slave_id = sig.model_extra.get("modbus_slave_id") if sig.model_extra else None
-            assert slave_id == uid, f"zone_{zone}_output_power slave_id should be {uid}"
+            assert sig.modbus_slave_id == uid, f"zone_{zone}_output_power slave_id should be {uid}"
             assert sig.modbus_ir == [2]
 
     def test_filler_opcua_nodes(self) -> None:
@@ -847,12 +845,12 @@ class TestFnbConfigLoading:
         assert chiller.signals["discharge_pressure"].modbus_hr == [1406, 1407]
         # Coils
         compressor = chiller.signals["compressor_state"]
-        assert compressor.model_extra.get("modbus_coil") == 101
+        assert compressor.modbus_coil == 101
         defrost = chiller.signals["defrost_active"]
-        assert defrost.model_extra.get("modbus_coil") == 102
+        assert defrost.modbus_coil == 102
         # Discrete input
         door = chiller.signals["door_open"]
-        assert door.model_extra.get("modbus_di") == 100
+        assert door.modbus_di == 100
 
     def test_cip_modbus_addresses(self) -> None:
         """CIP Modbus HR and IR addresses per Appendix A."""
@@ -941,4 +939,4 @@ class TestFnbConfigLoading:
         """Mixer lid_closed should map to coil 100."""
         cfg = load_config("config/factory-foodbev.yaml", apply_env=False)
         lid = cfg.equipment["mixer"].signals["lid_closed"]
-        assert lid.model_extra.get("modbus_coil") == 100
+        assert lid.modbus_coil == 100

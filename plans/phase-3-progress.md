@@ -14,7 +14,7 @@
 - [x] 3.9: Chiller Generator
 - [x] 3.10: CIP Generator
 - [x] 3.11: Shared Generator Coupling for F&B
-- [ ] 3.12: F&B Modbus — CDAB Encoding + Dynamic Block Sizing
+- [x] 3.12: F&B Modbus — CDAB Encoding + Dynamic Block Sizing
 - [ ] 3.13: F&B Modbus — Multi-Slave Oven Eurotherm UIDs
 - [ ] 3.14: F&B OPC-UA + MQTT Validation Tests
 - [ ] 3.15: Batch Cycle Scenario (Mixer)
@@ -197,3 +197,34 @@ Made `CoderGenerator` and `EnergyGenerator` configurable for their coupling sign
 - 20 new tests: 12 for coder (default/F&B coupling, pump speed tracking), 8 for energy (default/F&B coupling)
 - Key tests: `test_not_driven_by_filler` (packaging coder ignores filler), `test_not_driven_by_press` (F&B coder ignores press), `test_not_driven_by_filler` (packaging energy ignores filler), `test_not_driven_by_press` (F&B energy ignores press)
 - All 1783 tests pass (1763 existing + 20 new).
+
+### Task 3.12: F&B Modbus — CDAB Encoding + Dynamic Block Sizing
+
+**Files changed**: `src/factory_simulator/config.py`, `src/factory_simulator/protocols/modbus_server.py`, `tests/unit/test_protocols/test_modbus.py`, `tests/unit/test_config.py`
+
+**config.py**: Added 4 explicit fields to `SignalConfig` (previously in `model_extra`):
+- `modbus_byte_order: str = "ABCD"` — "CDAB" for Allen-Bradley mixer registers
+- `modbus_coil: int | None = None` — coil address for binary signals (F&B: lid_closed 100, compressor_state 101, defrost_active 102)
+- `modbus_di: int | None = None` — discrete input address (F&B: door_open 100)
+- `modbus_slave_id: int | None = None` — secondary slave UID (F&B oven zones, used in task 3.13)
+
+**modbus_server.py**: Full set of changes:
+1. **CDAB encode/decode**: `encode_float32_cdab`, `decode_float32_cdab`, `encode_uint32_cdab`, `decode_uint32_cdab` — Allen-Bradley word swap (low word in register[0], high word in register[1])
+2. **`byte_order` field on `HoldingRegisterEntry`**: default `"ABCD"`, set to `"CDAB"` for mixer signals
+3. **Dynamic block sizing**: `_compute_block_size(addresses, min_size=16)` function computes required block size from max register address + 3. Replaces hardcoded constants. F&B profile HR block grows to ~1510 entries; packaging stays at ~606.
+4. **F&B coils/DIs from config**: `build_register_map` scans all signals for `modbus_coil`/`modbus_di` and appends dynamic `CoilDefinition`/`DiscreteInputDefinition` using "gt_zero" mode. Packaging hardcoded coils/DIs unchanged.
+5. **Secondary slave exclusion**: signals with `modbus_slave_id` set are skipped from main IR block (they go to multi-slave UIDs 11-13 in task 3.13).
+6. **Sync respects byte order**: `_sync_holding_registers` uses per-entry `byte_order` to call CDAB or ABCD encoders. `_decode_hr_value` accepts `byte_order` parameter.
+7. **`DiscreteInputDefinition` gets "gt_zero" mode**: added to `_sync_discrete_inputs` for dynamic DIs.
+
+**Tests added** (28 new tests):
+- `TestFloat32CdabEncoding` (6): round-trip, word order verification vs ABCD, mixer range
+- `TestUint32CdabEncoding` (5): round-trip, max value, word order
+- `TestDynamicBlockSizing` (4): packaging stays small, F&B HR/coil/DI blocks grow correctly
+- `TestCdabSync` (3): float32 and uint32 CDAB syncs to correct registers, ABCD decoding gives wrong value
+- `TestFnbDynamicCoilsDI` (5): coil/DI registered from config, sync True/False correctly from store
+- Fixed 4 existing tests in `test_config.py` that used `model_extra.get()` for now-explicit fields
+
+All 1806 tests pass.
+
+**Decision**: Kept packaging profile hardcoded coil/DI defs unchanged — they'll just be "False" coils in F&B mode since `press.*` signals don't exist in the F&B store. This is correct behaviour and avoids profile-sniffing logic.

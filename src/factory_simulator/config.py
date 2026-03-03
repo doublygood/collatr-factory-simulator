@@ -248,6 +248,10 @@ class SignalConfig(BaseModel):
     modbus_ir: list[int] | None = None
     modbus_type: str | None = None
     modbus_writable: bool = False
+    modbus_byte_order: str = "ABCD"    # "ABCD" (default) or "CDAB" (Allen-Bradley)
+    modbus_coil: int | None = None     # Coil address for binary signals (F&B)
+    modbus_di: int | None = None       # Discrete input address for binary signals (F&B)
+    modbus_slave_id: int | None = None # Secondary slave UID (F&B oven zones, task 3.13)
 
     # Protocol: OPC-UA
     opcua_node: str | None = None
