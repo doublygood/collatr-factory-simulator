@@ -24,9 +24,14 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from factory_simulator.scenarios.base import Scenario, ScenarioPhase
+from factory_simulator.scenarios.cold_start import ColdStart
+from factory_simulator.scenarios.dryer_drift import DryerDrift
+from factory_simulator.scenarios.ink_excursion import InkExcursion
 from factory_simulator.scenarios.job_changeover import JobChangeover
+from factory_simulator.scenarios.registration_drift import RegistrationDrift
 from factory_simulator.scenarios.shift_change import ShiftChange
 from factory_simulator.scenarios.unplanned_stop import UnplannedStop
+from factory_simulator.scenarios.web_break import WebBreak
 
 if TYPE_CHECKING:
     from factory_simulator.config import ScenariosConfig, ShiftsConfig
@@ -146,17 +151,25 @@ class ScenarioEngine:
         duration ranges.  Scenarios are spread across the simulation
         duration with random spacing.
 
-        Note: Only Phase 1 scenarios (unplanned stops, job changeovers,
-        shift changes) are auto-scheduled here.  Phase 2 scenarios
-        (WebBreak, DryerDrift, InkExcursion, RegistrationDrift, ColdStart,
-        CoderDepletion, MaterialSplice) can be added manually via
-        ``add_scenario()``.  Full auto-scheduling with Poisson
-        inter-arrival times and priority rules is deferred to Phase 4
-        per PRD Appendix F.
+        Phase 1 scenarios: unplanned stops, job changeovers, shift changes.
+        Phase 2 scenarios: WebBreak, DryerDrift, InkExcursion,
+        RegistrationDrift, ColdStart, CoderDepletion, MaterialSplice.
+
+        Uses simple frequency-based scheduling with uniform-random start
+        times.  Full Poisson inter-arrival times and priority rules are
+        deferred to Phase 4 per PRD Appendix F.
         """
+        # Phase 1 scenarios
         self._schedule_unplanned_stops()
         self._schedule_job_changeovers()
         self._schedule_shift_changes()
+
+        # Phase 2 time-based scenarios
+        self._schedule_web_breaks()
+        self._schedule_dryer_drifts()
+        self._schedule_ink_excursions()
+        self._schedule_registration_drifts()
+        self._schedule_cold_starts()
 
         # Sort by start time for orderly evaluation
         self._scenarios.sort(key=lambda s: s.start_time)
@@ -266,6 +279,114 @@ class ScenarioEngine:
                     params=params,
                 )
                 self._scenarios.append(scenario)
+
+    def _schedule_web_breaks(self) -> None:
+        """Schedule web breaks based on config frequency (PRD 5.3)."""
+        cfg = self._config.web_break
+        if not cfg.enabled:
+            return
+
+        _WEEK_SECONDS = 7 * 86400
+        n_weeks = max(1.0, self._sim_duration_s / _WEEK_SECONDS)
+
+        min_f, max_f = cfg.frequency_per_week
+        n_breaks = round(self._rng.uniform(min_f, max_f) * n_weeks)
+
+        for _ in range(n_breaks):
+            start = float(self._rng.uniform(0, self._sim_duration_s))
+            params: dict[str, object] = {
+                "recovery_seconds": list(cfg.recovery_seconds),
+            }
+            self._scenarios.append(
+                WebBreak(start_time=start, rng=self._spawn_rng(), params=params)
+            )
+
+    def _schedule_dryer_drifts(self) -> None:
+        """Schedule dryer temperature drifts based on config frequency (PRD 5.4)."""
+        cfg = self._config.dryer_drift
+        if not cfg.enabled:
+            return
+
+        n_shifts = max(1.0, self._sim_duration_s / _SHIFT_SECONDS)
+
+        min_f, max_f = cfg.frequency_per_shift
+        n_drifts = round(self._rng.uniform(min_f, max_f) * n_shifts)
+
+        for _ in range(n_drifts):
+            start = float(self._rng.uniform(0, self._sim_duration_s))
+            params: dict[str, object] = {
+                "drift_duration_range": list(cfg.duration_seconds),
+                "drift_range": list(cfg.max_drift_c),
+            }
+            self._scenarios.append(
+                DryerDrift(start_time=start, rng=self._spawn_rng(), params=params)
+            )
+
+    def _schedule_ink_excursions(self) -> None:
+        """Schedule ink viscosity excursions based on config frequency (PRD 5.6)."""
+        cfg = self._config.ink_viscosity_excursion
+        if not cfg.enabled:
+            return
+
+        n_shifts = max(1.0, self._sim_duration_s / _SHIFT_SECONDS)
+
+        min_f, max_f = cfg.frequency_per_shift
+        n_excursions = round(self._rng.uniform(min_f, max_f) * n_shifts)
+
+        for _ in range(n_excursions):
+            start = float(self._rng.uniform(0, self._sim_duration_s))
+            params: dict[str, object] = {
+                "duration_range": list(cfg.duration_seconds),
+            }
+            self._scenarios.append(
+                InkExcursion(start_time=start, rng=self._spawn_rng(), params=params)
+            )
+
+    def _schedule_registration_drifts(self) -> None:
+        """Schedule registration drifts based on config frequency (PRD 5.7)."""
+        cfg = self._config.registration_drift
+        if not cfg.enabled:
+            return
+
+        n_shifts = max(1.0, self._sim_duration_s / _SHIFT_SECONDS)
+
+        min_f, max_f = cfg.frequency_per_shift
+        n_drifts = round(self._rng.uniform(min_f, max_f) * n_shifts)
+
+        for _ in range(n_drifts):
+            start = float(self._rng.uniform(0, self._sim_duration_s))
+            params: dict[str, object] = {
+                "duration_range": list(cfg.duration_seconds),
+            }
+            self._scenarios.append(
+                RegistrationDrift(
+                    start_time=start, rng=self._spawn_rng(), params=params
+                )
+            )
+
+    def _schedule_cold_starts(self) -> None:
+        """Schedule cold start monitoring instances (PRD 5.10).
+
+        ColdStart is reactive -- it monitors press state for idle-to-active
+        transitions.  We schedule monitoring instances spread across the
+        simulation; each watches for one qualifying trigger.
+        """
+        cfg = self._config.cold_start_spike
+        if not cfg.enabled:
+            return
+
+        n_days = max(1.0, self._sim_duration_s / 86400)
+        n_instances = round(self._rng.uniform(1, 2) * n_days)
+
+        for _ in range(n_instances):
+            start = float(self._rng.uniform(0, self._sim_duration_s))
+            params: dict[str, object] = {
+                "spike_duration_range": list(cfg.spike_duration_seconds),
+                "power_multiplier_range": list(cfg.spike_magnitude),
+            }
+            self._scenarios.append(
+                ColdStart(start_time=start, rng=self._spawn_rng(), params=params)
+            )
 
     def _spawn_rng(self) -> np.random.Generator:
         """Create a child RNG from the parent (Rule 13)."""

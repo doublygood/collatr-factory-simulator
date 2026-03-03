@@ -20,12 +20,19 @@ import pytest
 
 from factory_simulator.clock import SimulationClock
 from factory_simulator.config import (
+    CoderDepletionConfig,
+    ColdStartSpikeConfig,
+    DryerDriftConfig,
     FactoryConfig,
+    InkViscosityExcursionConfig,
     JobChangoverConfig,
+    MaterialSpliceConfig,
+    RegistrationDriftConfig,
     ScenariosConfig,
     ShiftChangeConfig,
     ShiftsConfig,
     UnplannedStopConfig,
+    WebBreakConfig,
     load_config,
 )
 from factory_simulator.engine.data_engine import DataEngine
@@ -63,6 +70,13 @@ def _make_engine(seed: int = 42) -> tuple[DataEngine, SignalStore]:
     config.scenarios.job_changeover.enabled = False
     config.scenarios.unplanned_stop.enabled = False
     config.scenarios.shift_change.enabled = False
+    config.scenarios.web_break.enabled = False
+    config.scenarios.dryer_drift.enabled = False
+    config.scenarios.ink_viscosity_excursion.enabled = False
+    config.scenarios.registration_drift.enabled = False
+    config.scenarios.cold_start_spike.enabled = False
+    config.scenarios.coder_depletion.enabled = False
+    config.scenarios.material_splice.enabled = False
     store = SignalStore()
     clock = SimulationClock.from_config(config.simulation)
     engine = DataEngine(config, store, clock)
@@ -83,6 +97,28 @@ def _get_press(engine: DataEngine) -> PressGenerator:
         if isinstance(gen, PressGenerator):
             return gen
     raise RuntimeError("Press generator not found")
+
+
+def _all_disabled_scenarios(**overrides: object) -> ScenariosConfig:
+    """Create ScenariosConfig with all scenario types disabled.
+
+    Pass keyword overrides to re-enable specific types, e.g.
+    ``_all_disabled_scenarios(shift_change=ShiftChangeConfig(enabled=True))``.
+    """
+    defaults: dict[str, object] = {
+        "job_changeover": JobChangoverConfig(enabled=False),
+        "unplanned_stop": UnplannedStopConfig(enabled=False),
+        "shift_change": ShiftChangeConfig(enabled=False),
+        "web_break": WebBreakConfig(enabled=False),
+        "dryer_drift": DryerDriftConfig(enabled=False),
+        "ink_viscosity_excursion": InkViscosityExcursionConfig(enabled=False),
+        "registration_drift": RegistrationDriftConfig(enabled=False),
+        "cold_start_spike": ColdStartSpikeConfig(enabled=False),
+        "coder_depletion": CoderDepletionConfig(enabled=False),
+        "material_splice": MaterialSpliceConfig(enabled=False),
+    }
+    defaults.update(overrides)
+    return ScenariosConfig(**defaults)  # type: ignore[arg-type]
 
 
 def _make_rng(seed: int = 42) -> np.random.Generator:
@@ -523,11 +559,7 @@ class TestScenarioEngine:
     def test_disabled_scenarios_not_scheduled(self) -> None:
         """Disabled scenario types should not appear in timeline."""
         rng = _make_rng()
-        scenarios_cfg = ScenariosConfig(
-            job_changeover=JobChangoverConfig(enabled=False),
-            unplanned_stop=UnplannedStopConfig(enabled=False),
-            shift_change=ShiftChangeConfig(enabled=False),
-        )
+        scenarios_cfg = _all_disabled_scenarios()
         shifts_cfg = ShiftsConfig()
 
         se = ScenarioEngine(
@@ -562,11 +594,7 @@ class TestScenarioEngine:
     def test_manual_scenario_addition(self) -> None:
         """Manually added scenarios should be in the list."""
         rng = _make_rng()
-        scenarios_cfg = ScenariosConfig(
-            job_changeover=JobChangoverConfig(enabled=False),
-            unplanned_stop=UnplannedStopConfig(enabled=False),
-            shift_change=ShiftChangeConfig(enabled=False),
-        )
+        scenarios_cfg = _all_disabled_scenarios()
         shifts_cfg = ShiftsConfig()
 
         se = ScenarioEngine(
@@ -626,11 +654,7 @@ class TestScenarioEngine:
     def test_active_and_completed_counts(self) -> None:
         """active_scenarios and completed_scenarios should track correctly."""
         rng = _make_rng()
-        scenarios_cfg = ScenariosConfig(
-            job_changeover=JobChangoverConfig(enabled=False),
-            unplanned_stop=UnplannedStopConfig(enabled=False),
-            shift_change=ShiftChangeConfig(enabled=False),
-        )
+        scenarios_cfg = _all_disabled_scenarios()
         shifts_cfg = ShiftsConfig()
 
         se = ScenarioEngine(
@@ -733,9 +757,7 @@ class TestShiftChangeScheduling:
     def test_shift_changes_have_jitter(self) -> None:
         """Shift changes should not fall at exact configured times."""
         rng = _make_rng()
-        scenarios_cfg = ScenariosConfig(
-            job_changeover=JobChangoverConfig(enabled=False),
-            unplanned_stop=UnplannedStopConfig(enabled=False),
+        scenarios_cfg = _all_disabled_scenarios(
             shift_change=ShiftChangeConfig(
                 enabled=True,
                 times=["06:00", "14:00", "22:00"],
@@ -763,9 +785,7 @@ class TestShiftChangeScheduling:
     def test_shift_changes_near_configured_times(self) -> None:
         """Shift changes should be within ±10 min of configured times."""
         rng = _make_rng()
-        scenarios_cfg = ScenariosConfig(
-            job_changeover=JobChangoverConfig(enabled=False),
-            unplanned_stop=UnplannedStopConfig(enabled=False),
+        scenarios_cfg = _all_disabled_scenarios(
             shift_change=ShiftChangeConfig(
                 enabled=True,
                 times=["06:00", "14:00", "22:00"],
