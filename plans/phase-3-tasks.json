@@ -240,7 +240,7 @@
       "description": "End-to-end: DataEngine + OPC-UA server + MQTT publisher with F&B config. Verify FoodBevLine nodes, 13 MQTT topics, no vibration topics, correct payloads.",
       "prd_refs": ["prd/appendix-b-opcua-node-tree.md", "prd/appendix-c-mqtt-topic-map.md"],
       "depends_on": ["3.4", "3.5", "3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.14"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.25",

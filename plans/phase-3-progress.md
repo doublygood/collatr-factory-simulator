@@ -26,7 +26,7 @@
 - [x] 3.21: Cold Chain Break Scenario
 - [x] 3.22: F&B Scenario Auto-Scheduling
 - [x] 3.23: F&B Modbus Integration Test
-- [ ] 3.24: F&B OPC-UA + MQTT Integration Test
+- [x] 3.24: F&B OPC-UA + MQTT Integration Test
 - [ ] 3.25: F&B Cross-Protocol Consistency Test
 
 ## Notes
@@ -379,6 +379,22 @@ All 1953 tests pass (18 new).
 - Key tests: compressor_forced_off True on activation, store shows compressor_state=0.0, room_temp rises with compressor locked, rises faster than bang-bang baseline, forced_off released after completion, no permanent lock (temp recovers to <10°C), default 1800-7200 s range, graceful exit without chiller.
 
 All 1968 tests pass (15 new).
+
+### Task 3.24: F&B OPC-UA + MQTT Integration Test
+
+**File**: `tests/integration/test_fnb_opcua_mqtt_integration.py`
+
+**24 tests in 6 classes** verifying end-to-end DataEngine + OpcuaServer + MqttPublisher with F&B config:
+
+- **TestFnbOpcuaNodeTree** (5): FoodBevLine in Objects folder, no PackagingLine, all 6 equipment folders present, 19 nodes registered, all nodes readable
+- **TestFnbOpcuaValues** (7): Double nodes finite and in EURange, key signals reflect injected values (LineSpeed=60, FillWeight=405, LinePower=180, etc.), BatchId is str, counter nodes ≥0, state nodes in range, all nodes read-only (AccessLevel=1), Good StatusCode for Double nodes
+- **TestFnbOpcuaWithLiveEngine** (1): Live DataEngine populates store → OPC-UA sync delivers values; Filler1.LineSpeed finite, CumulativeKwh ≥0
+- **TestFnbMqttAllTopicsPublish** (3): All 13 topics received within 10s, no vibration/* topics, exactly 13 distinct topics published
+- **TestFnbMqttPayloadStructure** (4): All payloads have {timestamp, value, unit, quality}, value is numeric, timestamp is ISO8601 UTC, injected coder values appear (ink_level=72.0, ambient_temp=15.0)
+- **TestFnbMqttQosAndRetain** (3): QoS 1 for state/prints_total/nozzle_health/gutter_fault, QoS 0 for analog/env, all 13 topics retained (new subscriber gets last value)
+- **TestFnbBothProtocolsSimultaneous** (1): OPC-UA and MQTT both serve data from same store simultaneously; no vibration cross-contamination
+
+All 2044 tests pass (24 new).
 
 ### Task 3.23: F&B Modbus Integration Test
 
