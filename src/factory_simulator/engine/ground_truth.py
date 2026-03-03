@@ -183,6 +183,31 @@ class GroundTruthLogger:
             "normal_range": normal_range,
         })
 
+    def log_contextual_anomaly(
+        self,
+        sim_time: float,
+        anomaly_type: str,
+        signal: str,
+        injected_value: float,
+        expected_state: int,
+        actual_state: int,
+    ) -> None:
+        """Log a contextual_anomaly injection start (PRD 5.16, Task 4.6).
+
+        Parameters record: event type, affected signal, injected value,
+        expected state (where the value would be normal), and actual state
+        (where it is anomalous), per PRD Section 5.16.
+        """
+        self._write_line({
+            "sim_time": self._format_time(sim_time),
+            "event": "contextual_anomaly",
+            "anomaly_type": anomaly_type,
+            "signal": signal,
+            "injected_value": injected_value,
+            "expected_state": expected_state,
+            "actual_state": actual_state,
+        })
+
     def log_data_quality(
         self,
         sim_time: float,

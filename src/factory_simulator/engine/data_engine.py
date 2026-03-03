@@ -258,6 +258,10 @@ class DataEngine:
                     )
                 self._gen_last_time[i] = sim_time
 
+        # Post-generator injection: active scenarios that override store values
+        # (e.g. contextual anomalies, PRD 5.16, Task 4.6)
+        self._scenario_engine.post_gen_tick(sim_time, dt, self._store)
+
         return sim_time
 
     # -- Async run loop -------------------------------------------------------

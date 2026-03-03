@@ -19,6 +19,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from factory_simulator.engine.data_engine import DataEngine
+    from factory_simulator.store import SignalStore
 
 
 class ScenarioPhase(Enum):
@@ -130,6 +131,20 @@ class Scenario(ABC):
         self, sim_time: float, engine: DataEngine,
     ) -> None:
         """Called when the scenario completes (cleanup / restore)."""
+
+    def post_gen_inject(  # noqa: B027
+        self,
+        sim_time: float,
+        dt: float,
+        store: SignalStore,
+    ) -> None:
+        """Post-generator injection hook (PRD 5.16, Task 4.6).
+
+        Called by the ScenarioEngine AFTER all generators have written to
+        the store, BEFORE protocol adapters read it.  Override in scenarios
+        that need to inject values directly into the store (e.g., contextual
+        anomalies).  Default is a no-op.
+        """
 
     @abstractmethod
     def duration(self) -> float:

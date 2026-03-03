@@ -53,6 +53,7 @@ from factory_simulator.scenarios.cip_cycle import CipCycle
 from factory_simulator.scenarios.coder_depletion import CoderDepletion
 from factory_simulator.scenarios.cold_chain_break import ColdChainBreak
 from factory_simulator.scenarios.cold_start import ColdStart
+from factory_simulator.scenarios.contextual_anomaly import ContextualAnomaly
 from factory_simulator.scenarios.dryer_drift import DryerDrift
 from factory_simulator.scenarios.fill_weight_drift import FillWeightDrift
 from factory_simulator.scenarios.ink_excursion import InkExcursion
@@ -70,6 +71,7 @@ if TYPE_CHECKING:
     from factory_simulator.config import ScenariosConfig, ShiftsConfig
     from factory_simulator.engine.data_engine import DataEngine
     from factory_simulator.engine.ground_truth import GroundTruthLogger
+    from factory_simulator.store import SignalStore
 
 logger = logging.getLogger(__name__)
 
@@ -257,6 +259,23 @@ class ScenarioEngine:
                     scenario_name=type(scenario).__name__,
                 )
 
+    def post_gen_tick(
+        self,
+        sim_time: float,
+        dt: float,
+        store: SignalStore,
+    ) -> None:
+        """Call post_gen_inject on all active scenarios (PRD 5.16).
+
+        Invoked by DataEngine AFTER generators write to the store.  Only
+        active scenarios are called; scenarios that override ``post_gen_inject``
+        (e.g. ContextualAnomaly) use this to write anomalous values that must
+        override generator output.
+        """
+        for scenario in self._scenarios:
+            if scenario.phase == ScenarioPhase.ACTIVE:
+                scenario.post_gen_inject(sim_time, dt, store)
+
     # -- Poisson scheduling helper --------------------------------------------
 
     def _poisson_starts(
@@ -324,9 +343,10 @@ class ScenarioEngine:
         self._schedule_coder_depletions()
         self._schedule_material_splices()
 
-        # Phase 4 advanced scenarios (bearing wear, micro-stops, etc.)
+        # Phase 4 advanced scenarios (bearing wear, micro-stops, contextual anomalies)
         self._schedule_bearing_wear()
         self._schedule_micro_stops()
+        self._schedule_contextual_anomalies()
 
         # Phase 3 F&B time-based scenarios (only scheduled when F&B config present)
         self._schedule_batch_cycles()
@@ -745,6 +765,61 @@ class ScenarioEngine:
                 MicroStop(start_time=start, rng=self._spawn_rng(), params=params)
             )
 
+    def _schedule_contextual_anomalies(self) -> None:
+        """Schedule contextual anomaly events using Poisson inter-arrival (PRD 5.16).
+
+        Each scheduled event independently picks its anomaly type from the
+        configured probability weights.  Events wait for the required machine
+        state before injecting.
+        """
+        cfg = self._config.contextual_anomaly
+        if cfg is None or not cfg.enabled:
+            return
+
+        # Build type config dict to pass to each scenario instance
+        tc = cfg.types
+        types_cfg: dict[str, object] = {
+            "heater_stuck": {
+                "probability": tc.heater_stuck.probability,
+                "duration_seconds": list(tc.heater_stuck.duration_seconds),
+            },
+            "pressure_bleed": {
+                "probability": tc.pressure_bleed.probability,
+                "duration_seconds": list(tc.pressure_bleed.duration_seconds),
+            },
+            "counter_false_trigger": {
+                "probability": tc.counter_false_trigger.probability,
+                "duration_seconds": list(tc.counter_false_trigger.duration_seconds),
+                "increment_rate": tc.counter_false_trigger.increment_rate,
+            },
+            "hot_during_maintenance": {
+                "probability": tc.hot_during_maintenance.probability,
+                "duration_seconds": list(tc.hot_during_maintenance.duration_seconds),
+            },
+            "vibration_during_off": {
+                "probability": tc.vibration_during_off.probability,
+                "duration_seconds": list(tc.vibration_during_off.duration_seconds),
+            },
+        }
+
+        # Minimum gap: smallest possible duration across all types
+        all_min_durations = [
+            float(v["duration_seconds"][0])
+            for v in types_cfg.values()
+            if isinstance(v, dict) and "duration_seconds" in v
+        ]
+        min_gap = min(all_min_durations) if all_min_durations else 60.0
+
+        params: dict[str, object] = {"types_config": types_cfg}
+        for start in self._poisson_starts(
+            cfg.frequency_per_week, _WEEK_SECONDS, min_gap
+        ):
+            self._scenarios.append(
+                ContextualAnomaly(
+                    start_time=start, rng=self._spawn_rng(), params=params
+                )
+            )
+
     # -- Child RNG creation ----------------------------------------------------
 
     def _spawn_rng(self) -> np.random.Generator:
@@ -771,6 +846,13 @@ _AFFECTED_SIGNALS: dict[str, list[str]] = {
         "press.waste_count",
         "press.main_drive_current",
         "press.main_drive_speed",
+    ],
+    "ContextualAnomaly": [
+        "coder.printhead_temp",      # heater_stuck
+        "coder.ink_pressure",        # pressure_bleed
+        "press.impression_count",    # counter_false_trigger
+        "press.dryer_temp_zone_1",   # hot_during_maintenance
+        "vibration.main_drive_x",    # vibration_during_off
     ],
     # -- Packaging scenarios (Phase 1 & 2) ------------------------------------
     "WebBreak": [

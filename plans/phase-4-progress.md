@@ -8,7 +8,7 @@
 - [x] 4.3: Phase 4 Config Models
 - [x] 4.4: Motor Bearing Wear Scenario
 - [x] 4.5: Micro-Stops Scenario
-- [ ] 4.6: Contextual Anomalies Scenario
+- [x] 4.6: Contextual Anomalies Scenario
 - [ ] 4.7: Intermittent Faults Scenario
 - [ ] 4.8: Communication Drop Injection
 - [ ] 4.9: Sensor Disconnect and Stuck Sensor
@@ -26,6 +26,37 @@
 - gutter_fault probability 18x too high → Fix in Task 4.13
 
 ## Notes
+
+### Task 4.6 — Contextual Anomalies Scenario (COMPLETE)
+
+New file: `src/factory_simulator/scenarios/contextual_anomaly.py`.
+
+`ContextualAnomaly` implements PRD 5.16 with:
+- `priority = "non_state_changing"` (deferred if a state_changing scenario is active)
+- Five anomaly types in `_TYPE_META`: `heater_stuck` (coder.printhead_temp 40-42°C during
+  coder Off/Standby), `pressure_bleed` (coder.ink_pressure 800-850 mbar during coder Off),
+  `counter_false_trigger` (press.impression_count increments during press Idle),
+  `hot_during_maintenance` (press.dryer_temp_zone_1 at 100°C during Maintenance),
+  `vibration_during_off` (vibration.main_drive_x 3-5 mm/s during press Off)
+- Type selected at construction via probability-weighted categorical draw (cumsum + uniform)
+- Duration and injected value drawn at construction for reproducibility
+- State machine: PENDING → ACTIVE (waiting) → ACTIVE (injecting) → COMPLETED
+- Timeout at 2× duration if target state never arrives
+- Early termination if machine state leaves target state during injection
+- `post_gen_inject()` hook overwrites store AFTER generators run (PRD 8.2 ordering)
+
+Infrastructure added:
+- `base.py`: `post_gen_inject(sim_time, dt, store)` no-op hook on Scenario base class
+- `scenario_engine.py`: `post_gen_tick()` iterates active scenarios; `_schedule_contextual_anomalies()`
+  uses Poisson scheduling (2-5 events/week = rate from `events_per_week_range`); sorted import
+- `data_engine.py`: `scenario_engine.post_gen_tick(sim_time, dt, store)` called after generator loop
+- `ground_truth.py`: `log_contextual_anomaly()` logs event with anomaly_type, signal,
+  injected_value, expected_state, actual_state
+
+Tests: 18 tests in `test_contextual_anomaly.py` covering priority, type selection (forced + all
+5 types from 50 seeds), lifecycle (pending/waiting/injecting/complete), timeout, early termination,
+injection values for all 5 types, ground truth JSONL output, and auto-scheduling. 2180 total tests
+passing.
 
 ### Task 4.5 — Micro-Stops Scenario (COMPLETE)
 
