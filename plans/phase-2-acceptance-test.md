@@ -127,10 +127,30 @@ For each signal, values are within PRD-specified min/max bounds:
 - Machine state is consistent: when Modbus HR 210 = 2 (Running), OPC-UA Press1.State = 2
 
 ### Scenario Evidence (Medium and Full tiers only)
+
+**Phase 1 scenarios (all tiers above Smoke):**
 - At least one state transition occurred (machine_state changed)
 - At least one job changeover (speed ramped to 0 and back)
 - Counters incremented during Running state
 - At 10x speed over 1 simulated hour, expect 1-2 shift changes and 3-6 job changeovers
+
+**Phase 2 scenarios — Medium tier (1 simulated hour at 10x):**
+- DryerDrift: likely 1-2 instances (frequency_per_shift [1, 2]); dryer_temp_zone_* deviates from setpoint
+- InkExcursion: likely 2-3 instances (frequency_per_shift [2, 3]); ink_viscosity spikes
+- RegistrationDrift: likely 1-3 instances (frequency_per_shift [1, 3]); registration_error_x/y drift
+- WebBreak: unlikely (frequency_per_week [1, 2]); may not fire in 1 hour
+- ColdStart: possible if a shift change causes an idle period followed by restart
+- CoderDepletion: 1 monitoring instance active; may not trigger in 1 hour (depends on ink consumption rate)
+- MaterialSplice: 1 monitoring instance active; may trigger if unwind_diameter reaches threshold
+
+**Phase 2 scenarios — Full tier (24 simulated hours at 10x):**
+- DryerDrift: multiple instances expected (3-6 per day)
+- InkExcursion: multiple instances expected (6-9 per day)
+- RegistrationDrift: multiple instances expected (3-9 per day)
+- WebBreak: at least 1 expected (1-2 per week frequency, 24h is ~14% of a week)
+- ColdStart: at least 1 triggered (monitors idle-to-active transitions after shift changes)
+- CoderDepletion: at least 1 full depletion-refill cycle expected (~24h cycle)
+- MaterialSplice: multiple splice events expected (one per ~3h, so 6-8 in 24h)
 
 ### Error Check
 - No NaN or Infinity values in any signal
@@ -149,8 +169,8 @@ For each signal, values are within PRD-specified min/max bounds:
 - FAIL: Smoke failures, or no state transitions, or cross-protocol mismatch
 
 ### Full (24 simulated hours)
-- PASS: Medium criteria + all scenario types fired at least once + no protocol crashes + memory stable
-- FAIL: Medium failures, or protocol server crashed, or memory grew unbounded
+- PASS: Medium criteria + all 10 scenario types (3 Phase 1 + 7 Phase 2) fired at least once + no protocol crashes + memory stable
+- FAIL: Medium failures, or protocol server crashed, or memory grew unbounded, or any Phase 2 scenario type missing from ground truth log
 
 ## Troubleshooting
 
