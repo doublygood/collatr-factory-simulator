@@ -11,7 +11,7 @@
 - [x] 3.6: Filler Generator
 - [x] 3.7: Sealer Generator
 - [x] 3.8: Checkweigher (QC) Generator
-- [ ] 3.9: Chiller Generator
+- [x] 3.9: Chiller Generator
 - [ ] 3.10: CIP Generator
 - [ ] 3.11: Shared Generator Coupling for F&B
 - [ ] 3.12: F&B Modbus — CDAB Encoding + Dynamic Block Sizing
@@ -149,3 +149,16 @@ All Modbus addresses cross-referenced against PRD Appendix A. OPC-UA nodes match
 - Properties exposed: overweight_count, underweight_count, metal_detect_trips, reject_total, last_actual_weight, tray_weight, overweight_threshold, underweight_threshold.
 - 26 tests covering: signal count/IDs, actual_weight offset, per-item holding, overweight/underweight counting, metal detect Bernoulli, reject total accumulation, throughput active/inactive, counter zero when filler off or speed=0, empty store fallback, item timer carry-over, determinism, config defaults.
 - All 1668 tests pass (1642 existing + 26 new).
+
+### Task 3.9: Chiller Generator
+`ChillerGenerator` in `src/factory_simulator/generators/chiller.py` — 7 signals, bang-bang hysteresis refrigeration model.
+- **Bang-bang controller** (PRD 4.2.12): room_temp oscillates around setpoint (default 2°C) in sawtooth pattern. Compressor turns ON when temp > setpoint + 1°C; turns OFF when temp < setpoint - 1°C. Cooling rate 0.5°C/min, heat gain rate 0.2°C/min.
+- **Defrost cycles**: periodic every 6h (4 per day), 20 min duration. During defrost, compressor forced OFF and defrost heaters add 3°C/min extra heat. Managed by `_time_since_last_defrost` and `_defrost_elapsed` counters.
+- **Door open**: `_door_open` property (default False) set by scenarios. Adds 1.5°C/min heat when open (ChillerDoorAlarmScenario, task 3.19).
+- **Compressor lock**: `compressor_forced_off` property allows scenarios (ColdChainBreak, task 3.21) to lock the compressor OFF, overriding bang-bang.
+- **Suction/discharge pressure**: first-order lag (τ=60s) toward compressor-state-dependent targets. Suction: 3.0 bar (ON) / 4.5 bar (OFF). Discharge: 16.0 bar (ON) / 12.0 bar (OFF).
+- **setpoint**: read from config params; exposed as property for scenarios.
+- Registered in `data_engine.py` as `"cold_room": ChillerGenerator`.
+- Properties exposed for scenarios: room_temp (R/W), compressor_on (R), compressor_forced_off (R/W), door_open (R/W), defrost_active (R), setpoint (R).
+- 37 tests covering: signal count/IDs, initial state, bang-bang cycling (ON→OFF, OFF→ON, sawtooth), defrost activation/duration/compressor-force/heat-rate, door open heat gain, pressure tracking, compressor_forced_off lock/release, signal clamp bounds, compressor binary, determinism, protocol mappings, setpoint writability.
+- All 1705 tests pass (1668 existing + 37 new).
