@@ -140,7 +140,7 @@
       "description": "Validate OPC-UA FoodBevLine node tree and MQTT foodbev1 topic map are built correctly from F&B config. Verify all node paths match Appendix B and all topics match Appendix C. No vibration topics for F&B.",
       "prd_refs": ["prd/appendix-b-opcua-node-tree.md", "prd/appendix-c-mqtt-topic-map.md"],
       "depends_on": ["3.2", "3.4", "3.5", "3.6", "3.7", "3.8", "3.9", "3.10"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.15",

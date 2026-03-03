@@ -16,7 +16,7 @@
 - [x] 3.11: Shared Generator Coupling for F&B
 - [x] 3.12: F&B Modbus — CDAB Encoding + Dynamic Block Sizing
 - [x] 3.13: F&B Modbus — Multi-Slave Oven Eurotherm UIDs
-- [ ] 3.14: F&B OPC-UA + MQTT Validation Tests
+- [x] 3.14: F&B OPC-UA + MQTT Validation Tests
 - [ ] 3.15: Batch Cycle Scenario (Mixer)
 - [ ] 3.16: Oven Thermal Excursion Scenario
 - [ ] 3.17: Fill Weight Drift Scenario
@@ -228,6 +228,28 @@ Made `CoderGenerator` and `EnergyGenerator` configurable for their coupling sign
 All 1806 tests pass.
 
 **Decision**: Kept packaging profile hardcoded coil/DI defs unchanged — they'll just be "False" coils in F&B mode since `press.*` signals don't exist in the F&B store. This is correct behaviour and avoids profile-sniffing logic.
+
+### Task 3.14: F&B OPC-UA + MQTT Validation Tests
+
+`tests/unit/test_protocols/test_opcua_fnb.py` — 31 tests validating F&B protocol endpoints.
+
+**OPC-UA tests (TestFnbNodeTreeStructure, TestFnbNodeDataTypes, TestFnbEURangeAttribute, TestFnbAccessLevel, TestFnbServerConstruction)**:
+- Verified 19 FoodBevLine OPC-UA nodes per Appendix B (Mixer1: State+BatchId, Oven1: State, Filler1: 7 nodes, QC1: 6 nodes, CIP1: State, Energy: 2 nodes)
+- Confirmed no PackagingLine nodes built when F&B config is used
+- All nodes browsable via string NodeId, all node_to_signal mappings present
+- Data types: Double/UInt32/UInt16 for numeric nodes, String for BatchId
+- EURange present on all nodes (including String); key values match config (Filler1.LineSpeed [10,120], FillWeight [200,800], QC1.ActualWeight [100,1000], Energy.LinePower [0,300])
+- All 19 nodes read-only (F&B setpoints accessed via Modbus only)
+
+**MQTT tests (TestFnbMqttTopicMap)**:
+- Verified exactly 13 topics (11 coder + 2 env), no vibration topics
+- All topics use `foodbev1` prefix (`collatr/factory/demo/foodbev1/`)
+- coder/state, prints_total, nozzle_health, gutter_fault → QoS 1, retain=True, event-driven
+- Analog coder and env topics → QoS 0, retain=True, timed intervals match sample_rate_ms
+- `build_batch_vibration_entry` returns None for F&B (no vibration equipment)
+- Modbus-only signals (mixer.speed, oven.zone_1_temp, filler.hopper_level, etc.) absent from topic map
+
+All 1780 non-integration tests pass (1748 unit + 32 other non-integration).
 
 ### Task 3.13: F&B Modbus — Multi-Slave Oven Eurotherm UIDs
 
