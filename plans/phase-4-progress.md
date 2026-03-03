@@ -12,7 +12,7 @@
 - [x] 4.7: Intermittent Faults Scenario
 - [x] 4.8: Communication Drop Injection
 - [x] 4.9: Sensor Disconnect and Stuck Sensor
-- [ ] 4.10: Modbus Exception and Partial Response Injection
+- [x] 4.10: Modbus Exception and Partial Response Injection
 - [ ] 4.11: Duplicate Timestamps and Timezone Offset
 - [ ] 4.12: Data Quality Engine Integration
 - [ ] 4.13: Noise Calibration — Packaging Profile
@@ -26,6 +26,50 @@
 - gutter_fault probability 18x too high → Fix in Task 4.13
 
 ## Notes
+
+### Task 4.10 — Modbus Exception and Partial Response Injection (COMPLETE)
+
+New class `ModbusExceptionInjector` in `modbus_server.py` implements PRD 10.6 and 10.11:
+
+**Exception injection (PRD 10.6)**:
+- `check_exception_0x04()`: random draw at `config.data_quality.exception_probability`
+  (default 0.001). Returns `ExcCodes.DEVICE_FAILURE` when triggered.
+- `check_exception_0x06(transition_active)`: deterministic — fires during machine state
+  transitions. `ModbusServer` tracks `press.machine_state` changes in `sync_registers()`
+  and sets `_transition_ts`; a 0.5s window thereafter marks the transition active.
+  Returns `ExcCodes.DEVICE_BUSY` when transition is active.
+- Priority: 0x06 is checked before 0x04 (transition preempts random failure).
+
+**Partial response injection (PRD 10.11)**:
+- `check_partial(count)`: draws at `partial_modbus_response.probability` (default 0.0001).
+  Single-register reads (count < 2) are never partial. For multi-register reads, truncated
+  count N drawn uniformly from 1 to count-1 via `rng.integers(1, count)`.
+- Returns N from `super().getValues(fc, address, N)` — pymodbus naturally encodes the
+  shorter register list with correct byte count in the response PDU.
+- Partial events stored in `injector.partial_events` list for ground truth plumbing.
+- `record_partial(controller_id, address, requested, returned)` adds event to list.
+
+**`FactoryDeviceContext` changes**:
+- New parameters: `exception_injector`, `transition_active_fn`, `unit_id`.
+- `getValues()`: enforces register limit first, then checks 0x06, 0x04, partial (in order).
+- Only applied to FC03/FC04 reads; FC01/FC02 coil reads and writes are unaffected.
+
+**`ModbusServer` changes**:
+- New parameter: `exception_rng` (independent RNG from comm drop).
+- Creates `ModbusExceptionInjector` in `__init__`.
+- `_check_machine_state_transition()`: reads `press.machine_state` from store; on change,
+  sets `_transition_ts = time.monotonic()`. Window = 0.5s.
+- `sync_registers()` calls `_check_machine_state_transition()` first.
+- `exception_injector` property exposed for testing.
+- `_is_transition_active()` lambda passed to `FactoryDeviceContext`.
+
+**`GroundTruthLogger`**:
+- Added `log_partial_modbus_response(sim_time, controller_id, start_address, requested_count,
+  returned_count)` — event type `partial_modbus_response` per PRD 10.11 spec.
+
+Tests: 38 tests in `test_modbus_exceptions.py` covering all injection modes, priority order,
+partial count range, state transition detection, determinism, and GT logging.
+2313 total tests passing.
 
 ### Task 4.9 — Sensor Disconnect and Stuck Sensor (COMPLETE)
 

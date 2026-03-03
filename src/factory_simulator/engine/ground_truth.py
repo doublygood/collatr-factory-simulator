@@ -333,6 +333,28 @@ class GroundTruthLogger:
             record["note"] = note
         self._write_line(record)
 
+    def log_partial_modbus_response(
+        self,
+        sim_time: float,
+        controller_id: str,
+        start_address: int,
+        requested_count: int,
+        returned_count: int,
+    ) -> None:
+        """Log a partial_modbus_response injection event (PRD 10.11, Task 4.10).
+
+        Records controller ID, requested address range, returned count, and
+        timestamp per the ground truth specification.
+        """
+        self._write_line({
+            "sim_time": self._format_time(sim_time),
+            "event": "partial_modbus_response",
+            "controller_id": controller_id,
+            "start_address": start_address,
+            "requested_count": requested_count,
+            "returned_count": returned_count,
+        })
+
     def log_connection_drop(
         self,
         sim_time: float,

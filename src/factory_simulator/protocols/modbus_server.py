@@ -27,6 +27,7 @@ import contextlib
 import logging
 import struct
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -42,7 +43,10 @@ from pymodbus.server import ModbusTcpServer
 from factory_simulator.protocols.comm_drop import CommDropScheduler
 
 if TYPE_CHECKING:
-    from factory_simulator.config import FactoryConfig
+    from factory_simulator.config import (
+        FactoryConfig,
+        PartialModbusResponseConfig,
+    )
     from factory_simulator.store import SignalStore
 
 logger = logging.getLogger(__name__)
@@ -201,27 +205,143 @@ class DiscreteInputDefinition:
 
 
 # ---------------------------------------------------------------------------
+# Exception / partial response injector
+# ---------------------------------------------------------------------------
+
+
+class ModbusExceptionInjector:
+    """Injects Modbus exception responses and partial responses (PRD 10.6, 10.11).
+
+    Exception 0x04 (Device Failure) is injected randomly at
+    ``exception_probability`` per read request.  Exception 0x06 (Device Busy)
+    fires when the caller signals a machine-state transition.  Partial
+    responses truncate multi-register reads at ``partial_cfg.probability``.
+
+    All draws use the supplied numpy RNG for deterministic reproduction.
+
+    Parameters
+    ----------
+    rng:
+        Numpy RNG for deterministic draws.
+    exception_probability:
+        Probability of injecting a 0x04 exception per read request.
+    partial_cfg:
+        :class:`~factory_simulator.config.PartialModbusResponseConfig`.
+    """
+
+    def __init__(
+        self,
+        rng: np.random.Generator,
+        exception_probability: float,
+        partial_cfg: PartialModbusResponseConfig,
+    ) -> None:
+        self._rng = rng
+        self._exception_prob = exception_probability
+        self._partial_cfg = partial_cfg
+
+        # Counters and event log (for testing and ground truth plumbing)
+        self.exception_0x04_count: int = 0
+        self.exception_0x06_count: int = 0
+        self.partial_response_count: int = 0
+        # Each entry: {controller_id, start_address, requested_count, returned_count}
+        self.partial_events: list[dict[str, object]] = []
+
+    def check_exception_0x04(self) -> bool:
+        """Return True if a 0x04 (Device Failure) exception should fire.
+
+        Performs one random draw; increments ``exception_0x04_count`` on hit.
+        """
+        if self._exception_prob <= 0.0:
+            return False
+        if bool(self._rng.random() < self._exception_prob):
+            self.exception_0x04_count += 1
+            return True
+        return False
+
+    def check_exception_0x06(self, transition_active: bool) -> bool:
+        """Return True if a 0x06 (Device Busy) exception should fire.
+
+        Fires deterministically whenever *transition_active* is True; no
+        random draw is made.  Increments ``exception_0x06_count`` on hit.
+        """
+        if transition_active:
+            self.exception_0x06_count += 1
+            return True
+        return False
+
+    def check_partial(self, count: int) -> int | None:
+        """Return a truncated register count, or ``None`` if no injection.
+
+        PRD 10.11: Single-register reads are never partial (count < 2).
+        For multi-register reads the truncated count N is drawn uniformly
+        from 1 to count-1 inclusive.  Increments ``partial_response_count``
+        on hit.
+        """
+        if not self._partial_cfg.enabled or count < 2:
+            return None
+        if not bool(self._rng.random() < self._partial_cfg.probability):
+            return None
+        # integers(low, high) returns [low, high) → gives 1 to count-1
+        truncated = int(self._rng.integers(1, count))
+        self.partial_response_count += 1
+        return truncated
+
+    def record_partial(
+        self,
+        controller_id: int,
+        address: int,
+        requested: int,
+        returned: int,
+    ) -> None:
+        """Record a partial response event for ground truth logging.
+
+        Called by :class:`FactoryDeviceContext` after injecting a partial
+        response.  The event is stored in ``partial_events`` so that callers
+        (e.g. :class:`ModbusServer`) can flush it to the ground truth log.
+        """
+        self.partial_events.append({
+            "controller_id": controller_id,
+            "start_address": address,
+            "requested_count": requested,
+            "returned_count": returned,
+        })
+        logger.debug(
+            "partial_modbus_response: ctrl=%d addr=%d req=%d ret=%d",
+            controller_id, address, requested, returned,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Custom device context
 # ---------------------------------------------------------------------------
 
 
 class FactoryDeviceContext(ModbusDeviceContext):
-    """Device context with FC06 rejection for float32 pairs and register limit.
+    """Device context with FC06 rejection, register limit, and data quality injection.
 
     PRD 3.1.2: FC06 (Write Single Register) to float32 register pairs
     returns Modbus exception code 0x01 (Illegal Function).  Use FC16.
 
     PRD 3.1.7: Each read request is limited to 125 registers.  Reads
     requesting more return exception code 0x03 (Illegal Data Value).
+
+    PRD 10.6, 10.11: Optional exception and partial response injection via
+    :class:`ModbusExceptionInjector`.  Injection only applies to FC03/FC04.
     """
 
     def __init__(
         self,
         float32_addresses: set[int] | None = None,
+        exception_injector: ModbusExceptionInjector | None = None,
+        transition_active_fn: Callable[[], bool] | None = None,
+        unit_id: int = 1,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)  # type: ignore[arg-type]
         self._float32_addresses = float32_addresses or set()
+        self._exception_injector = exception_injector
+        self._transition_active_fn = transition_active_fn
+        self._unit_id = unit_id
 
     def setValues(
         self,
@@ -240,9 +360,41 @@ class FactoryDeviceContext(ModbusDeviceContext):
         address: int,
         count: int = 1,
     ) -> list[int] | list[bool] | ExcCodes:
-        """Reject reads exceeding MAX_READ_REGISTERS."""
+        """Reject over-limit reads; inject exceptions and partial responses.
+
+        Check order (PRD 10.6, 10.11):
+        1. Register limit (0x03) — always enforced.
+        2. 0x06 Device Busy — during machine state transitions (deterministic).
+        3. 0x04 Device Failure — random draw at exception_probability.
+        4. Partial response — random draw; returns truncated register slice.
+        5. Normal response — full data returned.
+        """
         if func_code in (3, 4) and count > MAX_READ_REGISTERS:
             return ExcCodes.ILLEGAL_VALUE
+
+        if self._exception_injector is not None and func_code in (3, 4):
+            # 0x06: Device Busy during machine state transitions
+            transition = (
+                self._transition_active_fn()
+                if self._transition_active_fn is not None
+                else False
+            )
+            if self._exception_injector.check_exception_0x06(transition):
+                return ExcCodes.DEVICE_BUSY
+
+            # 0x04: Random device failure
+            if self._exception_injector.check_exception_0x04():
+                return ExcCodes.DEVICE_FAILURE
+
+            # Partial response (PRD 10.11): truncate multi-register reads
+            partial = self._exception_injector.check_partial(count)
+            if partial is not None:
+                result = super().getValues(func_code, address, partial)
+                self._exception_injector.record_partial(
+                    self._unit_id, address, count, partial,
+                )
+                return result
+
         return super().getValues(func_code, address, count)
 
 
@@ -463,6 +615,7 @@ class ModbusServer:
         host: str | None = None,
         port: int | None = None,
         comm_drop_rng: np.random.Generator | None = None,
+        exception_rng: np.random.Generator | None = None,
     ) -> None:
         self._config = config
         self._store = store
@@ -475,6 +628,20 @@ class ModbusServer:
         self._drop_scheduler = CommDropScheduler(
             config.data_quality.modbus_drop, _rng,
         )
+
+        # Exception / partial response injector (PRD 10.6, 10.11)
+        _exc_rng = exception_rng if exception_rng is not None else np.random.default_rng()
+        self._exception_injector = ModbusExceptionInjector(
+            _exc_rng,
+            config.data_quality.exception_probability,
+            config.data_quality.partial_modbus_response,
+        )
+
+        # Machine state transition tracking for 0x06 injection
+        self._last_machine_state: int = -1
+        self._transition_ts: float = -float("inf")
+        _TRANSITION_WINDOW_S: float = 0.5  # seconds window after transition
+        self._transition_window_s: float = _TRANSITION_WINDOW_S
 
         # Build register map from config
         self._rmap = build_register_map(config)
@@ -501,9 +668,12 @@ class ModbusServer:
         self._coil_block = ModbusSequentialDataBlock(0, [False] * coil_size)  # type: ignore[no-untyped-call]
         self._di_block = ModbusSequentialDataBlock(0, [False] * di_size)  # type: ignore[no-untyped-call]
 
-        # Custom device context with FC06 rejection + register limit
+        # Custom device context with FC06 rejection, register limit, and injection
         self._device_context = FactoryDeviceContext(
             float32_addresses=self._rmap.float32_hr_addresses,
+            exception_injector=self._exception_injector,
+            transition_active_fn=self._is_transition_active,
+            unit_id=self._modbus_cfg.unit_id,
             hr=self._hr_block,
             ir=self._ir_block,
             co=self._coil_block,
@@ -569,13 +739,51 @@ class ModbusServer:
         self._drop_scheduler.update(t)
         return self._drop_scheduler.is_active(t)
 
+    @property
+    def exception_injector(self) -> ModbusExceptionInjector:
+        """Exception / partial response injector (for testing and introspection)."""
+        return self._exception_injector
+
+    # -- Exception injection helpers ------------------------------------------
+
+    def _is_transition_active(self) -> bool:
+        """Return True if a machine state transition occurred within the window.
+
+        Called by :class:`FactoryDeviceContext` to determine whether to inject
+        a 0x06 (Device Busy) exception on the current read request.
+        """
+        return time.monotonic() - self._transition_ts < self._transition_window_s
+
+    def _check_machine_state_transition(self) -> None:
+        """Update transition tracking based on the current machine state.
+
+        Reads ``press.machine_state`` from the store.  If the state has
+        changed since the last call, records the transition timestamp so that
+        :meth:`_is_transition_active` returns True for the next window.
+        """
+        sv = self._store.get("press.machine_state")
+        if sv is None:
+            return
+        state = int(sv.value) if isinstance(sv.value, int | float) else -1
+        if self._last_machine_state >= 0 and state != self._last_machine_state:
+            self._transition_ts = time.monotonic()
+            logger.debug(
+                "modbus: machine state transition %d → %d",
+                self._last_machine_state, state,
+            )
+        self._last_machine_state = state
+
     # -- Register synchronisation ---------------------------------------------
 
     def sync_registers(self) -> None:
         """Synchronise all signal values from store to Modbus registers.
 
+        Also updates machine state transition tracking so that the
+        exception injector can fire 0x06 on reads that follow a state change.
+
         Call this periodically or explicitly before reading in tests.
         """
+        self._check_machine_state_transition()
         self._sync_holding_registers()
         self._sync_input_registers()
         self._sync_coils()

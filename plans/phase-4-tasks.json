@@ -122,7 +122,7 @@
                 "prd/10-data-quality-realism.md (10.6, 10.11)"
             ],
             "depends_on": ["4.3"],
-            "passes": false
+            "passes": true
         },
         {
             "id": "4.11",
