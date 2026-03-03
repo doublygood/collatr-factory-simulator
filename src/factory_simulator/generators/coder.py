@@ -105,6 +105,9 @@ class CoderGenerator(EquipmentGenerator):
         self._speed_signal: str = str(
             extras.get("coupling_speed_signal", "press.line_speed")
         )
+        self._running_state: int = int(
+            extras.get("coupling_running_state", 2)
+        )
         self._prev_press_state: int = 3  # Idle
         self._quality_overrides: dict[str, str] = {}
         self._build_models()
@@ -340,9 +343,14 @@ class CoderGenerator(EquipmentGenerator):
         return results
 
     def _update_conditions_from_press(self, press_state: int) -> None:
-        """Set coder state machine conditions based on press state."""
-        # Press machine states: 0=Off, 1=Setup, 2=Running, 3=Idle, 4=Fault, 5=Maint
-        is_running = press_state == 2
+        """Set coder state machine conditions based on press/filler state.
+
+        Uses self._running_state (from coupling_running_state config, default 2)
+        so the coder works correctly regardless of which equipment's state enum
+        is used as the coupling source.
+        """
+        # State ordinals: 0=Off, 1=Setup/Loading, 2=Running, 3=Idle, 4=Fault, 5=Maint/CIP
+        is_running = press_state == self._running_state
         is_idle = press_state == 3
         is_off = press_state in (0, 5)
 

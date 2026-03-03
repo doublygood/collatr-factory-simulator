@@ -153,6 +153,8 @@ equipment:
         params:
           target: 0.0
 
+      # HR 1008-1009: reserved/unused — gap in Allen-Bradley CompactLogix register
+      # layout per PRD Appendix A (mixer block jumps 1006-1007 → 1010-1011)
       mix_time_elapsed:
         model: "counter"
         sample_rate_ms: 5000
