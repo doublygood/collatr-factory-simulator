@@ -340,6 +340,12 @@ class ModbusServer:
             di=self._di_block,
         )
 
+        # Track last-synced register values for writable HR entries.
+        # Used to detect client FC16 writes: if the register block value
+        # differs from what we last wrote, a client must have changed it.
+        # Same pattern as OpcuaServer._last_written_setpoints.
+        self._last_hr_sync: dict[int, list[int]] = {}
+
         # TCP server deferred to start() (requires running event loop)
         self._tcp_server: ModbusTcpServer | None = None
         self._server_task: asyncio.Task[None] | None = None
@@ -375,13 +381,46 @@ class ModbusServer:
         self._sync_discrete_inputs()
 
     def _sync_holding_registers(self) -> None:
-        """Copy HR signal values from store into the data block.
+        """Sync HR values between store and the data block.
+
+        Read-only registers: store -> register (one-way).
+        Writable registers: bidirectional.  Detects client FC16 writes by
+        comparing the current register value with the last value we synced
+        from the store.  If the register changed, a client wrote it and the
+        new value is propagated to the store.  Then the normal store ->
+        register sync runs (which now contains the client-written value).
+
+        This matches the OPC-UA server's ``_sync_values`` pattern for
+        setpoint write-back (PRD 3.1.7, PRD 3.2.4).
 
         Note: ModbusDeviceContext adds +1 to addresses when mapping Modbus PDU
         addresses to data block offsets. We write directly to the data block,
         so we must apply the same +1 offset.
         """
         for entry in self._rmap.hr_entries:
+            addr = entry.address + 1  # +1: ModbusDeviceContext offset
+
+            # Phase 1: Detect client writes on writable registers
+            if entry.writable:
+                reg_count = 2 if entry.data_type in ("float32", "uint32") else 1
+                raw = self._hr_block.getValues(addr, reg_count)
+                current_regs: list[int] = list(raw)  # type: ignore[arg-type]
+                last_synced = self._last_hr_sync.get(entry.address)
+
+                if last_synced is not None and current_regs != last_synced:
+                    # Register changed since our last sync -> client FC16 write.
+                    # Propagate the new value to the store (PRD 3.1.7).
+                    decoded = self._decode_hr_value(entry.data_type, current_regs)
+                    if decoded is not None:
+                        self._store.set(
+                            entry.signal_id, float(decoded), 0.0, "good",
+                        )
+                        logger.debug(
+                            "Modbus setpoint write-back: %s = %s",
+                            entry.signal_id, decoded,
+                        )
+
+            # Phase 2: Store -> register (normal sync for all entries)
             sv = self._store.get(entry.signal_id)
             if sv is None:
                 continue
@@ -389,15 +428,33 @@ class ModbusServer:
             if isinstance(value, str):
                 continue
 
-            addr = entry.address + 1  # +1: ModbusDeviceContext offset
             if entry.data_type == "float32":
                 hi, lo = encode_float32_abcd(float(value))
-                self._hr_block.setValues(addr, [hi, lo])
+                regs = [hi, lo]
             elif entry.data_type == "uint32":
                 hi, lo = encode_uint32_abcd(int(value))
-                self._hr_block.setValues(addr, [hi, lo])
+                regs = [hi, lo]
             elif entry.data_type == "uint16":
-                self._hr_block.setValues(addr, [int(value) & 0xFFFF])
+                regs = [int(value) & 0xFFFF]
+            else:
+                continue
+
+            self._hr_block.setValues(addr, regs)
+
+            # Track writable registers for next-cycle client write detection
+            if entry.writable:
+                self._last_hr_sync[entry.address] = regs
+
+    @staticmethod
+    def _decode_hr_value(data_type: str, regs: list[int]) -> float | int | None:
+        """Decode register values back to a store-compatible numeric value."""
+        if data_type == "float32":
+            return decode_float32_abcd(regs)
+        if data_type == "uint32":
+            return decode_uint32_abcd(regs)
+        if data_type == "uint16":
+            return regs[0]
+        return None
 
     def _sync_input_registers(self) -> None:
         """Copy IR signal values from store into the data block."""
