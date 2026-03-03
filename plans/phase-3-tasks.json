@@ -250,7 +250,7 @@
       "description": "Verify same F&B signal values across Modbus, OPC-UA, MQTT within one engine tick. CDAB Modbus matches OPC-UA Double. Ground truth records F&B scenario events correctly.",
       "prd_refs": ["prd/appendix-f-implementation-phases.md (Phase 3 exit criteria)"],
       "depends_on": ["3.23", "3.24"],
-      "passes": false
+      "passes": true
     }
   ]
 }

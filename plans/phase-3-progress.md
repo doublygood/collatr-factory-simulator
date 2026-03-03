@@ -1,6 +1,6 @@
 # Phase 3: F&B Profile — Progress
 
-## Status: IN PROGRESS
+## Status: COMPLETE
 
 ## Tasks
 - [x] 3.1: F&B Equipment Config Models
@@ -27,7 +27,7 @@
 - [x] 3.22: F&B Scenario Auto-Scheduling
 - [x] 3.23: F&B Modbus Integration Test
 - [x] 3.24: F&B OPC-UA + MQTT Integration Test
-- [ ] 3.25: F&B Cross-Protocol Consistency Test
+- [x] 3.25: F&B Cross-Protocol Consistency Test
 
 ## Notes
 
@@ -448,3 +448,29 @@ All 2020 tests pass (49 new).
   - `test_fnb_scenarios_not_scheduled_without_fnb_config`: F&B types absent when packaging config used
 
 All 1868 unit tests pass (10 new in test_scenario_engine.py).
+
+### Task 3.25: F&B Cross-Protocol Consistency Test
+Created `tests/integration/test_fnb_cross_protocol.py` with 15 tests across 5 classes.
+All 15 tests pass; total suite 2059 passed.
+
+**Test classes:**
+- `TestFnbModbusHrVsIr` (3 tests): oven zone_1_temp HR 1100-1101 vs IR 110 (int16x10), chiller
+  room_temp HR 1400-1401 vs IR 110 (int16x10), energy line_power HR 600-601 vs IR 120-121 (float32 ABCD)
+- `TestFnbCdabVsAbcdEncoding` (3 tests): mixer.speed at HR 1000-1001 — CDAB decode gives injected
+  value 450.0; ABCD decode gives wrong value (confirms word-swap); oven zone_1_temp uses ABCD not CDAB
+- `TestFnbModbusOpcuaConsistency` (4 tests): energy Modbus HR == OPC-UA Double; cumulative_kwh same;
+  CDAB encoding doesn't corrupt OPC-UA (reads store directly); store change propagates to both
+- `TestFnbAllThreeProtocols` (3 tests, requires MQTT broker): all three protocols serve data;
+  MQTT coder state topic matches store; energy consistent across Modbus and OPC-UA
+- `TestFnbGroundTruthScenarioEvents` (2 tests, no external services): BatchCycle records
+  scenario_start + state_change events in JSONL log; required fields present in each event
+
+**Key implementation notes:**
+- Root cause of initial failures: missing `await asyncio.sleep(0.3)` after `server.start()` in
+  `fnb_modbus_only` fixture — the asyncio task hadn't had a chance to bind the port before
+  `client.connect()` was called. Added sleep (same pattern as test_modbus_fnb_integration.py).
+- Port 15520 chosen to avoid conflicts with 15502 (test_modbus_integration) and 15503
+  (test_modbus_fnb_integration, test_cross_protocol).
+- Ground truth field names: `"event"` and `"scenario"` (not `"event_type"`/`"scenario_type"`).
+- `fnb_modbus_opcua` and `fnb_all_protocols` fixtures already have sufficient settle time via
+  OPC-UA startup sleep; only `fnb_modbus_only` needed the explicit sleep.
