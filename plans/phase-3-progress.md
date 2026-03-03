@@ -22,7 +22,7 @@
 - [x] 3.17: Fill Weight Drift Scenario
 - [x] 3.18: Seal Integrity Failure Scenario
 - [x] 3.19: Chiller Door Alarm Scenario
-- [ ] 3.20: CIP Cycle Scenario
+- [x] 3.20: CIP Cycle Scenario
 - [ ] 3.21: Cold Chain Break Scenario
 - [ ] 3.22: F&B Scenario Auto-Scheduling
 - [ ] 3.23: F&B Modbus Integration Test
@@ -343,3 +343,21 @@ All 1830 non-integration tests pass (17 new).
 - Key tests: door_open True on activation, room_temp rises faster with door open (at least 4x background), door_open False after completion, no permanent door-open, default 300-1200 s range, graceful exit without chiller.
 
 All 1864 unit tests pass (14 new).
+
+### Task 3.20: CIP Cycle Scenario
+
+`CipCycle` in `src/factory_simulator/scenarios/cip_cycle.py` — full CIP cycle: production stops, CIP runs all 5 phases, production resumes.
+
+- **Mechanism**: On activation, places mixer in Cip state and filler in Off state, then calls `cip.force_state("Pre_rinse")`. The CipGenerator auto-advances through phases (Pre-rinse → Caustic → Intermediate → Acid → Final rinse → Idle) internally.
+- **Completion detection**: `_on_tick` polls `cip.state == STATE_IDLE` to detect when the generator completes its cycle. A `cycle_duration_range` timeout (default 1800-3600 s = 30-60 min) guards against infinite wait.
+- **Guard**: `self._elapsed > 0.0` prevents immediate completion on the activation tick before the CIP generator has started.
+- **Recovery**: On `_on_complete`, forces CIP → Idle (if not already), mixer → Off, filler → Off.
+- **Ground truth**: Logs `scenario_start`, `state_change` events for cip.state/mixer.state/filler.state on activation; `state_change` + `scenario_end` on completion.
+- **Graceful exit**: If no CipGenerator found (packaging profile), completes immediately.
+- **Generator timing note**: The CIP generator fires every 1 s (min sample_rate_ms=1000 ms, state signal). After initial 3 ticks (t=0.3, last fire t=0.1), next fire is at t=1.1. Tests account for this in flow/store checks by running ≥12 ticks after scenario addition.
+
+**Tests** (`tests/unit/test_scenarios/test_cip_cycle.py`):
+- 18 tests in 5 classes: Lifecycle (4), CipGeneratorActivation (4), ProductionStop (2), Completion (4), Defaults (3), NoCipGenerator (1).
+- Key tests: CIP enters Pre_rinse on activation, mixer enters Cip state, filler enters Off state, flow increases from 0 (> 0.5 L/min after 2 generator fires), store shows Pre_rinse (=1.0) after generator fires, completes when CIP returns to Idle naturally, mixer/filler return to Off after completion, default 1800-3600 s range, graceful completion without CIP generator.
+
+All 1953 tests pass (18 new).
