@@ -147,7 +147,7 @@
                 "prd/appendix-d-configuration-reference.md"
             ],
             "depends_on": ["4.8", "4.9", "4.10", "4.11"],
-            "passes": false
+            "passes": true
         },
         {
             "id": "4.13",

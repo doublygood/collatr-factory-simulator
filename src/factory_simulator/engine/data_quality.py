@@ -9,10 +9,16 @@ Implements two store-level injectors:
   when the event started; ``quality`` remains ``"good"`` because the sensor
   believes it is working.
 
-Both classes are designed to run **after** generators write and **before**
-protocol servers read (PRD 8.2 ordering).  They use *simulation time* (not
-wall-clock) for scheduling — sensor events are tied to the simulated factory
-timeline, not the host machine clock.
+A third orchestrating class is provided:
+
+* :class:`DataQualityInjector` — wraps both injectors and provides a single
+  ``tick()`` entry point.  Used by :class:`~factory_simulator.engine.data_engine.DataEngine`
+  to run data quality injection AFTER generators write and BEFORE protocol
+  servers read (PRD 8.2 ordering).
+
+Both leaf injectors use *simulation time* (not wall-clock) for scheduling —
+sensor events are tied to the simulated factory timeline, not the host machine
+clock.
 
 PRD Reference: Section 10.9 (Sensor Disconnect), Section 10.10 (Stuck Sensor)
 CLAUDE.md Rule 13: Reproducible when a seeded RNG is supplied.
@@ -26,7 +32,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from factory_simulator.config import SensorDisconnectConfig, StuckSensorConfig
+    from factory_simulator.config import (
+        DataQualityConfig,
+        SensorDisconnectConfig,
+        StuckSensorConfig,
+    )
     from factory_simulator.engine.ground_truth import GroundTruthLogger
     from factory_simulator.store import SignalStore
 
@@ -318,3 +328,83 @@ class StuckSensorInjector:
         if self.is_active(sig_id, sim_time):
             return self._frozen_value.get(sig_id)
         return None
+
+
+# ---------------------------------------------------------------------------
+# DataQualityInjector — orchestrator
+# ---------------------------------------------------------------------------
+
+
+class DataQualityInjector:
+    """Orchestrates all store-level data quality injection (PRD Section 10).
+
+    Combines :class:`SensorDisconnectInjector` and :class:`StuckSensorInjector`
+    under a single ``tick()`` call.  Runs **after** generators write and
+    **before** protocol servers read (PRD 8.2 ordering).
+
+    Each sub-injector is only created when its corresponding config section
+    is enabled, providing global and per-section enable/disable control.
+
+    Parameters
+    ----------
+    cfg:
+        Root :class:`~factory_simulator.config.DataQualityConfig`.
+    signal_ids:
+        All signal IDs managed by the engine.  Both injectors operate over
+        this set.
+    disconnect_rng:
+        Independent RNG for :class:`SensorDisconnectInjector` scheduling.
+        Should be spawned from the root ``SeedSequence`` (Rule 13).
+    stuck_rng:
+        Independent RNG for :class:`StuckSensorInjector` scheduling.
+        Should be spawned from the root ``SeedSequence`` (Rule 13).
+    """
+
+    def __init__(
+        self,
+        cfg: DataQualityConfig,
+        signal_ids: list[str],
+        disconnect_rng: np.random.Generator,
+        stuck_rng: np.random.Generator,
+    ) -> None:
+        self._cfg = cfg
+
+        self._disconnect: SensorDisconnectInjector | None = (
+            SensorDisconnectInjector(cfg.sensor_disconnect, signal_ids, disconnect_rng)
+            if cfg.sensor_disconnect.enabled
+            else None
+        )
+
+        self._stuck: StuckSensorInjector | None = (
+            StuckSensorInjector(cfg.stuck_sensor, signal_ids, stuck_rng)
+            if cfg.stuck_sensor.enabled
+            else None
+        )
+
+    # -- Public ---------------------------------------------------------------
+
+    def tick(
+        self,
+        sim_time: float,
+        store: SignalStore,
+        ground_truth: GroundTruthLogger | None = None,
+    ) -> None:
+        """Run all active data quality injectors for this tick.
+
+        Call this AFTER all generator writes and scenario post-gen hooks, and
+        BEFORE any protocol server reads the store.
+        """
+        if self._disconnect is not None:
+            self._disconnect.tick(sim_time, store, ground_truth)
+        if self._stuck is not None:
+            self._stuck.tick(sim_time, store, ground_truth)
+
+    @property
+    def sensor_disconnect(self) -> SensorDisconnectInjector | None:
+        """The sensor disconnect injector, or ``None`` if disabled."""
+        return self._disconnect
+
+    @property
+    def stuck_sensor(self) -> StuckSensorInjector | None:
+        """The stuck sensor injector, or ``None`` if disabled."""
+        return self._stuck

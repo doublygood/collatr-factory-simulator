@@ -14,7 +14,7 @@
 - [x] 4.9: Sensor Disconnect and Stuck Sensor
 - [x] 4.10: Modbus Exception and Partial Response Injection
 - [x] 4.11: Duplicate Timestamps and Timezone Offset
-- [ ] 4.12: Data Quality Engine Integration
+- [x] 4.12: Data Quality Engine Integration
 - [ ] 4.13: Noise Calibration — Packaging Profile
 - [ ] 4.14: Noise Calibration — F&B Profile
 - [ ] 4.15: Counter Rollover Testing Support
@@ -26,6 +26,42 @@
 - gutter_fault probability 18x too high → Fix in Task 4.13
 
 ## Notes
+
+### Task 4.12 — Data Quality Engine Integration (COMPLETE)
+
+New class `DataQualityInjector` added to `src/factory_simulator/engine/data_quality.py`.
+
+**`DataQualityInjector`**:
+- Wraps `SensorDisconnectInjector` and `StuckSensorInjector` under a single `tick()` entry point
+- Sub-injectors created only when their respective config sections are enabled (`cfg.sensor_disconnect.enabled`, `cfg.stuck_sensor.enabled`), providing global and per-section control
+- `tick(sim_time, store, ground_truth)` calls both sub-injectors in order (disconnect then stuck); no-op when both are disabled
+- Constructor signature: `(cfg: DataQualityConfig, signal_ids: list[str], disconnect_rng: np.random.Generator, stuck_rng: np.random.Generator)`
+
+**`DataEngine` changes** (`data_engine.py`):
+- Import added: `from factory_simulator.engine.data_quality import DataQualityInjector`
+- `__init__`: after scenario engine construction, collects all signal IDs from enabled generators, spawns two child RNGs (`disconnect_rng`, `stuck_rng`) from `_root_ss`, creates `DataQualityInjector` as `self._data_quality`
+- `tick()`: calls `self._data_quality.tick(sim_time, self._store, self._ground_truth)` AFTER `scenario_engine.post_gen_tick()` (PRD 8.2 ordering preserved)
+- New `data_quality` property exposes the injector for testing/introspection
+
+Tests: 19 tests in `tests/unit/test_data_quality_injector.py` covering:
+- Construction: both/disconnect-only/stuck-only/neither sub-injectors
+- `tick()` with both disabled: store not modified
+- Disconnect tick: sentinel written, quality=bad after event fires
+- Disconnect: restores to good after duration expires
+- Stuck tick: value frozen with quality=good
+- Determinism: same seed → identical schedule (same-seed test)
+- Determinism: different seeds → different first-event time
+- DataEngine: `data_quality` property returns `DataQualityInjector`
+- DataEngine: sub-injectors absent when disabled
+- DataEngine: sub-injectors created when enabled
+- DataEngine: tick runs without error with injectors active
+- DataEngine: signal count unchanged by injector wiring
+- DataEngine: store populated correctly after tick
+- DataEngine: full packaging config smoke test
+
+Note: `tests/integration/test_modbus_fnb_integration.py::TestFnbEquipmentHR::test_all_fnb_hr_entries_readable` exhibited one intermittent failure in the full suite run due to pre-existing random Modbus exception injection (task 4.10, probability 0.001). The test passed on immediate re-run. Not caused by task 4.12 changes (no Modbus server code was modified).
+
+2361 total tests passing.
 
 ### Task 4.11 — Duplicate Timestamps and Timezone Offset (COMPLETE)
 

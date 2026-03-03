@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from factory_simulator.clock import SimulationClock
+from factory_simulator.engine.data_quality import DataQualityInjector
 from factory_simulator.engine.ground_truth import GroundTruthLogger
 from factory_simulator.engine.scenario_engine import ScenarioEngine
 from factory_simulator.generators.base import EquipmentGenerator
@@ -153,6 +154,18 @@ class DataEngine:
             ground_truth=ground_truth,
         )
 
+        # Data quality injector (PRD 8.2: runs after generators, before protocol reads)
+        # Collect all signal IDs from enabled generators
+        all_signal_ids: list[str] = []
+        for gen in self._generators:
+            all_signal_ids.extend(gen.get_signal_ids())
+
+        disconnect_rng = np.random.default_rng(self._root_ss.spawn(1)[0])
+        stuck_rng = np.random.default_rng(self._root_ss.spawn(1)[0])
+        self._data_quality = DataQualityInjector(
+            config.data_quality, all_signal_ids, disconnect_rng, stuck_rng
+        )
+
     # -- Properties -----------------------------------------------------------
 
     @property
@@ -179,6 +192,11 @@ class DataEngine:
     def ground_truth(self) -> GroundTruthLogger | None:
         """The ground truth event logger, if configured."""
         return self._ground_truth
+
+    @property
+    def data_quality(self) -> DataQualityInjector:
+        """The data quality injector (sensor disconnect + stuck sensor)."""
+        return self._data_quality
 
     @property
     def running(self) -> bool:
@@ -261,6 +279,10 @@ class DataEngine:
         # Post-generator injection: active scenarios that override store values
         # (e.g. contextual anomalies, PRD 5.16, Task 4.6)
         self._scenario_engine.post_gen_tick(sim_time, dt, self._store)
+
+        # Data quality injection: runs after all generator and scenario writes,
+        # before protocol servers read the store (PRD 8.2, Task 4.12)
+        self._data_quality.tick(sim_time, self._store, self._ground_truth)
 
         return sim_time
 
