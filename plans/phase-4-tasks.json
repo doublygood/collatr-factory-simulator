@@ -1,0 +1,203 @@
+{
+    "phase": 4,
+    "name": "Full Scenario System and Data Quality",
+    "tasks": [
+        {
+            "id": "4.1",
+            "name": "Poisson Scheduling Engine",
+            "group": "A: Scheduling Engine",
+            "file": "src/factory_simulator/engine/scenario_engine.py",
+            "description": "Replace uniform-random scheduling with Poisson inter-arrival times. Fix Y1 (SeedSequence.spawn) and Y3 (sim_duration_s parameter). Enforce minimum gap = scenario min duration. Support cross-shift continuation.",
+            "prd_refs": [
+                "prd/05-scenario-system.md (5.13)",
+                "prd/appendix-f-implementation-phases.md (Phase 4)"
+            ],
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "4.2",
+            "name": "Scenario Priority and Conflict Resolution",
+            "group": "A: Scheduling Engine",
+            "file": "src/factory_simulator/engine/scenario_engine.py",
+            "description": "Add priority attribute to Scenario base class (state_changing, non_state_changing, background, micro). State-changing preempts non-state-changing. Non-state-changing can overlap. Background never preempted. Contextual anomaly timeout at 2x window.",
+            "prd_refs": [
+                "prd/05-scenario-system.md (5.13)"
+            ],
+            "depends_on": ["4.1"],
+            "passes": false
+        },
+        {
+            "id": "4.3",
+            "name": "Phase 4 Config Models",
+            "group": "A: Scheduling Engine",
+            "file": "src/factory_simulator/config.py",
+            "description": "Add config models: MicroStopConfig, ContextualAnomalyConfig (5 nested types), IntermittentFaultConfig (4 nested subtypes), DataQualityConfig (comm drops, sensor disconnect, stuck sensor, Modbus exceptions, partial responses, duplicates, timezone offset, counter rollover). Update BearingWearConfig. Add to ScenariosConfig and FactoryConfig. Update both factory YAML configs with defaults from PRD Appendix D.",
+            "prd_refs": [
+                "prd/appendix-d-configuration-reference.md",
+                "prd/10-data-quality-realism.md"
+            ],
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "4.4",
+            "name": "Motor Bearing Wear Scenario",
+            "group": "B: Advanced Packaging Scenarios",
+            "file": "src/factory_simulator/scenarios/bearing_wear.py",
+            "description": "Exponential degradation model: vibration_increase = base_rate * exp(k * elapsed_hours). Affects vibration.main_drive_x/y/z and press.main_drive_current. Warning/alarm thresholds. Optional failure culmination. Background priority. Register in ScenarioEngine with Poisson scheduling.",
+            "prd_refs": [
+                "prd/05-scenario-system.md (5.5)"
+            ],
+            "depends_on": ["4.1", "4.2", "4.3"],
+            "passes": false
+        },
+        {
+            "id": "4.5",
+            "name": "Micro-Stops Scenario",
+            "group": "B: Advanced Packaging Scenarios",
+            "file": "src/factory_simulator/scenarios/micro_stop.py",
+            "description": "Brief speed dips (5-30s) without state change. Poisson process, 10-50 per shift. Speed drops 30-80%, waste increases, recovery ramp. Machine state stays Running. Micro priority.",
+            "prd_refs": [
+                "prd/05-scenario-system.md (5.15)"
+            ],
+            "depends_on": ["4.1", "4.2", "4.3"],
+            "passes": false
+        },
+        {
+            "id": "4.6",
+            "name": "Contextual Anomalies Scenario",
+            "group": "B: Advanced Packaging Scenarios",
+            "file": "src/factory_simulator/scenarios/contextual_anomaly.py",
+            "description": "Five types: heater stuck on, pressure bleed, counter false trigger, temperature during maintenance, vibration during off. 2-5 per week. Wait for target machine state, inject anomalous value. Timeout at 2x window. Ground truth with expected_state and actual_state.",
+            "prd_refs": [
+                "prd/05-scenario-system.md (5.16)"
+            ],
+            "depends_on": ["4.1", "4.2", "4.3"],
+            "passes": false
+        },
+        {
+            "id": "4.7",
+            "name": "Intermittent Faults Scenario",
+            "group": "B: Advanced Packaging Scenarios",
+            "file": "src/factory_simulator/scenarios/intermittent_fault.py",
+            "description": "Three-phase progression (sporadic -> frequent -> permanent). Four subtypes: bearing vibration, electrical current, sensor sentinel, pneumatic pressure. Phase timing configurable per subtype. Background priority. Ground truth logs phase transitions and individual spikes.",
+            "prd_refs": [
+                "prd/05-scenario-system.md (5.17)"
+            ],
+            "depends_on": ["4.1", "4.2", "4.3"],
+            "passes": false
+        },
+        {
+            "id": "4.8",
+            "name": "Communication Drop Injection",
+            "group": "C: Data Quality Injection",
+            "file": "src/factory_simulator/protocols/modbus_server.py",
+            "description": "Inject configurable comm drops into Modbus (stop responding 1-10s), OPC-UA (freeze values + UncertainLastUsableValue status), MQTT (stop publishing 5-30s). 1-2 per hour per protocol. Deterministic with seed. Also modify opcua_server.py and mqtt_publisher.py.",
+            "prd_refs": [
+                "prd/10-data-quality-realism.md (10.2)"
+            ],
+            "depends_on": ["4.3"],
+            "passes": false
+        },
+        {
+            "id": "4.9",
+            "name": "Sensor Disconnect and Stuck Sensor",
+            "group": "C: Data Quality Injection",
+            "file": "src/factory_simulator/engine/data_quality.py",
+            "description": "Sensor disconnect: signal jumps to sentinel value (temp=6553.5, pressure=0.0, voltage=-32768), OPC-UA BadSensorFailure, MQTT quality=bad. Stuck sensor: signal freezes at current value, status remains Good. Both override generator output in the store. Ground truth logging.",
+            "prd_refs": [
+                "prd/10-data-quality-realism.md (10.9, 10.10)"
+            ],
+            "depends_on": ["4.3"],
+            "passes": false
+        },
+        {
+            "id": "4.10",
+            "name": "Modbus Exception and Partial Response Injection",
+            "group": "C: Data Quality Injection",
+            "file": "src/factory_simulator/protocols/modbus_server.py",
+            "description": "Exception responses: 0x04 random, 0x06 during state transitions. Partial responses: multi-register reads return fewer registers than requested. Configurable probabilities. Ground truth logging.",
+            "prd_refs": [
+                "prd/10-data-quality-realism.md (10.6, 10.11)"
+            ],
+            "depends_on": ["4.3"],
+            "passes": false
+        },
+        {
+            "id": "4.11",
+            "name": "Duplicate Timestamps and Timezone Offset",
+            "group": "C: Data Quality Injection",
+            "file": "src/factory_simulator/protocols/mqtt_publisher.py",
+            "description": "Duplicate timestamps: Modbus same value+timestamp (0.01%), MQTT two messages within 1ms (0.005%). Timezone offset: MQTT timestamp_offset_hours shifts ISO 8601 timestamps. OPC-UA always UTC. Also modify modbus_server.py.",
+            "prd_refs": [
+                "prd/10-data-quality-realism.md (10.5, 10.7)"
+            ],
+            "depends_on": ["4.3"],
+            "passes": false
+        },
+        {
+            "id": "4.12",
+            "name": "Data Quality Engine Integration",
+            "group": "C: Data Quality Injection",
+            "file": "src/factory_simulator/engine/data_quality.py",
+            "description": "Create DataQualityInjector class. Wire into DataEngine tick loop: runs AFTER generators write, BEFORE protocol servers read. Manages sensor disconnect and stuck sensor lifecycle. Uses spawned child RNG for determinism. Global and per-section enable/disable.",
+            "prd_refs": [
+                "prd/10-data-quality-realism.md (all)",
+                "prd/appendix-d-configuration-reference.md"
+            ],
+            "depends_on": ["4.8", "4.9", "4.10", "4.11"],
+            "passes": false
+        },
+        {
+            "id": "4.13",
+            "name": "Noise Calibration — Packaging Profile",
+            "group": "D: Noise Calibration and Polish",
+            "file": "config/factory.yaml",
+            "description": "Update all 47 packaging signal noise params per PRD Section 10.3 table: sigma values, noise_distribution (gaussian/student_t/ar1), noise_df, noise_phi. Fix gutter_fault probability (18x too high). Add quantisation_resolution where applicable.",
+            "prd_refs": [
+                "prd/10-data-quality-realism.md (10.3)",
+                "prd/appendix-d-configuration-reference.md"
+            ],
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "4.14",
+            "name": "Noise Calibration — F&B Profile",
+            "group": "D: Noise Calibration and Polish",
+            "file": "config/factory-foodbev.yaml",
+            "description": "Update all 68 F&B signal noise params using analogous equipment types from PRD Section 10.3. PID-controlled temps get AR(1), load/torque get Student-t, encoders get Gaussian. Add quantisation_resolution where applicable.",
+            "prd_refs": [
+                "prd/10-data-quality-realism.md (10.3)",
+                "prd/appendix-d-configuration-reference.md"
+            ],
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "4.15",
+            "name": "Counter Rollover Testing Support",
+            "group": "D: Noise Calibration and Polish",
+            "file": "src/factory_simulator/models/counter.py",
+            "description": "Verify and test configurable rollover_value on counter models. Default uint32 max. Config override per signal via DataQualityConfig.counter_rollover. Ground truth logs rollover events.",
+            "prd_refs": [
+                "prd/10-data-quality-realism.md (10.4)"
+            ],
+            "depends_on": ["4.3"],
+            "passes": false
+        },
+        {
+            "id": "4.16",
+            "name": "Reproducibility Test and Final Integration",
+            "group": "D: Noise Calibration and Polish",
+            "file": "tests/integration/test_reproducibility.py",
+            "description": "Reproducibility: run both profiles with seed=42 twice, assert byte-identical output. Final integration: run both profiles for 1 simulated day, verify all scenario types fire, no NaN/Inf, memory stable, ground truth well-formed, data quality injections present.",
+            "prd_refs": [
+                "prd/appendix-f-implementation-phases.md (Phase 4 exit criteria)"
+            ],
+            "depends_on": ["4.1", "4.2", "4.3", "4.4", "4.5", "4.6", "4.7", "4.8", "4.9", "4.10", "4.11", "4.12", "4.13", "4.14", "4.15"],
+            "passes": false
+        }
+    ]
+}
