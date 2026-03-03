@@ -180,7 +180,7 @@
       "description": "Seal temp drops below threshold, seal pressure decreases, vacuum degrades, QC rejects spike. Line stops for seal bar replacement/adjustment. Uses existing sealer signals.",
       "prd_refs": ["prd/05-scenario-system.md (5.14.4)"],
       "depends_on": ["3.7", "3.8"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.19",

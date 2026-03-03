@@ -20,7 +20,7 @@
 - [x] 3.15: Batch Cycle Scenario (Mixer)
 - [x] 3.16: Oven Thermal Excursion Scenario
 - [x] 3.17: Fill Weight Drift Scenario
-- [ ] 3.18: Seal Integrity Failure Scenario
+- [x] 3.18: Seal Integrity Failure Scenario
 - [ ] 3.19: Chiller Door Alarm Scenario
 - [ ] 3.20: CIP Cycle Scenario
 - [ ] 3.21: Cold Chain Break Scenario
