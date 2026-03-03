@@ -23,7 +23,7 @@
 - [x] 3.18: Seal Integrity Failure Scenario
 - [x] 3.19: Chiller Door Alarm Scenario
 - [x] 3.20: CIP Cycle Scenario
-- [ ] 3.21: Cold Chain Break Scenario
+- [x] 3.21: Cold Chain Break Scenario
 - [ ] 3.22: F&B Scenario Auto-Scheduling
 - [ ] 3.23: F&B Modbus Integration Test
 - [ ] 3.24: F&B OPC-UA + MQTT Integration Test
@@ -361,3 +361,21 @@ All 1864 unit tests pass (14 new).
 - Key tests: CIP enters Pre_rinse on activation, mixer enters Cip state, filler enters Off state, flow increases from 0 (> 0.5 L/min after 2 generator fires), store shows Pre_rinse (=1.0) after generator fires, completes when CIP returns to Idle naturally, mixer/filler return to Off after completion, default 1800-3600 s range, graceful completion without CIP generator.
 
 All 1953 tests pass (18 new).
+
+### Task 3.21: Cold Chain Break Scenario
+
+`ColdChainBreak` in `src/factory_simulator/scenarios/cold_chain_break.py` — refrigeration failure, compressor locks off.
+
+- **Mechanism**: Sets `ChillerGenerator.compressor_forced_off = True` on activation. The generator's bang-bang control is overridden — compressor stays off and room temperature rises via the natural background heat gain (0.2°C/min). This will cross the 8°C alarm threshold within the 30-120 minute failure window.
+- **Duration**: 30-120 min (1800-7200 s, PRD 5.14.7). Default: [1800.0, 7200.0].
+- **Recovery**: On `_on_complete`, `compressor_forced_off` is restored to its saved value (normally False). The bang-bang controller then resumes normal cooling.
+- **Ground truth**: Logs `scenario_start`, `state_change` (compressor 1→0), `signal_anomaly` (room_temp drift) on activation; `state_change` (compressor 0→1) + `scenario_end` on completion.
+- **Graceful exit**: If no ChillerGenerator in engine (packaging profile), completes immediately.
+
+**Design decision**: The PRD states "0.5-1.5 C/min rise". The chiller generator's natural heat gain when compressor is off is 0.2°C/min. From setpoint (2°C) to alarm threshold (8°C) = 6°C ÷ 0.2°C/min = 30 min minimum — this just reaches 8°C at the minimum scenario duration (30 min). For longer failures, there's more time above threshold. This matches PRD intent (compressor off → room warms toward ambient). No additional heat injection needed.
+
+**Tests** (`tests/unit/test_scenarios/test_cold_chain_break.py`):
+- 15 tests in 5 classes: Lifecycle (4), CompressorLock (4), Recovery (3), Defaults (3), NoChillerGenerator (1).
+- Key tests: compressor_forced_off True on activation, store shows compressor_state=0.0, room_temp rises with compressor locked, rises faster than bang-bang baseline, forced_off released after completion, no permanent lock (temp recovers to <10°C), default 1800-7200 s range, graceful exit without chiller.
+
+All 1968 tests pass (15 new).

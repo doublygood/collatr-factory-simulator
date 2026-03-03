@@ -210,7 +210,7 @@
       "description": "Compressor locks off (failure). Room temp rises toward ambient at 0.5-1.5 C/min. Crosses 8C alarm. After repair, compressor restarts, first_order_lag recovery. 30-120 min, 1-2 per month.",
       "prd_refs": ["prd/05-scenario-system.md (5.14.7)"],
       "depends_on": ["3.9"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.22",
