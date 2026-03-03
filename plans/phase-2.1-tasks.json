@@ -1,0 +1,54 @@
+{
+  "phase": "2.1",
+  "name": "Scenario Auto-Scheduling",
+  "tasks": [
+    {
+      "id": "2.1.1",
+      "name": "Schedule time-based Phase 2 scenarios",
+      "file": "src/factory_simulator/engine/scenario_engine.py",
+      "description": "Add _schedule_web_breaks(), _schedule_dryer_drifts(), _schedule_ink_excursions(), _schedule_registration_drifts(), _schedule_cold_starts() methods. Call from _generate_timeline(). Follow existing _schedule_unplanned_stops() pattern.",
+      "prd_refs": ["5.3", "5.4", "5.6", "5.7", "5.10", "5.13"],
+      "passes": false
+    },
+    {
+      "id": "2.1.2",
+      "name": "Schedule condition-triggered Phase 2 scenarios",
+      "file": "src/factory_simulator/engine/scenario_engine.py",
+      "description": "Add _schedule_coder_depletions() and _schedule_material_splices() methods. CoderDepletion: one instance per ~24h of sim time at evenly-spaced start times. MaterialSplice: one instance per ~3h of sim time. Call from _generate_timeline().",
+      "prd_refs": ["5.12", "5.13a"],
+      "passes": false
+    },
+    {
+      "id": "2.1.3",
+      "name": "Signal name validation test",
+      "file": "tests/unit/test_scenario_engine.py",
+      "description": "Test that every signal ID in _AFFECTED_SIGNALS matches a valid key in the store after engine init. Catches the DryerDrift naming bug class permanently.",
+      "prd_refs": ["4.7"],
+      "passes": false
+    },
+    {
+      "id": "2.1.4",
+      "name": "Auto-scheduling integration test",
+      "file": "tests/unit/test_scenario_engine.py",
+      "description": "Test that ScenarioEngine with default config and sim_duration_s=7*86400 produces instances of all 10 scenario types. Verify sorted by start_time and reasonable count.",
+      "prd_refs": ["5.13"],
+      "passes": false
+    },
+    {
+      "id": "2.1.5",
+      "name": "Update acceptance test procedure",
+      "file": "plans/phase-2-acceptance-test.md",
+      "description": "Update Scenario Evidence section with specific Phase 2 scenario expectations for Medium and Full tiers.",
+      "prd_refs": [],
+      "passes": false
+    },
+    {
+      "id": "2.1.6",
+      "name": "Update docstrings and create progress file",
+      "file": "src/factory_simulator/engine/scenario_engine.py",
+      "description": "Update module docstring and _generate_timeline() docstring. Create plans/phase-2.1-progress.md.",
+      "prd_refs": [],
+      "passes": false
+    }
+  ]
+}
