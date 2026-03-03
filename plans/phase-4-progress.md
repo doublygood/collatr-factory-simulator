@@ -9,7 +9,7 @@
 - [x] 4.4: Motor Bearing Wear Scenario
 - [x] 4.5: Micro-Stops Scenario
 - [x] 4.6: Contextual Anomalies Scenario
-- [ ] 4.7: Intermittent Faults Scenario
+- [x] 4.7: Intermittent Faults Scenario
 - [ ] 4.8: Communication Drop Injection
 - [ ] 4.9: Sensor Disconnect and Stuck Sensor
 - [ ] 4.10: Modbus Exception and Partial Response Injection
@@ -26,6 +26,40 @@
 - gutter_fault probability 18x too high → Fix in Task 4.13
 
 ## Notes
+
+### Task 4.7 — Intermittent Faults Scenario (COMPLETE)
+
+New file: `src/factory_simulator/scenarios/intermittent_fault.py`.
+
+`IntermittentFault` implements PRD 5.17 with:
+- `priority = "background"` (never preempted, never deferred)
+- Three-phase model: Phase 1 (sporadic) → Phase 2 (frequent) → Phase 3 (permanent, optional)
+- Four subtypes with subtype-specific effects:
+  - `bearing`: modifies `VibrationGenerator._models[axis]._target` during each spike
+  - `electrical`: modifies `PressGenerator._main_drive_current._base` during each spike
+  - `sensor`: writes sentinel value (6553.5 for temp, 0.0 for pressure) via `post_gen_inject` hook
+  - `pneumatic`: sets `CoderGenerator._ink_pressure._target = 0` during each spike (no Phase 3)
+- Pre-generated `_spike_queue: list[tuple[float, float]]` at construction for reproducibility
+- Poisson inter-arrival spike scheduling per phase via `rng.exponential(mean_interval_s)`
+- Phase transitions triggered by `_elapsed` crossing `_phase1_duration_s` and `_total_duration_s`
+- `_phase3_active` flag: scenario stays ACTIVE forever, spike remains applied permanently
+- Ground truth: `log_intermittent_fault()` called at each spike start and phase transition
+
+`scenario_engine.py` changes:
+- Import added (alphabetical between FillWeightDrift and InkExcursion)
+- `_schedule_intermittent_faults()`: 4 explicit per-subtype blocks (avoids mypy generic-object
+  type errors from a loop); each subtype checked for `enabled` and `start_after_hours < sim_duration_s`
+- `_generate_timeline()` calls `_schedule_intermittent_faults()` after `_schedule_contextual_anomalies()`
+- `_AFFECTED_SIGNALS["IntermittentFault"]` entry added
+
+`ground_truth.py`: Added `log_intermittent_fault()` with fields: subtype, phase, affected_signals,
+magnitude, duration, permanent, and optional note (used for phase transition labels).
+
+11 test `_make_engine()` helpers updated to disable `intermittent_fault`.
+
+Tests: 33 tests in `test_intermittent_fault.py` covering priority, durations, spike queue,
+all 4 subtypes (bearing/electrical/sensor/pneumatic), phase transitions, Phase 3 permanence,
+spike count, ground truth JSONL output, and auto-scheduling. 2213 total tests passing.
 
 ### Task 4.6 — Contextual Anomalies Scenario (COMPLETE)
 

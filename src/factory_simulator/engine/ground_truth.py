@@ -302,6 +302,37 @@ class GroundTruthLogger:
             "duration": duration,
         })
 
+    def log_intermittent_fault(
+        self,
+        sim_time: float,
+        subtype: str,
+        phase: int,
+        affected_signals: list[str],
+        magnitude: float,
+        duration: float,
+        permanent: bool,
+        note: str | None = None,
+    ) -> None:
+        """Log an intermittent_fault event (PRD 5.17).
+
+        Records each spike occurrence and phase transitions.  Fields:
+        ``subtype`` (bearing/electrical/sensor/pneumatic), ``phase`` (1/2/3),
+        ``affected_signals``, ``magnitude``, ``duration``, ``permanent``.
+        """
+        record: dict[str, object] = {
+            "sim_time": self._format_time(sim_time),
+            "event": "intermittent_fault",
+            "subtype": subtype,
+            "phase": phase,
+            "affected_signals": affected_signals,
+            "magnitude": magnitude,
+            "duration": duration,
+            "permanent": permanent,
+        }
+        if note is not None:
+            record["note"] = note
+        self._write_line(record)
+
     def log_connection_drop(
         self,
         sim_time: float,

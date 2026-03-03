@@ -57,6 +57,8 @@ def _make_engine(seed: int = 42) -> DataEngine:
     config.scenarios.bearing_wear.enabled = False
     if config.scenarios.micro_stop is not None:
         config.scenarios.micro_stop.enabled = False
+    if config.scenarios.intermittent_fault is not None:
+        config.scenarios.intermittent_fault.enabled = False
 
     from factory_simulator.store import SignalStore
     store = SignalStore()

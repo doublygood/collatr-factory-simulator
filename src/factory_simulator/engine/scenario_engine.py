@@ -57,6 +57,7 @@ from factory_simulator.scenarios.contextual_anomaly import ContextualAnomaly
 from factory_simulator.scenarios.dryer_drift import DryerDrift
 from factory_simulator.scenarios.fill_weight_drift import FillWeightDrift
 from factory_simulator.scenarios.ink_excursion import InkExcursion
+from factory_simulator.scenarios.intermittent_fault import IntermittentFault
 from factory_simulator.scenarios.job_changeover import JobChangeover
 from factory_simulator.scenarios.material_splice import MaterialSplice
 from factory_simulator.scenarios.micro_stop import MicroStop
@@ -343,10 +344,12 @@ class ScenarioEngine:
         self._schedule_coder_depletions()
         self._schedule_material_splices()
 
-        # Phase 4 advanced scenarios (bearing wear, micro-stops, contextual anomalies)
+        # Phase 4 advanced scenarios (bearing wear, micro-stops, contextual anomalies,
+        # intermittent faults)
         self._schedule_bearing_wear()
         self._schedule_micro_stops()
         self._schedule_contextual_anomalies()
+        self._schedule_intermittent_faults()
 
         # Phase 3 F&B time-based scenarios (only scheduled when F&B config present)
         self._schedule_batch_cycles()
@@ -820,6 +823,107 @@ class ScenarioEngine:
                 )
             )
 
+    def _schedule_intermittent_faults(self) -> None:
+        """Schedule one IntermittentFault instance per enabled subtype (PRD 5.17).
+
+        Each enabled subtype starts at its configured ``start_after_hours`` and
+        runs its Phase 1 + Phase 2 progression.  Only subtypes whose
+        ``start_after_hours`` falls within ``sim_duration_s`` are scheduled.
+        """
+        cfg = self._config.intermittent_fault
+        if cfg is None or not cfg.enabled:
+            return
+
+        faults = cfg.faults
+
+        # -- Bearing vibration subtype ----------------------------------------
+        bc = faults.bearing_intermittent
+        if bc.enabled:
+            start_s = bc.start_after_hours * 3600.0
+            if start_s < self._sim_duration_s:
+                self._scenarios.append(IntermittentFault(
+                    start_time=start_s,
+                    rng=self._spawn_rng(),
+                    params={
+                        "subtype": "bearing",
+                        "phase3_transition": bc.phase3_transition,
+                        "affected_signals": list(bc.affected_signals),
+                        "phase1_duration_hours": list(bc.phase1_duration_hours),
+                        "phase1_frequency_per_day": list(bc.phase1_frequency_per_day),
+                        "phase1_spike_duration_s": list(bc.phase1_spike_duration_s),
+                        "phase2_duration_hours": list(bc.phase2_duration_hours),
+                        "phase2_frequency_per_day": list(bc.phase2_frequency_per_day),
+                        "phase2_spike_duration_s": list(bc.phase2_spike_duration_s),
+                        "spike_magnitude": list(bc.spike_magnitude),
+                    },
+                ))
+
+        # -- Electrical current subtype ---------------------------------------
+        ec = faults.electrical_intermittent
+        if ec.enabled:
+            start_s = ec.start_after_hours * 3600.0
+            if start_s < self._sim_duration_s:
+                self._scenarios.append(IntermittentFault(
+                    start_time=start_s,
+                    rng=self._spawn_rng(),
+                    params={
+                        "subtype": "electrical",
+                        "phase3_transition": ec.phase3_transition,
+                        "affected_signals": list(ec.affected_signals),
+                        "phase1_duration_hours": list(ec.phase1_duration_hours),
+                        "phase1_frequency_per_day": list(ec.phase1_frequency_per_day),
+                        "phase1_spike_duration_s": list(ec.phase1_spike_duration_s),
+                        "phase2_duration_hours": list(ec.phase2_duration_hours),
+                        "phase2_frequency_per_day": list(ec.phase2_frequency_per_day),
+                        "phase2_spike_duration_s": list(ec.phase2_spike_duration_s),
+                        "spike_magnitude_pct": list(ec.spike_magnitude_pct),
+                    },
+                ))
+
+        # -- Sensor sentinel subtype ------------------------------------------
+        sc = faults.sensor_intermittent
+        if sc.enabled:
+            start_s = sc.start_after_hours * 3600.0
+            if start_s < self._sim_duration_s:
+                self._scenarios.append(IntermittentFault(
+                    start_time=start_s,
+                    rng=self._spawn_rng(),
+                    params={
+                        "subtype": "sensor",
+                        "phase3_transition": sc.phase3_transition,
+                        "affected_signals": list(sc.affected_signals),
+                        "phase1_duration_hours": list(sc.phase1_duration_hours),
+                        "phase1_frequency_per_day": list(sc.phase1_frequency_per_day),
+                        "phase1_spike_duration_s": list(sc.phase1_spike_duration_s),
+                        "phase2_duration_hours": list(sc.phase2_duration_hours),
+                        "phase2_frequency_per_day": list(sc.phase2_frequency_per_day),
+                        "phase2_spike_duration_s": list(sc.phase2_spike_duration_s),
+                        "spike_magnitude": [6553.5, 6553.5],  # sentinel (PRD 10.9)
+                    },
+                ))
+
+        # -- Pneumatic pressure subtype ---------------------------------------
+        pc = faults.pneumatic_intermittent
+        if pc.enabled:
+            start_s = pc.start_after_hours * 3600.0
+            if start_s < self._sim_duration_s:
+                self._scenarios.append(IntermittentFault(
+                    start_time=start_s,
+                    rng=self._spawn_rng(),
+                    params={
+                        "subtype": "pneumatic",
+                        "phase3_transition": pc.phase3_transition,
+                        "affected_signals": list(pc.affected_signals),
+                        "phase1_duration_hours": list(pc.phase1_duration_hours),
+                        "phase1_frequency_per_day": list(pc.phase1_frequency_per_day),
+                        "phase1_spike_duration_s": list(pc.phase1_spike_duration_s),
+                        "phase2_duration_hours": list(pc.phase2_duration_hours),
+                        "phase2_frequency_per_day": list(pc.phase2_frequency_per_day),
+                        "phase2_spike_duration_s": list(pc.phase2_spike_duration_s),
+                        "spike_magnitude": [0.0, 0.0],  # pressure drops to 0
+                    },
+                ))
+
     # -- Child RNG creation ----------------------------------------------------
 
     def _spawn_rng(self) -> np.random.Generator:
@@ -853,6 +957,12 @@ _AFFECTED_SIGNALS: dict[str, list[str]] = {
         "press.impression_count",    # counter_false_trigger
         "press.dryer_temp_zone_1",   # hot_during_maintenance
         "vibration.main_drive_x",    # vibration_during_off
+    ],
+    "IntermittentFault": [
+        "vibration.main_drive_x", "vibration.main_drive_y",
+        "vibration.main_drive_z",    # bearing subtype
+        "press.main_drive_current",  # electrical subtype
+        "coder.ink_pressure",        # pneumatic subtype
     ],
     # -- Packaging scenarios (Phase 1 & 2) ------------------------------------
     "WebBreak": [
