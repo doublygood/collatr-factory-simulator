@@ -492,9 +492,117 @@ class MaterialSpliceConfig(BaseModel):
         return self
 
 
+# ---------------------------------------------------------------------------
+# F&B scenario configs (PRD 5.14)
+# ---------------------------------------------------------------------------
+
+
+class BatchCycleConfig(BaseModel):
+    """PRD 5.14.1: Mixer batch cycle scenario."""
+
+    enabled: bool = True
+    frequency_per_shift: list[int] = Field(default_factory=lambda: [8, 16])
+    batch_duration_seconds: list[int] = Field(default_factory=lambda: [1200, 2700])
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> BatchCycleConfig:
+        _validate_range_pair(self.frequency_per_shift, "frequency_per_shift")
+        _validate_range_pair(self.batch_duration_seconds, "batch_duration_seconds")
+        return self
+
+
+class OvenThermalExcursionConfig(BaseModel):
+    """PRD 5.14.2: Oven thermal excursion scenario."""
+
+    enabled: bool = True
+    frequency_per_shift: list[int] = Field(default_factory=lambda: [1, 2])
+    duration_seconds: list[int] = Field(default_factory=lambda: [1800, 5400])
+    max_drift_c: list[float] = Field(default_factory=lambda: [3.0, 10.0])
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> OvenThermalExcursionConfig:
+        _validate_range_pair(self.frequency_per_shift, "frequency_per_shift")
+        _validate_range_pair(self.duration_seconds, "duration_seconds")
+        _validate_range_pair(self.max_drift_c, "max_drift_c")
+        return self
+
+
+class FillWeightDriftConfig(BaseModel):
+    """PRD 5.14.3: Fill weight drift scenario."""
+
+    enabled: bool = True
+    frequency_per_shift: list[int] = Field(default_factory=lambda: [1, 3])
+    duration_seconds: list[int] = Field(default_factory=lambda: [600, 3600])
+    drift_rate: list[float] = Field(default_factory=lambda: [0.05, 0.2])
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> FillWeightDriftConfig:
+        _validate_range_pair(self.frequency_per_shift, "frequency_per_shift")
+        _validate_range_pair(self.duration_seconds, "duration_seconds")
+        _validate_range_pair(self.drift_rate, "drift_rate")
+        return self
+
+
+class SealIntegrityFailureConfig(BaseModel):
+    """PRD 5.14.4: Seal integrity failure scenario."""
+
+    enabled: bool = True
+    frequency_per_week: list[int] = Field(default_factory=lambda: [1, 2])
+    duration_seconds: list[int] = Field(default_factory=lambda: [300, 1800])
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> SealIntegrityFailureConfig:
+        _validate_range_pair(self.frequency_per_week, "frequency_per_week")
+        _validate_range_pair(self.duration_seconds, "duration_seconds")
+        return self
+
+
+class ChillerDoorAlarmConfig(BaseModel):
+    """PRD 5.14.5: Chiller door alarm scenario."""
+
+    enabled: bool = True
+    frequency_per_week: list[int] = Field(default_factory=lambda: [1, 3])
+    duration_seconds: list[int] = Field(default_factory=lambda: [300, 1200])
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> ChillerDoorAlarmConfig:
+        _validate_range_pair(self.frequency_per_week, "frequency_per_week")
+        _validate_range_pair(self.duration_seconds, "duration_seconds")
+        return self
+
+
+class CipCycleConfig(BaseModel):
+    """PRD 5.14.6: CIP (Clean-in-Place) cycle scenario."""
+
+    enabled: bool = True
+    frequency_per_day: list[int] = Field(default_factory=lambda: [1, 3])
+    cycle_duration_seconds: list[int] = Field(default_factory=lambda: [1800, 3600])
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> CipCycleConfig:
+        _validate_range_pair(self.frequency_per_day, "frequency_per_day")
+        _validate_range_pair(self.cycle_duration_seconds, "cycle_duration_seconds")
+        return self
+
+
+class ColdChainBreakConfig(BaseModel):
+    """PRD 5.14.7: Cold chain break scenario."""
+
+    enabled: bool = True
+    frequency_per_month: list[int] = Field(default_factory=lambda: [1, 2])
+    duration_seconds: list[int] = Field(default_factory=lambda: [1800, 7200])
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> ColdChainBreakConfig:
+        _validate_range_pair(self.frequency_per_month, "frequency_per_month")
+        _validate_range_pair(self.duration_seconds, "duration_seconds")
+        return self
+
+
 class ScenariosConfig(BaseModel):
     """Container for all scenario configurations."""
 
+    # Packaging scenarios
     job_changeover: JobChangoverConfig = Field(default_factory=JobChangoverConfig)
     web_break: WebBreakConfig = Field(default_factory=WebBreakConfig)
     dryer_drift: DryerDriftConfig = Field(default_factory=DryerDriftConfig)
@@ -510,6 +618,15 @@ class ScenariosConfig(BaseModel):
     cold_start_spike: ColdStartSpikeConfig = Field(default_factory=ColdStartSpikeConfig)
     coder_depletion: CoderDepletionConfig = Field(default_factory=CoderDepletionConfig)
     material_splice: MaterialSpliceConfig = Field(default_factory=MaterialSpliceConfig)
+
+    # F&B scenarios (PRD 5.14) — optional, None when using packaging profile
+    batch_cycle: BatchCycleConfig | None = None
+    oven_thermal_excursion: OvenThermalExcursionConfig | None = None
+    fill_weight_drift: FillWeightDriftConfig | None = None
+    seal_integrity_failure: SealIntegrityFailureConfig | None = None
+    chiller_door_alarm: ChillerDoorAlarmConfig | None = None
+    cip_cycle: CipCycleConfig | None = None
+    cold_chain_break: ColdChainBreakConfig | None = None
 
 
 # ---------------------------------------------------------------------------

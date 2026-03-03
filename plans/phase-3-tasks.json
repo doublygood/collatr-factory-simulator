@@ -10,7 +10,7 @@
       "description": "Add Pydantic config models for F&B scenario configs (BatchCycleConfig, OvenThermalExcursionConfig, FillWeightDriftConfig, SealIntegrityFailureConfig, ChillerDoorAlarmConfig, CipCycleConfig, ColdChainBreakConfig). Extend ScenariosConfig with optional F&B fields.",
       "prd_refs": ["prd/05-scenario-system.md (5.14)", "prd/06-configuration.md"],
       "depends_on": [],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.2",

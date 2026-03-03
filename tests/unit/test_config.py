@@ -14,13 +14,20 @@ import yaml
 from pydantic import ValidationError
 
 from factory_simulator.config import (
+    BatchCycleConfig,
+    ChillerDoorAlarmConfig,
+    CipCycleConfig,
+    ColdChainBreakConfig,
     EquipmentConfig,
     ErrorInjectionConfig,
     FactoryInfo,
+    FillWeightDriftConfig,
     ModbusProtocolConfig,
     MqttProtocolConfig,
     OpcuaProtocolConfig,
+    OvenThermalExcursionConfig,
     ScenariosConfig,
+    SealIntegrityFailureConfig,
     ShiftsConfig,
     SignalConfig,
     SimulationConfig,
@@ -322,6 +329,156 @@ class TestScenariosConfig:
             ScenariosConfig(
                 bearing_wear={"enabled": True, "duration_hours": 0}  # type: ignore[arg-type]
             )
+
+    def test_fnb_scenarios_none_by_default(self) -> None:
+        """F&B scenario configs are None by default (packaging profile)."""
+        cfg = ScenariosConfig()
+        assert cfg.batch_cycle is None
+        assert cfg.oven_thermal_excursion is None
+        assert cfg.fill_weight_drift is None
+        assert cfg.seal_integrity_failure is None
+        assert cfg.chiller_door_alarm is None
+        assert cfg.cip_cycle is None
+        assert cfg.cold_chain_break is None
+
+    def test_fnb_scenarios_enabled(self) -> None:
+        """F&B scenario configs can be set explicitly."""
+        cfg = ScenariosConfig(
+            batch_cycle=BatchCycleConfig(),
+            oven_thermal_excursion=OvenThermalExcursionConfig(),
+            fill_weight_drift=FillWeightDriftConfig(),
+            seal_integrity_failure=SealIntegrityFailureConfig(),
+            chiller_door_alarm=ChillerDoorAlarmConfig(),
+            cip_cycle=CipCycleConfig(),
+            cold_chain_break=ColdChainBreakConfig(),
+        )
+        assert cfg.batch_cycle is not None
+        assert cfg.batch_cycle.enabled is True
+        assert cfg.oven_thermal_excursion is not None
+        assert cfg.cold_chain_break is not None
+
+
+# ===================================================================
+# F&B Scenario Config Models (PRD 5.14)
+# ===================================================================
+
+
+class TestBatchCycleConfig:
+    def test_defaults(self) -> None:
+        cfg = BatchCycleConfig()
+        assert cfg.enabled is True
+        assert cfg.frequency_per_shift == [8, 16]
+        assert cfg.batch_duration_seconds == [1200, 2700]
+
+    def test_custom_values(self) -> None:
+        cfg = BatchCycleConfig(
+            frequency_per_shift=[10, 12],
+            batch_duration_seconds=[1500, 2400],
+        )
+        assert cfg.frequency_per_shift == [10, 12]
+        assert cfg.batch_duration_seconds == [1500, 2400]
+
+    def test_inverted_frequency_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            BatchCycleConfig(frequency_per_shift=[16, 8])
+
+    def test_inverted_duration_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            BatchCycleConfig(batch_duration_seconds=[2700, 1200])
+
+    def test_wrong_length_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="must be a \\[min, max\\] pair"):
+            BatchCycleConfig(frequency_per_shift=[8])
+
+
+class TestOvenThermalExcursionConfig:
+    def test_defaults(self) -> None:
+        cfg = OvenThermalExcursionConfig()
+        assert cfg.enabled is True
+        assert cfg.frequency_per_shift == [1, 2]
+        assert cfg.duration_seconds == [1800, 5400]
+        assert cfg.max_drift_c == [3.0, 10.0]
+
+    def test_inverted_drift_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            OvenThermalExcursionConfig(max_drift_c=[10.0, 3.0])
+
+    def test_inverted_duration_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            OvenThermalExcursionConfig(duration_seconds=[5400, 1800])
+
+
+class TestFillWeightDriftConfig:
+    def test_defaults(self) -> None:
+        cfg = FillWeightDriftConfig()
+        assert cfg.enabled is True
+        assert cfg.frequency_per_shift == [1, 3]
+        assert cfg.duration_seconds == [600, 3600]
+        assert cfg.drift_rate == [0.05, 0.2]
+
+    def test_inverted_drift_rate_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            FillWeightDriftConfig(drift_rate=[0.2, 0.05])
+
+    def test_custom_values(self) -> None:
+        cfg = FillWeightDriftConfig(drift_rate=[0.1, 0.15])
+        assert cfg.drift_rate == [0.1, 0.15]
+
+
+class TestSealIntegrityFailureConfig:
+    def test_defaults(self) -> None:
+        cfg = SealIntegrityFailureConfig()
+        assert cfg.enabled is True
+        assert cfg.frequency_per_week == [1, 2]
+        assert cfg.duration_seconds == [300, 1800]
+
+    def test_inverted_frequency_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            SealIntegrityFailureConfig(frequency_per_week=[2, 1])
+
+
+class TestChillerDoorAlarmConfig:
+    def test_defaults(self) -> None:
+        cfg = ChillerDoorAlarmConfig()
+        assert cfg.enabled is True
+        assert cfg.frequency_per_week == [1, 3]
+        assert cfg.duration_seconds == [300, 1200]
+
+    def test_inverted_duration_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            ChillerDoorAlarmConfig(duration_seconds=[1200, 300])
+
+
+class TestCipCycleConfig:
+    def test_defaults(self) -> None:
+        cfg = CipCycleConfig()
+        assert cfg.enabled is True
+        assert cfg.frequency_per_day == [1, 3]
+        assert cfg.cycle_duration_seconds == [1800, 3600]
+
+    def test_inverted_cycle_duration_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            CipCycleConfig(cycle_duration_seconds=[3600, 1800])
+
+    def test_custom_values(self) -> None:
+        cfg = CipCycleConfig(frequency_per_day=[2, 4], cycle_duration_seconds=[2400, 3000])
+        assert cfg.frequency_per_day == [2, 4]
+
+
+class TestColdChainBreakConfig:
+    def test_defaults(self) -> None:
+        cfg = ColdChainBreakConfig()
+        assert cfg.enabled is True
+        assert cfg.frequency_per_month == [1, 2]
+        assert cfg.duration_seconds == [1800, 7200]
+
+    def test_inverted_frequency_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="min.*must be <= max"):
+            ColdChainBreakConfig(frequency_per_month=[2, 1])
+
+    def test_disabled(self) -> None:
+        cfg = ColdChainBreakConfig(enabled=False)
+        assert cfg.enabled is False
 
 
 # ===================================================================
