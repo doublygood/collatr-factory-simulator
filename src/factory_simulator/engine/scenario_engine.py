@@ -58,6 +58,7 @@ from factory_simulator.scenarios.fill_weight_drift import FillWeightDrift
 from factory_simulator.scenarios.ink_excursion import InkExcursion
 from factory_simulator.scenarios.job_changeover import JobChangeover
 from factory_simulator.scenarios.material_splice import MaterialSplice
+from factory_simulator.scenarios.micro_stop import MicroStop
 from factory_simulator.scenarios.oven_thermal_excursion import OvenThermalExcursion
 from factory_simulator.scenarios.registration_drift import RegistrationDrift
 from factory_simulator.scenarios.seal_integrity import SealIntegrityFailure
@@ -325,6 +326,7 @@ class ScenarioEngine:
 
         # Phase 4 advanced scenarios (bearing wear, micro-stops, etc.)
         self._schedule_bearing_wear()
+        self._schedule_micro_stops()
 
         # Phase 3 F&B time-based scenarios (only scheduled when F&B config present)
         self._schedule_batch_cycles()
@@ -714,6 +716,35 @@ class ScenarioEngine:
             BearingWear(start_time=start_s, rng=self._spawn_rng(), params=params)
         )
 
+    def _schedule_micro_stops(self) -> None:
+        """Schedule micro-stops using Poisson inter-arrival (PRD 5.15).
+
+        Micro-stops are brief speed dips (5-30s) without state change.
+        They occur 10-50 times per 8-hour shift.
+        """
+        cfg = self._config.micro_stop
+        if cfg is None or not cfg.enabled:
+            return
+
+        # Minimum gap: min ramp_down + min hold + min ramp_up
+        min_gap = (
+            float(cfg.ramp_down_seconds[0])
+            + float(cfg.duration_seconds[0])
+            + float(cfg.ramp_up_seconds[0])
+        )
+        params: dict[str, object] = {
+            "duration_seconds": list(cfg.duration_seconds),
+            "speed_drop_percent": list(cfg.speed_drop_percent),
+            "ramp_down_seconds": list(cfg.ramp_down_seconds),
+            "ramp_up_seconds": list(cfg.ramp_up_seconds),
+        }
+        for start in self._poisson_starts(
+            cfg.frequency_per_shift, _SHIFT_SECONDS, min_gap
+        ):
+            self._scenarios.append(
+                MicroStop(start_time=start, rng=self._spawn_rng(), params=params)
+            )
+
     # -- Child RNG creation ----------------------------------------------------
 
     def _spawn_rng(self) -> np.random.Generator:
@@ -733,6 +764,13 @@ _AFFECTED_SIGNALS: dict[str, list[str]] = {
     "BearingWear": [
         "vibration.main_drive_x", "vibration.main_drive_y",
         "vibration.main_drive_z", "press.main_drive_current",
+    ],
+    "MicroStop": [
+        "press.line_speed",
+        "press.web_tension",
+        "press.waste_count",
+        "press.main_drive_current",
+        "press.main_drive_speed",
     ],
     # -- Packaging scenarios (Phase 1 & 2) ------------------------------------
     "WebBreak": [

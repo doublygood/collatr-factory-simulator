@@ -7,7 +7,7 @@
 - [x] 4.2: Scenario Priority and Conflict Resolution
 - [x] 4.3: Phase 4 Config Models
 - [x] 4.4: Motor Bearing Wear Scenario
-- [ ] 4.5: Micro-Stops Scenario
+- [x] 4.5: Micro-Stops Scenario
 - [ ] 4.6: Contextual Anomalies Scenario
 - [ ] 4.7: Intermittent Faults Scenario
 - [ ] 4.8: Communication Drop Injection
@@ -26,6 +26,40 @@
 - gutter_fault probability 18x too high → Fix in Task 4.13
 
 ## Notes
+
+### Task 4.5 — Micro-Stops Scenario (COMPLETE)
+
+New file: `src/factory_simulator/scenarios/micro_stop.py`.
+
+`MicroStop` implements PRD 5.15 with:
+- `priority = "micro"` (activates without checks, never preempted, never deferred)
+- Three sub-phases tracked via `_elapsed`: RAMP_DOWN, HOLD, RAMP_UP
+- Parameters drawn at construction from config ranges for reproducibility
+- `_on_activate`: saves `press._target_speed`, computes `low_speed = target * (1 - drop_pct/100)`,
+  calls `press._line_speed_model.start_ramp(current, low_speed, ramp_down_s)`
+- `_on_tick`: transitions HOLD→RAMP_UP at `elapsed >= ramp_down_s + hold_s`; completes at
+  `elapsed >= total_s`
+- `_on_complete`: restores speed with a quick ramp if not fully recovered
+- Machine state stays Running (2) throughout — no fault code written
+- Default ranges: hold 5-30s, drop 30-80%, ramp_down 2-5s, ramp_up 5-15s
+- Ground truth logging on activate and complete
+
+Engine wiring:
+- Added `from factory_simulator.scenarios.micro_stop import MicroStop` to `scenario_engine.py`
+- `_schedule_micro_stops()` uses Poisson scheduling (`_poisson_starts()`) with
+  `frequency_per_shift = cfg.frequency_per_shift`, min_gap from min param values
+- `_generate_timeline()` calls `_schedule_micro_stops()` after `_schedule_bearing_wear()`
+- Added `"MicroStop"` entry to `_AFFECTED_SIGNALS` dict
+
+Key implementation detail: `low_speed` is based on `press._target_speed` (configured baseline),
+not the current ramp value. This ensures consistent drop magnitude even if the scenario fires
+during ramp-up when actual speed may be far below target.
+
+Tests: 16 new tests in `test_micro_stop.py` covering priority, default ranges, duration formula,
+lifecycle (pending→active→completed), speed dip, machine state invariant, speed recovery, and
+auto-scheduling. Fixed 9 packaging scenario test `_make_engine()` helpers to disable `micro_stop`
+(and `bearing_wear` where missing) to prevent interference with existing tests. 2162 total tests
+passing.
 
 ### Task 4.4 — Motor Bearing Wear Scenario (COMPLETE)
 

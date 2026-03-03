@@ -57,6 +57,8 @@ def _make_engine(seed: int = 42) -> tuple[DataEngine, object]:
     config.scenarios.coder_depletion.enabled = False
     config.scenarios.material_splice.enabled = False
     config.scenarios.bearing_wear.enabled = False
+    if config.scenarios.micro_stop is not None:
+        config.scenarios.micro_stop.enabled = False
 
     from factory_simulator.store import SignalStore
     store = SignalStore()
