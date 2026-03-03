@@ -10,7 +10,7 @@
 - [x] 3.5: Oven Generator
 - [x] 3.6: Filler Generator
 - [x] 3.7: Sealer Generator
-- [ ] 3.8: Checkweigher (QC) Generator
+- [x] 3.8: Checkweigher (QC) Generator
 - [ ] 3.9: Chiller Generator
 - [ ] 3.10: CIP Generator
 - [ ] 3.11: Shared Generator Coupling for F&B
@@ -133,3 +133,19 @@ All Modbus addresses cross-referenced against PRD Appendix A. OPC-UA nodes match
 - Graceful fallback: when `filler.state` is absent from store, behaves as inactive.
 - 20 tests covering: signal count, signal IDs, seal temp convergence, seal temp decay, seal pressure active/inactive, vacuum active/inactive, dwell always generated, gas mix always generated, clamping, no-filler-state fallback, determinism, different seeds.
 - All 1642 tests pass (1622 existing + 20 new).
+
+### Task 3.8: Checkweigher (QC) Generator
+`CheckweigherGenerator` in `src/factory_simulator/generators/checkweigher.py` — 6 signals, per-item generation.
+- **actual_weight**: reads `filler.fill_weight` from store on each item arrival, adds `tray_weight_g` (default 10g). Noise from signal config sigma. Clamped to [100, 1000] g. Between arrivals, holds last value.
+- **overweight_count**: discrete integer counter, increments by 1 when actual > fill_target + tray + overweight_threshold (default 30g). Capped at 9999.
+- **underweight_count**: discrete integer counter, increments by 1 when actual < fill_target + tray - underweight_threshold (default 15g). Capped at 9999.
+- **metal_detect_trips**: per-item Bernoulli with probability `metal_detect_prob` (default 0.001 = 1 per 1000 packs as per PRD 2b.6). Capped at 99.
+- **throughput**: mirrors `filler.line_speed` from store when Running; 0.0 when inactive. Optional noise. Clamped to [10, 120] items/min when running.
+- **reject_total**: running total of all reject types (overweight + underweight + metal detect). Capped at 9999.
+- Weight thresholds read from config extras: `tray_weight_g`, `overweight_threshold_g`, `underweight_threshold_g`.
+- Item timing: tracks `_time_since_last_item`, item_interval = 60 / line_speed s.
+- Graceful fallback: when `filler.fill_target` is absent, derives reference from `last_actual_weight - tray_weight`.
+- Registered in `data_engine.py` as `"checkweigher": CheckweigherGenerator`.
+- Properties exposed: overweight_count, underweight_count, metal_detect_trips, reject_total, last_actual_weight, tray_weight, overweight_threshold, underweight_threshold.
+- 26 tests covering: signal count/IDs, actual_weight offset, per-item holding, overweight/underweight counting, metal detect Bernoulli, reject total accumulation, throughput active/inactive, counter zero when filler off or speed=0, empty store fallback, item timer carry-over, determinism, config defaults.
+- All 1668 tests pass (1642 existing + 26 new).

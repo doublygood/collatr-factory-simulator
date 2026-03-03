@@ -28,6 +28,7 @@ from factory_simulator.clock import SimulationClock
 from factory_simulator.engine.ground_truth import GroundTruthLogger
 from factory_simulator.engine.scenario_engine import ScenarioEngine
 from factory_simulator.generators.base import EquipmentGenerator
+from factory_simulator.generators.checkweigher import CheckweigherGenerator
 from factory_simulator.generators.coder import CoderGenerator
 from factory_simulator.generators.energy import EnergyGenerator
 from factory_simulator.generators.environment import EnvironmentGenerator
@@ -62,6 +63,7 @@ _GENERATOR_REGISTRY: dict[str, type[EquipmentGenerator]] = {
     "tunnel_oven": OvenGenerator,
     "gravimetric_filler": FillerGenerator,
     "tray_sealer": SealerGenerator,
+    "checkweigher": CheckweigherGenerator,
 }
 
 

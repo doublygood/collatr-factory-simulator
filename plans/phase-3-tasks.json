@@ -80,7 +80,7 @@
       "description": "Checkweigher/metal detection generator: 6 signals. Actual weight mirrors filler fill_weight + offset, overweight/underweight counting, rare metal detect trips, throughput follows filler speed. Per-item generation. Register in data_engine.py.",
       "prd_refs": ["prd/02b-factory-layout-food-and-beverage.md (2b.6)"],
       "depends_on": ["3.6"],
-      "passes": false
+      "passes": true
     },
     {
       "id": "3.9",
