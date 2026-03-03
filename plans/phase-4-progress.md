@@ -10,7 +10,7 @@
 - [x] 4.5: Micro-Stops Scenario
 - [x] 4.6: Contextual Anomalies Scenario
 - [x] 4.7: Intermittent Faults Scenario
-- [ ] 4.8: Communication Drop Injection
+- [x] 4.8: Communication Drop Injection
 - [ ] 4.9: Sensor Disconnect and Stuck Sensor
 - [ ] 4.10: Modbus Exception and Partial Response Injection
 - [ ] 4.11: Duplicate Timestamps and Timezone Offset
@@ -26,6 +26,34 @@
 - gutter_fault probability 18x too high → Fix in Task 4.13
 
 ## Notes
+
+### Task 4.8 — Communication Drop Injection (COMPLETE)
+
+New file: `src/factory_simulator/protocols/comm_drop.py`.
+
+`CommDropScheduler` implements PRD 10.2 with:
+- Poisson inter-arrival times via `rng.exponential(mean_interval_s)`
+- Duration drawn uniformly from `cfg.duration_seconds` range
+- Wall-clock time (`time.monotonic()`) used for scheduling (drops are network
+  events, not simulation-time events)
+- `update(t)` / `is_active(t)` state machine — idempotent, no locks needed
+- Disabled config → `next_drop_at = inf` (never fires)
+
+Protocol adapter changes (all optional `comm_drop_rng` parameter):
+- **ModbusServer**: `_update_loop` skips `sync_registers()` during drop;
+  register values freeze at last-synced state
+- **OpcuaServer**: `_freeze_all_nodes()` writes `UncertainLastUsableValue` to
+  all nodes when a drop starts; `_update_loop` skips `_sync_values()` during
+  drop; values return to Good on normal sync after drop ends
+- **MqttPublisher**: `_publish_loop` skips `_publish_due()` during drop
+
+Each adapter exposes `comm_drop_active: bool` property and references its
+own protocol-specific config: `modbus_drop`, `opcua_stale`, `mqtt_drop`.
+
+Tests: 23 tests in `test_comm_drop.py` covering scheduler disabled/enabled
+states, drop activation/deactivation, multi-drop sequences, same-seed
+determinism, and protocol-level freeze/suppress behaviour for all three
+adapters. 2236 total tests passing.
 
 ### Task 4.7 — Intermittent Faults Scenario (COMPLETE)
 

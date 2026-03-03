@@ -26,9 +26,11 @@ import asyncio
 import contextlib
 import logging
 import struct
+import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+import numpy as np
 from pymodbus.datastore import (
     ModbusDeviceContext,
     ModbusSequentialDataBlock,
@@ -36,6 +38,8 @@ from pymodbus.datastore import (
 )
 from pymodbus.pdu.register_message import ExcCodes  # type: ignore[attr-defined]
 from pymodbus.server import ModbusTcpServer
+
+from factory_simulator.protocols.comm_drop import CommDropScheduler
 
 if TYPE_CHECKING:
     from factory_simulator.config import FactoryConfig
@@ -458,12 +462,19 @@ class ModbusServer:
         *,
         host: str | None = None,
         port: int | None = None,
+        comm_drop_rng: np.random.Generator | None = None,
     ) -> None:
         self._config = config
         self._store = store
         self._modbus_cfg = config.protocols.modbus
         self._host = host or self._modbus_cfg.bind_address
         self._port = port or self._modbus_cfg.port
+
+        # Communication drop scheduler (PRD 10.2)
+        _rng = comm_drop_rng if comm_drop_rng is not None else np.random.default_rng()
+        self._drop_scheduler = CommDropScheduler(
+            config.data_quality.modbus_drop, _rng,
+        )
 
         # Build register map from config
         self._rmap = build_register_map(config)
@@ -550,6 +561,13 @@ class ModbusServer:
     def register_map(self) -> RegisterMap:
         """The register map (for testing and introspection)."""
         return self._rmap
+
+    @property
+    def comm_drop_active(self) -> bool:
+        """True if a Modbus communication drop is currently active (PRD 10.2)."""
+        t = time.monotonic()
+        self._drop_scheduler.update(t)
+        return self._drop_scheduler.is_active(t)
 
     # -- Register synchronisation ---------------------------------------------
 
@@ -802,10 +820,17 @@ class ModbusServer:
         logger.info("Modbus server stopped")
 
     async def _update_loop(self) -> None:
-        """Periodically sync register values from the store."""
+        """Periodically sync register values from the store.
+
+        Skips register synchronisation during an active communication drop
+        (PRD 10.2): Modbus register values freeze at their last-synced values.
+        """
         try:
             while True:
-                self.sync_registers()
+                now = time.monotonic()
+                self._drop_scheduler.update(now)
+                if not self._drop_scheduler.is_active(now):
+                    self.sync_registers()
                 await asyncio.sleep(0.05)  # 50ms update interval
         except asyncio.CancelledError:
             pass

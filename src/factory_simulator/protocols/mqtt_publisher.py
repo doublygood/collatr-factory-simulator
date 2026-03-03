@@ -35,8 +35,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+import numpy as np
 import paho.mqtt.client as mqtt
 from paho.mqtt.enums import CallbackAPIVersion
+
+from factory_simulator.protocols.comm_drop import CommDropScheduler
 
 if TYPE_CHECKING:
     from factory_simulator.config import FactoryConfig
@@ -389,6 +392,7 @@ class MqttPublisher:
         host: str | None = None,
         port: int | None = None,
         client: mqtt.Client | None = None,
+        comm_drop_rng: np.random.Generator | None = None,
     ) -> None:
         self._config = config
         self._store = store
@@ -408,6 +412,12 @@ class MqttPublisher:
         # Async task handle
         self._publish_task: asyncio.Task[None] | None = None
 
+        # Communication drop scheduler (PRD 10.2)
+        _rng = comm_drop_rng if comm_drop_rng is not None else np.random.default_rng()
+        self._drop_scheduler = CommDropScheduler(
+            config.data_quality.mqtt_drop, _rng,
+        )
+
     # -- Properties -----------------------------------------------------------
 
     @property
@@ -419,6 +429,13 @@ class MqttPublisher:
     def batch_vibration_entry(self) -> BatchVibrationEntry | None:
         """The batch vibration entry, or None if the profile has no vibration."""
         return self._batch_vib_entry
+
+    @property
+    def comm_drop_active(self) -> bool:
+        """True if an MQTT communication drop is currently active (PRD 10.2)."""
+        t = time.monotonic()
+        self._drop_scheduler.update(t)
+        return self._drop_scheduler.is_active(t)
 
     # -- Client setup ---------------------------------------------------------
 
@@ -546,11 +563,19 @@ class MqttPublisher:
         logger.info("MQTT publisher stopped")
 
     async def _publish_loop(self) -> None:
-        """Periodically check and publish due signal values."""
+        """Periodically check and publish due signal values.
+
+        Skips publishing during an active communication drop (PRD 10.2):
+        QoS 0 messages are silently dropped; QoS 1 messages resume
+        delivery when the drop ends (paho re-queues them on reconnect,
+        but here we simply skip the publish call during the drop window).
+        """
         try:
             while True:
                 now = time.monotonic()
-                self._publish_due(now)
+                self._drop_scheduler.update(now)
+                if not self._drop_scheduler.is_active(now):
+                    self._publish_due(now)
                 await asyncio.sleep(0.1)  # 100 ms scheduling granularity
         except asyncio.CancelledError:
             pass

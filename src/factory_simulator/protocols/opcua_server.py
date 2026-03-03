@@ -23,9 +23,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 from asyncua import Server, ua
+
+from factory_simulator.protocols.comm_drop import CommDropScheduler
 
 if TYPE_CHECKING:
     from factory_simulator.config import FactoryConfig
@@ -125,6 +129,7 @@ class OpcuaServer:
         *,
         host: str | None = None,
         port: int | None = None,
+        comm_drop_rng: np.random.Generator | None = None,
     ) -> None:
         self._config = config
         self._store = store
@@ -135,6 +140,12 @@ class OpcuaServer:
         # asyncua Server instance — created in start()
         self._server: Any | None = None
         self._update_task: asyncio.Task[None] | None = None
+
+        # Communication drop scheduler (PRD 10.2)
+        _rng = comm_drop_rng if comm_drop_rng is not None else np.random.default_rng()
+        self._drop_scheduler = CommDropScheduler(
+            config.data_quality.opcua_stale, _rng,
+        )
 
         # node_path → asyncua variable node (populated by _build_node_tree)
         self._nodes: dict[str, Any] = {}
@@ -191,6 +202,13 @@ class OpcuaServer:
     def node_to_signal(self) -> dict[str, str]:
         """Mapping from node path to signal ID."""
         return self._node_to_signal
+
+    @property
+    def comm_drop_active(self) -> bool:
+        """True if an OPC-UA communication drop is currently active (PRD 10.2)."""
+        t = time.monotonic()
+        self._drop_scheduler.update(t)
+        return self._drop_scheduler.is_active(t)
 
     # -- Async lifecycle ------------------------------------------------------
 
@@ -331,6 +349,32 @@ class OpcuaServer:
 
     # -- Value sync ----------------------------------------------------------
 
+    async def _freeze_all_nodes(self) -> None:
+        """Write UncertainLastUsableValue to all OPC-UA nodes during a drop.
+
+        Called once when a comm drop starts.  Holds the last known value
+        but signals to clients that the data is stale (PRD 10.2).
+        """
+        if self._server is None:
+            return
+        for node_path, var_node in self._nodes.items():
+            signal_id = self._node_to_signal.get(node_path)
+            if signal_id is None:
+                continue
+            vtype = self._node_types.get(node_path, ua.VariantType.Double)
+            sv = self._store.get(signal_id)
+            if sv is None:
+                continue
+            cast_val = _cast_to_opcua_value(sv.value, vtype)
+            try:
+                dv = ua.DataValue(
+                    ua.Variant(cast_val, vtype),
+                    ua.StatusCode(ua.StatusCodes.UncertainLastUsableValue),
+                )
+                await var_node.write_value(dv)
+            except Exception as exc:
+                logger.debug("OPC-UA freeze failed for %s: %s", node_path, exc)
+
     async def _update_loop(self) -> None:
         """Periodically sync signal values from SignalStore to OPC-UA nodes.
 
@@ -338,12 +382,29 @@ class OpcuaServer:
         Syncs immediately on first invocation so values are available as
         soon as the server starts.
 
+        During a comm drop (PRD 10.2):
+        - On drop start: write UncertainLastUsableValue to all nodes.
+        - During drop: skip value sync (values remain frozen at last update).
+        - On drop end: resume normal sync (StatusCode returns to Good).
+
         PRD Reference: Section 3.2 (minimum 500ms publishing interval),
         Section 3.2.3 (StatusCode mapping), Section 3.2.4 (setpoint write-back)
         """
+        drop_was_active = False
         try:
             while True:
-                await self._sync_values()
+                now = time.monotonic()
+                self._drop_scheduler.update(now)
+                is_drop = self._drop_scheduler.is_active(now)
+
+                if is_drop and not drop_was_active:
+                    # Drop just started — freeze all nodes with Uncertain status
+                    await self._freeze_all_nodes()
+                elif not is_drop:
+                    # Normal operation — push store values to OPC-UA
+                    await self._sync_values()
+
+                drop_was_active = is_drop
                 await asyncio.sleep(MIN_PUBLISHING_INTERVAL_MS / 1000.0)
         except asyncio.CancelledError:
             pass
