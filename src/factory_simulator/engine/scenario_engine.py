@@ -77,6 +77,15 @@ _DAY_SECONDS = 86400             # 24-hour day
 _WEEK_SECONDS = 7 * _DAY_SECONDS  # 7-day week
 _MONTH_SECONDS = 30 * _DAY_SECONDS  # 30-day month (approximate)
 
+# Priority ordering for conflict resolution (lower number = higher priority).
+# PRD 5.13 / Task 4.2.
+_PRIORITY_ORDER: dict[str, int] = {
+    "state_changing": 0,
+    "non_state_changing": 1,
+    "background": 2,
+    "micro": 3,
+}
+
 
 class ScenarioEngine:
     """Schedules and evaluates scenarios per simulation tick.
@@ -146,11 +155,74 @@ class ScenarioEngine:
         """Evaluate all scenarios for the current tick.
 
         Called by the DataEngine before running generators.
+        Applies priority-based conflict resolution (PRD 5.13, Task 4.2):
+
+        1. Pending scenarios due this tick are sorted by priority
+           (state_changing first).
+        2. Activating a state_changing scenario preempts any active
+           non_state_changing scenarios (calls their ``complete()``).
+        3. A pending non_state_changing scenario is deferred (stays
+           PENDING) if a state_changing scenario is currently active.
+        4. background and micro scenarios activate without any checks.
+
         Logs scenario_start and scenario_end events to ground truth.
         """
+        # -- Priority-based conflict resolution for pending activations --------
+
+        # Scenarios that are already active at the start of this tick.
+        currently_active = [
+            s for s in self._scenarios if s.phase == ScenarioPhase.ACTIVE
+        ]
+        active_state_changing = any(
+            s.priority == "state_changing" for s in currently_active
+        )
+
+        # Pending scenarios whose start_time has arrived, sorted priority-first.
+        pending_due = sorted(
+            [
+                s for s in self._scenarios
+                if s.phase == ScenarioPhase.PENDING and sim_time >= s.start_time
+            ],
+            key=lambda s: _PRIORITY_ORDER.get(s.priority, 1),
+        )
+
+        # IDs of scenarios to skip in the main evaluate loop.
+        skip_ids: set[int] = set()       # deferred this tick (stays PENDING)
+        preempted_ids: set[int] = set()  # completed by preemption
+
+        for scenario in pending_due:
+            prio = scenario.priority
+
+            if prio == "state_changing":
+                # Preempt any currently-active non_state_changing scenarios.
+                for s in currently_active:
+                    if s.priority == "non_state_changing":
+                        s.complete(sim_time, engine)
+                        preempted_ids.add(id(s))
+                        if self._ground_truth is not None:
+                            self._ground_truth.log_scenario_end(
+                                sim_time=sim_time,
+                                scenario_name=type(s).__name__,
+                            )
+                # A state_changing will be active after this tick.
+                active_state_changing = True
+
+            elif prio == "non_state_changing":
+                # Defer if a state_changing scenario is active.
+                if active_state_changing:
+                    skip_ids.add(id(scenario))
+
+            # background / micro: no checks — always allow activation.
+
+        # -- Main evaluate loop ------------------------------------------------
+
         for scenario in self._scenarios:
             if scenario.phase == ScenarioPhase.COMPLETED:
                 continue
+            if id(scenario) in preempted_ids:
+                continue  # already completed + logged above
+            if id(scenario) in skip_ids:
+                continue  # deferred this tick
 
             phase_before = scenario.phase
             scenario.evaluate(sim_time, dt, engine)

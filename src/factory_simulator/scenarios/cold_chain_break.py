@@ -24,7 +24,7 @@ CLAUDE.md Rule 12: No global state.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 
@@ -53,6 +53,8 @@ class ColdChainBreak(Scenario):
         [min, max] scenario duration in seconds
         (default [1800.0, 7200.0] = 30-120 minutes per PRD 5.14.7).
     """
+
+    priority: ClassVar[str] = "state_changing"
 
     def __init__(
         self,

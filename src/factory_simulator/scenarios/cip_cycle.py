@@ -24,7 +24,7 @@ CLAUDE.md Rule 12: No global state.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 
@@ -53,6 +53,8 @@ class CipCycle(Scenario):
         The scenario completes when CIP returns to Idle OR this timeout
         expires, whichever comes first.
     """
+
+    priority: ClassVar[str] = "state_changing"
 
     def __init__(
         self,

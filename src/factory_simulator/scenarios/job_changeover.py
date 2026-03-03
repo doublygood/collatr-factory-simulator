@@ -24,7 +24,7 @@ Duration: 10-30 minutes per changeover.
 from __future__ import annotations
 
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
@@ -69,6 +69,8 @@ class JobChangeover(Scenario):
     waste_spike_factor : float
         Waste rate multiplier during spike (default 3.0).
     """
+
+    priority: ClassVar[str] = "state_changing"
 
     def __init__(
         self,

@@ -21,7 +21,7 @@ Duration: 5-30 minutes.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 
@@ -62,6 +62,8 @@ class SealIntegrityFailure(Scenario):
         [min, max] extra QC rejects per minute from failed seals
         (default [5.0, 20.0]).
     """
+
+    priority: ClassVar[str] = "state_changing"
 
     def __init__(
         self,

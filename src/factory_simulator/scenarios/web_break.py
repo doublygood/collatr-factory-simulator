@@ -23,7 +23,7 @@ Duration: 15-60 minutes recovery.
 from __future__ import annotations
 
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
@@ -58,6 +58,8 @@ class WebBreak(Scenario):
         [min, max] emergency deceleration time in seconds
         (default [5.0, 10.0]).
     """
+
+    priority: ClassVar[str] = "state_changing"
 
     def __init__(
         self,

@@ -16,7 +16,7 @@ Duration: 5-60 minutes.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 
@@ -50,6 +50,8 @@ class UnplannedStop(Scenario):
         [min, max] stop duration range.  Duration drawn from
         ``uniform(min, max)`` at init (default [300, 3600]).
     """
+
+    priority: ClassVar[str] = "state_changing"
 
     def __init__(
         self,

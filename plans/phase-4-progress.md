@@ -4,7 +4,7 @@
 
 ## Tasks
 - [x] 4.1: Poisson Scheduling Engine
-- [ ] 4.2: Scenario Priority and Conflict Resolution
+- [x] 4.2: Scenario Priority and Conflict Resolution
 - [ ] 4.3: Phase 4 Config Models
 - [ ] 4.4: Motor Bearing Wear Scenario
 - [ ] 4.5: Micro-Stops Scenario
@@ -26,6 +26,38 @@
 - gutter_fault probability 18x too high → Fix in Task 4.13
 
 ## Notes
+
+### Task 4.2 — Scenario Priority and Conflict Resolution (COMPLETE)
+
+Added `priority: ClassVar[str]` to the `Scenario` base class (default `"non_state_changing"`).
+Set `priority = "state_changing"` on: WebBreak, UnplannedStop, JobChangeover, CipCycle,
+ColdChainBreak, SealIntegrityFailure.
+
+Modified `ScenarioEngine.tick()` with two-phase logic:
+1. **Priority pass**: pending-due scenarios sorted by `_PRIORITY_ORDER`. Activating a
+   `state_changing` scenario calls `complete()` on all active `non_state_changing` scenarios
+   (preemption). Pending `non_state_changing` scenarios are added to a `skip_ids` set if any
+   `state_changing` is currently active or about to activate this tick.
+2. **Evaluate pass**: all non-skipped, non-preempted, non-COMPLETED scenarios are evaluated.
+   Ground truth logging is unchanged.
+
+Added `_PRIORITY_ORDER` module-level constant (`state_changing=0, non_state_changing=1,
+background=2, micro=3`) and exported it for tests.
+
+11 new tests in `TestScenarioPriority` covering:
+- Priority attribute values on all 6 state_changing classes
+- Priority values on non_state_changing classes
+- Priority ordering dict
+- Preemption of multiple active non_state_changing by a state_changing
+- Deferral of pending non_state_changing when state_changing is active
+- Recovery: non_state_changing activates after state_changing completes
+- Background and micro always activate (no preemption, no deferral)
+- Background NOT preempted when state_changing activates
+
+Decision: `background` and `micro` priorities added to `_PRIORITY_ORDER` now (ready for
+Tasks 4.4/4.5/4.7 which will set these on BearingWear, MicroStop, IntermittentFault).
+
+2081 tests passing.
 
 ### Task 4.1 — Poisson Scheduling Engine (COMPLETE)
 

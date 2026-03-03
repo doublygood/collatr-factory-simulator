@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 
@@ -41,6 +41,10 @@ class Scenario(ABC):
     params:
         Scenario-specific parameters from config.
     """
+
+    #: Scheduling priority for conflict resolution (PRD 5.13, Task 4.2).
+    #: Values: "state_changing", "non_state_changing", "background", "micro".
+    priority: ClassVar[str] = "non_state_changing"
 
     def __init__(
         self,
