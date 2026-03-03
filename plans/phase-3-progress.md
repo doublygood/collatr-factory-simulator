@@ -6,7 +6,7 @@
 - [x] 3.1: F&B Equipment Config Models
 - [x] 3.2: F&B Factory Config (factory-foodbev.yaml)
 - [x] 3.3: Thermal Diffusion Signal Model
-- [ ] 3.4: Mixer Generator
+- [x] 3.4: Mixer Generator
 - [ ] 3.5: Oven Generator
 - [ ] 3.6: Filler Generator
 - [ ] 3.7: Sealer Generator
@@ -74,3 +74,19 @@ All Modbus addresses cross-referenced against PRD Appendix A. OPC-UA nodes match
 - 62 tests covering convergence, monotonicity, physical correctness (72°C in ~8-9 min), determinism, time compression, edge cases, Hypothesis property-based tests
 - Exported from `factory_simulator.models` package
 - All 1538 tests pass.
+
+### Task 3.4: Mixer Generator
+`MixerGenerator` in `src/factory_simulator/generators/mixer.py` — 8 signals, 6-state batch cycle state machine.
+- **State machine**: Off(0)/Loading(1)/Mixing(2)/Holding(3)/Discharging(4)/CIP(5) via `StateMachineModel`
+- **Speed** (RampModel): ramps to target_speed (450 RPM) during Mixing, drops to 150 RPM for Holding, 50 RPM for Loading/Discharging, 0 for Off/CIP
+- **Torque** (CorrelatedFollowerModel): follows speed with gain=0.8, lag=2.0s, noise
+- **Batch temperature** (FirstOrderLagModel): starts at 4.0°C (chilled ingredients), setpoint 65.0°C during Mixing, tau=120s
+- **Batch weight** (RampModel): ramps up to 500kg during Loading (120s), ramps down to 0 during Discharging (90s)
+- **Batch ID** (StringGeneratorModel): new batch ID generated on each Loading transition
+- **Mix time elapsed** (CounterModel): increments during Mixing/Holding states, resets on Loading
+- **Lid closed** (StateMachineModel): binary 0/1, closes on Loading, opens on Off
+- State transitions handled by `_handle_state_transition()` — scenario-driven via `force_state()`
+- Properties exposed for scenario access: state_machine, speed_model, batch_weight_model, batch_temp_model, batch_id_model, mix_time_model, lid_state_machine
+- Registered in `data_engine.py` as `"high_shear_mixer": MixerGenerator`
+- 27 tests covering: signal IDs, initial state, all state transitions, torque correlation, batch temperature lag, batch ID string generation, mix time counting, signal bounds, determinism, protocol mappings
+- All 1565 tests pass (1538 existing + 27 new).

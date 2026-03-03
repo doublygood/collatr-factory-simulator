@@ -32,6 +32,7 @@ from factory_simulator.generators.coder import CoderGenerator
 from factory_simulator.generators.energy import EnergyGenerator
 from factory_simulator.generators.environment import EnvironmentGenerator
 from factory_simulator.generators.laminator import LaminatorGenerator
+from factory_simulator.generators.mixer import MixerGenerator
 from factory_simulator.generators.press import PressGenerator
 from factory_simulator.generators.slitter import SlitterGenerator
 from factory_simulator.generators.vibration import VibrationGenerator
@@ -54,6 +55,7 @@ _GENERATOR_REGISTRY: dict[str, type[EquipmentGenerator]] = {
     "iolink_sensor": EnvironmentGenerator,
     "power_meter": EnergyGenerator,
     "wireless_vibration": VibrationGenerator,
+    "high_shear_mixer": MixerGenerator,
 }
 
 
