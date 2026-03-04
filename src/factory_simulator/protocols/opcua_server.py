@@ -24,6 +24,7 @@ import asyncio
 import contextlib
 import logging
 import time
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -34,6 +35,7 @@ from factory_simulator.protocols.comm_drop import CommDropScheduler
 if TYPE_CHECKING:
     from factory_simulator.config import FactoryConfig
     from factory_simulator.store import SignalStore
+    from factory_simulator.topology import ClockDriftModel, OpcuaEndpointSpec
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,18 @@ NAMESPACE_INDEX = 2  # PRD specifies ns=2
 
 # PRD 3.2: minimum server-side publishing interval
 MIN_PUBLISHING_INTERVAL_MS = 500
+
+# Reference epoch for converting sim_time → datetime (same as MQTT/ground truth)
+_REFERENCE_EPOCH_TS: float = datetime(2026, 1, 1, tzinfo=UTC).timestamp()
+
+
+def _sim_time_to_datetime(sim_time: float) -> datetime:
+    """Convert sim_time (seconds from simulation start) to datetime.
+
+    Uses the same reference epoch (2026-01-01T00:00:00Z) as MQTT and
+    ground truth loggers.  Rule 6: signal timestamps use simulated time.
+    """
+    return datetime.fromtimestamp(_REFERENCE_EPOCH_TS + sim_time, tz=UTC)
 
 # Config opcua_type string → asyncua VariantType
 _VARIANT_TYPE_MAP: dict[str, Any] = {
@@ -130,12 +144,28 @@ class OpcuaServer:
         host: str | None = None,
         port: int | None = None,
         comm_drop_rng: np.random.Generator | None = None,
+        endpoint: OpcuaEndpointSpec | None = None,
+        clock_drift: ClockDriftModel | None = None,
     ) -> None:
         self._config = config
         self._store = store
         self._opcua_cfg = config.protocols.opcua
+        self._endpoint = endpoint
+        self._clock_drift = clock_drift
+
+        # Port/host resolution: endpoint overrides config, explicit args override both
+        if port is not None:
+            self._port = port
+        elif endpoint is not None:
+            self._port = endpoint.port
+        else:
+            self._port = self._opcua_cfg.port
+
         self._host = host or self._opcua_cfg.bind_address
-        self._port = port if port is not None else self._opcua_cfg.port
+
+        # Node subtree filter: when set, only build nodes whose opcua_node
+        # starts with this prefix (for realistic mode per-controller servers)
+        self._node_tree_root: str = endpoint.node_tree_root if endpoint else ""
 
         # asyncua Server instance — created in start()
         self._server: Any | None = None
@@ -281,8 +311,15 @@ class OpcuaServer:
                 if sig_cfg.opcua_node is None:
                     continue
 
-                signal_id = f"{equip_key}.{sig_key}"
+                # In realistic mode, filter to only nodes under this
+                # server's subtree root (e.g. "FoodBevLine.Filler1").
                 node_path = sig_cfg.opcua_node
+                if self._node_tree_root and not node_path.startswith(
+                    self._node_tree_root
+                ):
+                    continue
+
+                signal_id = f"{equip_key}.{sig_key}"
                 parts = node_path.split(".")
 
                 # -- Folder hierarchy for intermediate path segments ----------
@@ -477,19 +514,38 @@ class OpcuaServer:
             vtype = self._node_types.get(node_path, ua.VariantType.Double)
             cast_val = _cast_to_opcua_value(sv.value, vtype)
 
+            # Compute SourceTimestamp: apply clock drift if configured
+            # (PRD 3a.5). Ground truth uses true sim_time; OPC-UA uses drifted.
+            source_ts: datetime | None = None
+            if self._clock_drift is not None:
+                drifted = self._clock_drift.drifted_time(sv.timestamp)
+                source_ts = _sim_time_to_datetime(drifted)
+
             try:
+                # Determine StatusCode from quality
                 if sv.quality == "bad":
+                    status = ua.StatusCode(ua.StatusCodes.BadSensorFailure)
+                elif sv.quality == "uncertain":
+                    status = ua.StatusCode(
+                        ua.StatusCodes.UncertainLastUsableValue,
+                    )
+                else:
+                    status = None
+
+                # ua.DataValue is a frozen dataclass in asyncua >=1.1 —
+                # SourceTimestamp must be passed in the constructor, not
+                # assigned after creation.
+                if source_ts is not None:
                     dv = ua.DataValue(
-                        ua.Variant(cast_val, vtype),
-                        ua.StatusCode(ua.StatusCodes.BadSensorFailure),
+                        Value=ua.Variant(cast_val, vtype),
+                        StatusCode_=status or ua.StatusCode(ua.StatusCodes.Good),
+                        SourceTimestamp=source_ts,
                     )
                     await var_node.write_value(dv)
-                elif sv.quality == "uncertain":
+                elif status is not None:
                     dv = ua.DataValue(
                         ua.Variant(cast_val, vtype),
-                        ua.StatusCode(
-                            ua.StatusCodes.UncertainLastUsableValue,
-                        ),
+                        status,
                     )
                     await var_node.write_value(dv)
                 else:

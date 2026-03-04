@@ -49,6 +49,7 @@ if TYPE_CHECKING:
     from factory_simulator.config import EquipmentConfig, FactoryConfig
     from factory_simulator.models.counter import CounterModel
     from factory_simulator.protocols.modbus_server import ModbusServer
+    from factory_simulator.protocols.opcua_server import OpcuaServer
     from factory_simulator.topology import NetworkTopologyManager
 
 logger = logging.getLogger(__name__)
@@ -254,6 +255,41 @@ class DataEngine:
                 self._config,
                 self._store,
                 endpoint=ep,
+            )
+            servers.append(server)
+        return servers
+
+    def create_opcua_servers(self) -> list[OpcuaServer]:
+        """Create OPC-UA server(s) based on topology configuration.
+
+        In collapsed mode (or no topology): returns a single :class:`OpcuaServer`
+        serving the full node tree — current behaviour.
+
+        In realistic mode: returns one :class:`OpcuaServer` per endpoint
+        from the topology manager, each filtered to its node subtree with
+        per-controller clock drift.
+
+        Returns
+        -------
+        list[OpcuaServer]
+            Ordered list of OPC-UA servers to start.
+        """
+        from factory_simulator.protocols.opcua_server import OpcuaServer
+        from factory_simulator.topology import ClockDriftModel
+
+        if self._topology is None or self._topology.mode == "collapsed":
+            # Collapsed mode: single server, full node tree
+            return [OpcuaServer(self._config, self._store)]
+
+        # Realistic mode: one server per endpoint with clock drift
+        servers: list[OpcuaServer] = []
+        for ep in self._topology.opcua_endpoints():
+            drift = ClockDriftModel(ep.clock_drift)
+            server = OpcuaServer(
+                self._config,
+                self._store,
+                endpoint=ep,
+                clock_drift=drift,
             )
             servers.append(server)
         return servers

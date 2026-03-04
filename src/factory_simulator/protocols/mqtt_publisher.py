@@ -44,6 +44,7 @@ from factory_simulator.protocols.comm_drop import CommDropScheduler
 if TYPE_CHECKING:
     from factory_simulator.config import FactoryConfig
     from factory_simulator.store import SignalStore, SignalValue
+    from factory_simulator.topology import ClockDriftModel
 
 # Reference epoch for converting sim_time to ISO 8601 timestamps.
 # Matches the reference epoch in GroundTruthLogger._format_time().
@@ -413,6 +414,7 @@ class MqttPublisher:
         client: mqtt.Client | None = None,
         comm_drop_rng: np.random.Generator | None = None,
         duplicate_rng: np.random.Generator | None = None,
+        clock_drift: ClockDriftModel | None = None,
     ) -> None:
         self._config = config
         self._store = store
@@ -444,6 +446,9 @@ class MqttPublisher:
 
         # Timezone offset for MQTT timestamps (PRD 10.7)
         self._offset_hours: float = config.data_quality.mqtt_timestamp_offset_hours
+
+        # Per-controller clock drift for MQTT timestamps (PRD 3a.5)
+        self._clock_drift: ClockDriftModel | None = clock_drift
 
     # -- Properties -----------------------------------------------------------
 
@@ -495,11 +500,14 @@ class MqttPublisher:
     def _publish_entry(self, entry: TopicEntry, sv: SignalValue) -> None:
         """Publish one signal value to its MQTT topic.
 
-        Applies timezone offset to the timestamp (PRD 10.7).  Occasionally
-        publishes the same message twice within 1 ms to simulate sensor
-        gateway double-publish (PRD 10.5).
+        Applies clock drift (PRD 3a.5) and timezone offset (PRD 10.7) to
+        the timestamp.  Occasionally publishes the same message twice
+        within 1 ms to simulate sensor gateway double-publish (PRD 10.5).
         """
-        payload = make_payload(sv.value, sv.quality, entry.unit, sv.timestamp,
+        ts = sv.timestamp
+        if self._clock_drift is not None:
+            ts = self._clock_drift.drifted_time(ts)
+        payload = make_payload(sv.value, sv.quality, entry.unit, ts,
                                self._offset_hours)
         self._client.publish(
             entry.topic,
@@ -542,6 +550,9 @@ class MqttPublisher:
         quality = _worst_quality([sv_x.quality, sv_y.quality, sv_z.quality])
         # Use the most recent timestamp among the three axes (Rule 6)
         sim_time = max(sv_x.timestamp, sv_y.timestamp, sv_z.timestamp)
+        # Apply clock drift (PRD 3a.5) if configured
+        if self._clock_drift is not None:
+            sim_time = self._clock_drift.drifted_time(sim_time)
         payload = make_batch_vibration_payload(
             float(sv_x.value), float(sv_y.value), float(sv_z.value),
             quality, entry.unit, sim_time, self._offset_hours,

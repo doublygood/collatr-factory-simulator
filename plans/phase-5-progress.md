@@ -5,7 +5,7 @@
 ## Tasks
 - [x] 5.1: Network Topology Manager and Config
 - [x] 5.2: Multi-Port Modbus Servers
-- [ ] 5.3: Multi-Port OPC-UA Servers and Clock Drift
+- [x] 5.3: Multi-Port OPC-UA Servers and Clock Drift
 - [ ] 5.4: Scan Cycle Quantisation and Phase Jitter
 - [ ] 5.5: Independent Connection Drops per Controller
 - [ ] 5.6: Evaluation Framework: Core Engine
@@ -54,3 +54,20 @@
 - Connection limit enforcement: config stored on endpoint, actual TCP limiting deferred (requires custom server class).
 
 **Test count:** 2555 passed (was 2516 before).
+
+### Task 5.3: Multi-Port OPC-UA Servers and Clock Drift
+**Files created/modified:**
+- `src/factory_simulator/protocols/opcua_server.py` — Added `endpoint: OpcuaEndpointSpec | None` and `clock_drift: ClockDriftModel | None` parameters to `OpcuaServer.__init__`. Port resolution: endpoint overrides config, explicit arg overrides both. `_node_tree_root` set from endpoint (empty = serve all nodes). `_sync_values` applies clock drift to `SourceTimestamp` when `_clock_drift` is set — otherwise no SourceTimestamp is written (asyncua uses server receive time).
+- `src/factory_simulator/topology.py` — `ClockDriftModel` class added: `drifted_time(sim_time)` formula per PRD 3a.5. `drift_offset(sim_time)` helper. Properties for `initial_offset_s` and `drift_rate_s_per_day`. Already had `OpcuaEndpointSpec` with `clock_drift` field and `_packaging_opcua()` / `_foodbev_opcua()` methods.
+- `src/factory_simulator/protocols/mqtt_publisher.py` — `clock_drift: ClockDriftModel | None` parameter added to `MqttPublisher.__init__`. `_publish_entry` and `_publish_batch_vib` apply drift to `sv.timestamp` before calling `make_payload()`.
+- `src/factory_simulator/engine/data_engine.py` — `create_opcua_servers()` method added: collapsed mode → single server (full tree, no drift); realistic mode → one server per endpoint with `ClockDriftModel` from endpoint config.
+- `tests/unit/test_clock_drift_opcua.py` (NEW) — 38 tests covering: ClockDriftModel formula, `_sim_time_to_datetime`, OPC-UA node tree filtering (filler/QC/full), SourceTimestamp drift visibility, MQTT payload clock drift, ground truth no-drift invariant, DataEngine server creation for both modes and profiles, OpcuaServer construction variants.
+
+**Decisions:**
+- Packaging realistic mode: 1 OPC-UA server on port 4840 serving full PackagingLine tree (same as collapsed — press PLC is dual-stack).
+- F&B realistic mode: 2 OPC-UA servers — port 4841 for FoodBevLine.Filler1 (7 nodes), port 4842 for FoodBevLine.QC1 (6 nodes).
+- Ground truth logger never receives a ClockDriftModel — enforced by construction (no parameter in signature). Verified by test.
+- Clock drift for MQTT: applied to `sv.timestamp` before ISO conversion. Timezone offset (PRD 10.7) stacks on top.
+- No SourceTimestamp when drift is None: asyncua assigns its own server-side timestamp, which is correct default behaviour per OPC-UA spec.
+
+**Test count:** 2593 passed (was 2555 before).

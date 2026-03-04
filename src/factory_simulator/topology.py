@@ -4,7 +4,10 @@ Resolves logical controller endpoints to simulator port bindings in both
 collapsed (single port per protocol) and realistic (per-controller ports)
 modes.
 
-PRD Reference: Section 3a.4
+Also provides the :class:`ClockDriftModel` for per-controller timestamp
+drift in OPC-UA SourceTimestamp and MQTT JSON payloads.
+
+PRD Reference: Section 3a.4, 3a.5 (clock drift)
 """
 
 from __future__ import annotations
@@ -66,6 +69,77 @@ class MqttEndpointSpec:
 
     broker_host: str = "mqtt-broker"
     broker_port: int = 1883
+
+
+# ---------------------------------------------------------------------------
+# Clock drift model (PRD 3a.5)
+# ---------------------------------------------------------------------------
+
+
+class ClockDriftModel:
+    """Per-controller clock drift for OPC-UA SourceTimestamp and MQTT payloads.
+
+    Formula (PRD 3a.5):
+        ``drifted_time = sim_time + initial_offset_ms/1000
+                         + drift_rate_s_per_day * elapsed_hours / 24``
+
+    Ground truth always uses true ``sim_time``, never drifted time.
+
+    Parameters
+    ----------
+    config:
+        :class:`ClockDriftConfig` with initial offset and daily drift rate.
+    """
+
+    def __init__(self, config: ClockDriftConfig) -> None:
+        self._initial_offset_s = config.initial_offset_ms / 1000.0
+        self._drift_rate_s_per_day = config.drift_rate_s_per_day
+
+    @property
+    def initial_offset_s(self) -> float:
+        """Initial clock offset in seconds."""
+        return self._initial_offset_s
+
+    @property
+    def drift_rate_s_per_day(self) -> float:
+        """Clock drift rate in seconds per day."""
+        return self._drift_rate_s_per_day
+
+    def drifted_time(self, sim_time: float) -> float:
+        """Return the drifted timestamp for a given sim_time.
+
+        Parameters
+        ----------
+        sim_time:
+            Simulation time in seconds from start (0.0 at start).
+
+        Returns
+        -------
+        float
+            Drifted timestamp in seconds (always >= sim_time).
+        """
+        elapsed_hours = sim_time / 3600.0
+        return (
+            sim_time
+            + self._initial_offset_s
+            + self._drift_rate_s_per_day * elapsed_hours / 24.0
+        )
+
+    def drift_offset(self, sim_time: float) -> float:
+        """Return the total drift offset (without sim_time itself).
+
+        Parameters
+        ----------
+        sim_time:
+            Simulation time in seconds from start.
+
+        Returns
+        -------
+        float
+            Total offset in seconds (initial + accumulated drift).
+        """
+        elapsed_hours = sim_time / 3600.0
+        return self._initial_offset_s + self._drift_rate_s_per_day * elapsed_hours / 24.0
 
 
 # ---------------------------------------------------------------------------

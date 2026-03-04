@@ -37,7 +37,7 @@
                 "prd/03a-network-topology.md (3a.2, 3a.3, 3a.5)"
             ],
             "depends_on": ["5.1"],
-            "passes": false
+            "passes": true
         },
         {
             "id": "5.4",
