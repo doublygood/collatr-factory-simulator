@@ -1,6 +1,6 @@
 # Phase 4: Full Scenario System and Data Quality — Progress
 
-## Status: COMPLETE
+## Status: COMPLETE (post independent review)
 
 ## Tasks
 - [x] 4.1: Poisson Scheduling Engine
@@ -19,6 +19,52 @@
 - [x] 4.14: Noise Calibration — F&B Profile
 - [x] 4.15: Counter Rollover Testing Support
 - [x] 4.16: Reproducibility Test and Final Integration
+
+## Independent Review Findings (post-4.16)
+
+See `plans/phase-4-independent-review.md` for the full review.
+
+**Y3 (7-day test) — FIXED:**
+- Added `TestSevenDayStability` class to `test_reproducibility.py` with 4
+  `@pytest.mark.slow` tests running 60,480 ticks (7 simulated days at 100x).
+- Verifies no NaN/Inf and memory growth < 5x initial peak for both profiles.
+- 5x threshold (vs 2x for 1-day) accounts for linear accumulation over 7x more
+  ticks (~0.8 bytes/tick → 2.88x observed; 5x leaves headroom for scenario list
+  growth without masking genuine exponential leaks).
+- Added `slow` marker to `pyproject.toml`. Run with `pytest -m slow`.
+
+**Y4 (simultaneous state_changing) — FIXED:**
+- Added `activated_sc_this_tick` flag to `ScenarioEngine.tick()`.
+- When two state_changing scenarios are due in the same tick, only the first
+  activates; the second is deferred to the next tick.
+- Key distinction: uses a per-tick flag (not `active_state_changing` which
+  includes currently-active-from-previous-ticks). This prevents same-tick
+  conflicts while preserving the existing behaviour that allows a state_changing
+  scenario to activate while another is already running.
+- Initial implementation incorrectly used `active_state_changing` (which
+  includes scenarios active from previous ticks), causing all state_changing
+  scenarios to be serialized. This extended blocking periods for
+  non_state_changing scenarios and broke the F&B integration test. Fixed before
+  committing.
+
+**Rule 14 gap — FIXED:**
+- `_base_fnb_config()` in `test_fnb_opcua_mqtt_integration.py` did not disable
+  `opcua_stale`, `mqtt_drop`, `modbus_drop`, `exception_probability`, or
+  `partial_modbus_response.probability`.
+- `TestFnbBothProtocolsSimultaneous::test_both_protocols_serve_data_simultaneously`
+  was failing intermittently with `UncertainLastUsableValue` because the
+  OpcuaServer received a comm drop RNG that could fire during the test.
+- Fixed by disabling all injection vectors in `_base_fnb_config()`.
+
+**Y1 (Poisson min-gap) — Accepted:**
+- Documented as intentional. Min gap = minimum of drawn duration range.
+  Consistent across all phases.
+
+**Y2 (sentinel for current signals in IntermittentFault) — Deferred:**
+- `sensor_intermittent` subtype is disabled by default. Edge case only matters
+  when enabled with a current-type signal. Acceptable for Phase 4 scope.
+
+**Final test counts:** 2455 passing (non-slow) + 4 passing (slow) = 2459 total.
 
 ## Carried Forward Items
 - Y1 (Phase 2): `_spawn_rng` uses `integers()` not `SeedSequence.spawn()` → Fixed in Task 4.1
