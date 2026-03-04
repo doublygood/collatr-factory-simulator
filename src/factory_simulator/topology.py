@@ -35,6 +35,8 @@ class ModbusEndpointSpec:
     byte_order: str = "ABCD"
     controller_type: str = "generic"
     controller_name: str = ""
+    equipment_ids: list[str] = field(default_factory=list)
+    uid_equipment_map: dict[int, list[str]] = field(default_factory=dict)
     clock_drift: ClockDriftConfig = field(default_factory=ClockDriftConfig)
     scan_cycle: ScanCycleConfig = field(default_factory=ScanCycleConfig)
     connection_limit: ConnectionLimitConfig = field(
@@ -282,7 +284,11 @@ class NetworkTopologyManager:
     # ---- realistic mode: packaging ----------------------------------------
 
     def _packaging_modbus(self) -> list[ModbusEndpointSpec]:
-        """Packaging profile: 4 Modbus endpoints per PRD 3a.4."""
+        """Packaging profile: 3 Modbus endpoints per PRD 3a.4.
+
+        Press PLC + Energy meter share port 5020 (UIDs 1 and 5).
+        Laminator and slitter each get their own port.
+        """
         return [
             # Press PLC + Energy meter share port 5020 (UIDs 1 and 5)
             ModbusEndpointSpec(
@@ -292,6 +298,8 @@ class NetworkTopologyManager:
                 byte_order="ABCD",
                 controller_type="S7-1500",
                 controller_name="press_plc",
+                equipment_ids=["press", "energy"],
+                uid_equipment_map={1: ["press"], 5: ["energy"]},
                 clock_drift=self._get_clock_drift("press_plc", "S7-1500"),
                 scan_cycle=self._get_scan_cycle("press_plc", "S7-1500"),
                 connection_limit=self._get_connection_limit("press_plc", "S7-1500"),
@@ -305,6 +313,8 @@ class NetworkTopologyManager:
                 byte_order="ABCD",
                 controller_type="S7-1200",
                 controller_name="laminator_plc",
+                equipment_ids=["laminator"],
+                uid_equipment_map={1: ["laminator"]},
                 clock_drift=self._get_clock_drift("laminator_plc", "S7-1200"),
                 scan_cycle=self._get_scan_cycle("laminator_plc", "S7-1200"),
                 connection_limit=self._get_connection_limit("laminator_plc", "S7-1200"),
@@ -318,17 +328,13 @@ class NetworkTopologyManager:
                 byte_order="ABCD",
                 controller_type="S7-1200",
                 controller_name="slitter_plc",
+                equipment_ids=["slitter"],
+                uid_equipment_map={1: ["slitter"]},
                 clock_drift=self._get_clock_drift("slitter_plc", "S7-1200"),
                 scan_cycle=self._get_scan_cycle("slitter_plc", "S7-1200"),
                 connection_limit=self._get_connection_limit("slitter_plc", "S7-1200"),
                 connection_drop=self._get_connection_drop("slitter_plc", "S7-1200"),
             ),
-            # Energy meter is on press port (UID 5) — already included above.
-            # PM5560 props are resolved via the energy_meter controller name
-            # when the server routes by UID.  The press port entry above
-            # carries the S7-1500 controller type (dominant controller on that
-            # port).  Per-UID scan cycle and drift are resolved at a higher
-            # level (task 5.2/5.4).
         ]
 
     def _packaging_opcua(self) -> list[OpcuaEndpointSpec]:
@@ -348,7 +354,11 @@ class NetworkTopologyManager:
     # ---- realistic mode: F&B ----------------------------------------------
 
     def _foodbev_modbus(self) -> list[ModbusEndpointSpec]:
-        """F&B profile: 7 Modbus endpoints per PRD 3a.4."""
+        """F&B profile: 6 Modbus endpoints per PRD 3a.4.
+
+        Oven gateway shares port 5031 for zones (UIDs 1,2,3) and energy
+        meter (UID 10).
+        """
         return [
             # Mixer PLC (CompactLogix, CDAB)
             ModbusEndpointSpec(
@@ -358,6 +368,8 @@ class NetworkTopologyManager:
                 byte_order="CDAB",
                 controller_type="CompactLogix",
                 controller_name="mixer_plc",
+                equipment_ids=["mixer"],
+                uid_equipment_map={1: ["mixer"]},
                 clock_drift=self._get_clock_drift("mixer_plc", "CompactLogix"),
                 scan_cycle=self._get_scan_cycle("mixer_plc", "CompactLogix"),
                 connection_limit=self._get_connection_limit(
@@ -375,6 +387,13 @@ class NetworkTopologyManager:
                 byte_order="ABCD",
                 controller_type="Eurotherm",
                 controller_name="oven_gateway",
+                equipment_ids=["oven", "energy"],
+                uid_equipment_map={
+                    1: ["oven"],
+                    2: ["oven"],
+                    3: ["oven"],
+                    10: ["energy"],
+                },
                 clock_drift=self._get_clock_drift("oven_gateway", "Eurotherm"),
                 scan_cycle=self._get_scan_cycle("oven_gateway", "Eurotherm"),
                 connection_limit=self._get_connection_limit(
@@ -392,6 +411,8 @@ class NetworkTopologyManager:
                 byte_order="ABCD",
                 controller_type="S7-1200",
                 controller_name="filler_plc",
+                equipment_ids=["filler"],
+                uid_equipment_map={1: ["filler"]},
                 clock_drift=self._get_clock_drift("filler_plc", "S7-1200"),
                 scan_cycle=self._get_scan_cycle("filler_plc", "S7-1200"),
                 connection_limit=self._get_connection_limit("filler_plc", "S7-1200"),
@@ -405,6 +426,8 @@ class NetworkTopologyManager:
                 byte_order="ABCD",
                 controller_type="S7-1200",
                 controller_name="sealer_plc",
+                equipment_ids=["sealer"],
+                uid_equipment_map={1: ["sealer"]},
                 clock_drift=self._get_clock_drift("sealer_plc", "S7-1200"),
                 scan_cycle=self._get_scan_cycle("sealer_plc", "S7-1200"),
                 connection_limit=self._get_connection_limit("sealer_plc", "S7-1200"),
@@ -418,6 +441,8 @@ class NetworkTopologyManager:
                 byte_order="ABCD",
                 controller_type="Danfoss",
                 controller_name="chiller",
+                equipment_ids=["chiller"],
+                uid_equipment_map={1: ["chiller"]},
                 clock_drift=self._get_clock_drift("chiller", "Danfoss"),
                 scan_cycle=self._get_scan_cycle("chiller", "Danfoss"),
                 connection_limit=self._get_connection_limit("chiller", "Danfoss"),
@@ -431,6 +456,8 @@ class NetworkTopologyManager:
                 byte_order="ABCD",
                 controller_type="S7-1200",
                 controller_name="cip_controller",
+                equipment_ids=["cip"],
+                uid_equipment_map={1: ["cip"]},
                 clock_drift=self._get_clock_drift("cip_controller", "S7-1200"),
                 scan_cycle=self._get_scan_cycle("cip_controller", "S7-1200"),
                 connection_limit=self._get_connection_limit(

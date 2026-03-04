@@ -48,6 +48,8 @@ from factory_simulator.store import SignalStore
 if TYPE_CHECKING:
     from factory_simulator.config import EquipmentConfig, FactoryConfig
     from factory_simulator.models.counter import CounterModel
+    from factory_simulator.protocols.modbus_server import ModbusServer
+    from factory_simulator.topology import NetworkTopologyManager
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +115,7 @@ class DataEngine:
         store: SignalStore,
         clock: SimulationClock | None = None,
         ground_truth: GroundTruthLogger | None = None,
+        topology: NetworkTopologyManager | None = None,
     ) -> None:
         self._config = config
         self._store = store
@@ -122,6 +125,7 @@ class DataEngine:
         )
         self._running = False
         self._ground_truth = ground_truth
+        self._topology = topology
 
         # Master RNG -- child rngs are spawned per generator (Rule 13)
         # Use SeedSequence hierarchy for proper statistical independence (Y1 fix)
@@ -215,6 +219,44 @@ class DataEngine:
     def running(self) -> bool:
         """Whether the async run loop is active."""
         return self._running
+
+    @property
+    def topology(self) -> NetworkTopologyManager | None:
+        """The network topology manager, if configured."""
+        return self._topology
+
+    # -- Protocol server creation (PRD 3a.4) ----------------------------------
+
+    def create_modbus_servers(self) -> list[ModbusServer]:
+        """Create Modbus server(s) based on topology configuration.
+
+        In collapsed mode (or no topology): returns a single :class:`ModbusServer`
+        serving all registers — current behaviour.
+
+        In realistic mode: returns one :class:`ModbusServer` per endpoint
+        from the topology manager, each filtered to its equipment.
+
+        Returns
+        -------
+        list[ModbusServer]
+            Ordered list of Modbus servers to start.
+        """
+        from factory_simulator.protocols.modbus_server import ModbusServer
+
+        if self._topology is None or self._topology.mode == "collapsed":
+            # Collapsed mode: single server, all registers
+            return [ModbusServer(self._config, self._store)]
+
+        # Realistic mode: one server per endpoint
+        servers: list[ModbusServer] = []
+        for ep in self._topology.modbus_endpoints():
+            server = ModbusServer(
+                self._config,
+                self._store,
+                endpoint=ep,
+            )
+            servers.append(server)
+        return servers
 
     # -- Generator construction -----------------------------------------------
 

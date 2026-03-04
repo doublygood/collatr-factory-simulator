@@ -48,6 +48,7 @@ if TYPE_CHECKING:
         PartialModbusResponseConfig,
     )
     from factory_simulator.store import SignalStore
+    from factory_simulator.topology import ModbusEndpointSpec
 
 logger = logging.getLogger(__name__)
 
@@ -327,6 +328,9 @@ class FactoryDeviceContext(ModbusDeviceContext):
 
     PRD 10.6, 10.11: Optional exception and partial response injection via
     :class:`ModbusExceptionInjector`.  Injection only applies to FC03/FC04.
+
+    PRD 3a.5: In realistic mode, reads to addresses outside the controller's
+    defined range return Modbus exception code 0x02 (Illegal Data Address).
     """
 
     def __init__(
@@ -335,6 +339,8 @@ class FactoryDeviceContext(ModbusDeviceContext):
         exception_injector: ModbusExceptionInjector | None = None,
         transition_active_fn: Callable[[], bool] | None = None,
         unit_id: int = 1,
+        valid_hr_addresses: set[int] | None = None,
+        valid_ir_addresses: set[int] | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)  # type: ignore[arg-type]
@@ -342,6 +348,10 @@ class FactoryDeviceContext(ModbusDeviceContext):
         self._exception_injector = exception_injector
         self._transition_active_fn = transition_active_fn
         self._unit_id = unit_id
+        # When set, restrict FC03 (HR) and FC04 (IR) to only these addresses.
+        # Reads to addresses outside return 0x02 (Illegal Data Address).
+        self._valid_hr_addresses = valid_hr_addresses
+        self._valid_ir_addresses = valid_ir_addresses
 
     def setValues(
         self,
@@ -362,15 +372,26 @@ class FactoryDeviceContext(ModbusDeviceContext):
     ) -> list[int] | list[bool] | ExcCodes:
         """Reject over-limit reads; inject exceptions and partial responses.
 
-        Check order (PRD 10.6, 10.11):
+        Check order (PRD 10.6, 10.11, 3a.5):
         1. Register limit (0x03) — always enforced.
-        2. 0x06 Device Busy — during machine state transitions (deterministic).
-        3. 0x04 Device Failure — random draw at exception_probability.
-        4. Partial response — random draw; returns truncated register slice.
-        5. Normal response — full data returned.
+        2. Address range validation (0x02) — realistic mode only.
+        3. 0x06 Device Busy — during machine state transitions (deterministic).
+        4. 0x04 Device Failure — random draw at exception_probability.
+        5. Partial response — random draw; returns truncated register slice.
+        6. Normal response — full data returned.
         """
         if func_code in (3, 4) and count > MAX_READ_REGISTERS:
             return ExcCodes.ILLEGAL_VALUE
+
+        # PRD 3a.5: In realistic mode, out-of-range reads return 0x02
+        if func_code == 3 and self._valid_hr_addresses is not None:
+            for a in range(address, address + count):
+                if a not in self._valid_hr_addresses:
+                    return ExcCodes.ILLEGAL_ADDRESS
+        if func_code == 4 and self._valid_ir_addresses is not None:
+            for a in range(address, address + count):
+                if a not in self._valid_ir_addresses:
+                    return ExcCodes.ILLEGAL_ADDRESS
 
         if self._exception_injector is not None and func_code in (3, 4):
             # 0x06: Device Busy during machine state transitions
@@ -432,7 +453,10 @@ class RegisterMap:
     secondary_slaves: list[SecondarySlaveRegisterMap] = field(default_factory=list)
 
 
-def build_register_map(config: FactoryConfig) -> RegisterMap:
+def build_register_map(
+    config: FactoryConfig,
+    equipment_filter: set[str] | None = None,
+) -> RegisterMap:
     """Build the complete register map from factory configuration.
 
     Scans all equipment signal configs for ``modbus_hr``, ``modbus_ir``,
@@ -445,12 +469,22 @@ def build_register_map(config: FactoryConfig) -> RegisterMap:
     Signals with ``modbus_slave_id`` set are excluded from the main IR block
     (they belong to secondary Modbus slaves, handled by multi-slave support
     in task 3.13).
+
+    Parameters
+    ----------
+    config:
+        Validated :class:`FactoryConfig`.
+    equipment_filter:
+        If provided, only include signals from the listed equipment IDs.
+        When *None*, all equipment is included (current behaviour).
     """
     rmap = RegisterMap()
 
     # -- Holding and input registers from signal configs --
     for eq_id, eq_cfg in config.equipment.items():
         if not eq_cfg.enabled:
+            continue
+        if equipment_filter is not None and eq_id not in equipment_filter:
             continue
         for sig_name, sig_cfg in eq_cfg.signals.items():
             signal_id = f"{eq_id}.{sig_name}"
@@ -493,25 +527,28 @@ def build_register_map(config: FactoryConfig) -> RegisterMap:
                 ))
 
     # -- Packaging profile coils (PRD Appendix A, addresses 0-5) --
-    rmap.coil_defs = [
-        CoilDefinition(0, "press.machine_state", derive_value=2),   # press.running
-        CoilDefinition(1, "press.machine_state", derive_value=4),   # press.fault_active
-        CoilDefinition(2, None),                                    # press.emergency_stop
-        CoilDefinition(3, "press.web_break", mode="gt_zero"),        # press.web_break
-        CoilDefinition(4, "press.machine_state", derive_value=2),   # laminator.running
-        CoilDefinition(5, "slitter.speed", mode="gt_zero"),          # slitter.running
-    ]
+    # Only include when no equipment filter, or when press/slitter are in filter.
+    if equipment_filter is None or "press" in equipment_filter:
+        rmap.coil_defs = [
+            CoilDefinition(0, "press.machine_state", derive_value=2),   # press.running
+            CoilDefinition(1, "press.machine_state", derive_value=4),   # press.fault_active
+            CoilDefinition(2, None),                                    # press.emergency_stop
+            CoilDefinition(3, "press.web_break", mode="gt_zero"),        # press.web_break
+            CoilDefinition(4, "press.machine_state", derive_value=2),   # laminator.running
+            CoilDefinition(5, "slitter.speed", mode="gt_zero"),          # slitter.running
+        ]
 
     # -- Packaging profile discrete inputs (PRD Appendix A, addresses 0-2) --
-    rmap.di_defs = [
-        DiscreteInputDefinition(0, None, mode="false"),              # guard_door_open
-        DiscreteInputDefinition(                                     # material_present
-            1, "press.machine_state", mode="eq", eq_value=2,
-        ),
-        DiscreteInputDefinition(                                     # cycle_complete
-            2, "press.impression_count", mode="modulo",
-        ),
-    ]
+    if equipment_filter is None or "press" in equipment_filter:
+        rmap.di_defs = [
+            DiscreteInputDefinition(0, None, mode="false"),              # guard_door_open
+            DiscreteInputDefinition(                                     # material_present
+                1, "press.machine_state", mode="eq", eq_value=2,
+            ),
+            DiscreteInputDefinition(                                     # cycle_complete
+                2, "press.impression_count", mode="modulo",
+            ),
+        ]
 
     # -- Dynamic coils and discrete inputs from signal configs (F&B profile) --
     # Signals with modbus_coil or modbus_di fields (e.g. mixer.lid_closed at
@@ -519,6 +556,8 @@ def build_register_map(config: FactoryConfig) -> RegisterMap:
     # DI 100).  Use "gt_zero" mode: value > 0 maps to True.
     for eq_id, eq_cfg in config.equipment.items():
         if not eq_cfg.enabled:
+            continue
+        if equipment_filter is not None and eq_id not in equipment_filter:
             continue
         for sig_name, sig_cfg in eq_cfg.signals.items():
             signal_id = f"{eq_id}.{sig_name}"
@@ -540,6 +579,8 @@ def build_register_map(config: FactoryConfig) -> RegisterMap:
     secondary_slave_dict: dict[int, SecondarySlaveRegisterMap] = {}
     for eq_id, eq_cfg in config.equipment.items():
         if not eq_cfg.enabled:
+            continue
+        if equipment_filter is not None and eq_id not in equipment_filter:
             continue
         for sig_name, sig_cfg in eq_cfg.signals.items():
             if sig_cfg.modbus_slave_id is None:
@@ -617,12 +658,20 @@ class ModbusServer:
         comm_drop_rng: np.random.Generator | None = None,
         exception_rng: np.random.Generator | None = None,
         duplicate_rng: np.random.Generator | None = None,
+        endpoint: ModbusEndpointSpec | None = None,
     ) -> None:
         self._config = config
         self._store = store
         self._modbus_cfg = config.protocols.modbus
-        self._host = host or self._modbus_cfg.bind_address
-        self._port = port or self._modbus_cfg.port
+        self._endpoint = endpoint
+
+        # Port/host resolution: endpoint overrides config
+        if endpoint is not None:
+            self._host = host or self._modbus_cfg.bind_address
+            self._port = port or endpoint.port
+        else:
+            self._host = host or self._modbus_cfg.bind_address
+            self._port = port or self._modbus_cfg.port
 
         # Communication drop scheduler (PRD 10.2)
         _rng = comm_drop_rng if comm_drop_rng is not None else np.random.default_rng()
@@ -650,8 +699,18 @@ class ModbusServer:
         _TRANSITION_WINDOW_S: float = 0.5  # seconds window after transition
         self._transition_window_s: float = _TRANSITION_WINDOW_S
 
-        # Build register map from config
-        self._rmap = build_register_map(config)
+        # Response latency config (PRD 3a.5) — stored for future per-read injection
+        self._response_latency_ms: float = (
+            endpoint.connection_limit.response_timeout_ms_typical
+            if endpoint is not None
+            else 0.0
+        )
+
+        # Build register map from config, optionally filtered by equipment
+        equipment_filter: set[str] | None = None
+        if endpoint is not None and endpoint.equipment_ids:
+            equipment_filter = set(endpoint.equipment_ids)
+        self._rmap = build_register_map(config, equipment_filter)
 
         # Dynamic block sizes: computed from the actual register map so
         # both the packaging profile (max HR ~603) and the F&B profile
@@ -675,12 +734,30 @@ class ModbusServer:
         self._coil_block = ModbusSequentialDataBlock(0, [False] * coil_size)  # type: ignore[no-untyped-call]
         self._di_block = ModbusSequentialDataBlock(0, [False] * di_size)  # type: ignore[no-untyped-call]
 
+        # PRD 3a.5: Compute valid address sets for realistic mode (0x02 enforcement).
+        # When an endpoint has equipment_ids, only those registers are valid.
+        valid_hr: set[int] | None = None
+        valid_ir: set[int] | None = None
+        if equipment_filter is not None:
+            valid_hr = set()
+            for hr_e in self._rmap.hr_entries:
+                valid_hr.add(hr_e.address)
+                if hr_e.data_type in ("float32", "uint32"):
+                    valid_hr.add(hr_e.address + 1)
+            valid_ir = set()
+            for ir_e in self._rmap.ir_entries:
+                valid_ir.add(ir_e.address)
+                if ir_e.data_type == "float32":
+                    valid_ir.add(ir_e.address + 1)
+
         # Custom device context with FC06 rejection, register limit, and injection
         self._device_context = FactoryDeviceContext(
             float32_addresses=self._rmap.float32_hr_addresses,
             exception_injector=self._exception_injector,
             transition_active_fn=self._is_transition_active,
             unit_id=self._modbus_cfg.unit_id,
+            valid_hr_addresses=valid_hr,
+            valid_ir_addresses=valid_ir,
             hr=self._hr_block,
             ir=self._ir_block,
             co=self._coil_block,
@@ -738,6 +815,16 @@ class ModbusServer:
     def register_map(self) -> RegisterMap:
         """The register map (for testing and introspection)."""
         return self._rmap
+
+    @property
+    def endpoint(self) -> ModbusEndpointSpec | None:
+        """The endpoint spec, if operating in realistic mode."""
+        return self._endpoint
+
+    @property
+    def response_latency_ms(self) -> float:
+        """Configured response latency in milliseconds (PRD 3a.5)."""
+        return self._response_latency_ms
 
     @property
     def comm_drop_active(self) -> bool:
@@ -990,18 +1077,38 @@ class ModbusServer:
         and multi-slave mode for F&B profiles (secondary slaves for Eurotherm
         zone controllers at UIDs 11-13).  Multi-slave mode routes requests by
         unit ID; single-slave mode ignores unit ID (preserves packaging tests).
+
+        In realistic mode with an endpoint, multiple UIDs on the same port
+        each route to the primary device context (all registers filtered by
+        equipment are in one context).  Secondary Eurotherm slaves still get
+        their own contexts.
         """
-        if self._secondary_contexts:
-            # F&B multi-slave mode: route by unit ID
-            devices: dict[int, FactoryDeviceContext] = {
-                self._modbus_cfg.unit_id: self._device_context,
-                **self._secondary_contexts,
-            }
+        use_multi_slave = bool(self._secondary_contexts)
+
+        # Realistic mode: if the endpoint specifies multiple unit IDs, use
+        # multi-slave routing so each UID maps to the primary context.
+        if self._endpoint is not None and len(self._endpoint.unit_ids) > 1:
+            use_multi_slave = True
+
+        if use_multi_slave:
+            devices: dict[int, FactoryDeviceContext] = {}
+
+            if self._endpoint is not None:
+                # Realistic mode: map each endpoint UID to the primary context
+                for uid in self._endpoint.unit_ids:
+                    devices[uid] = self._device_context
+            else:
+                # Collapsed mode: primary UID maps to primary context
+                devices[self._modbus_cfg.unit_id] = self._device_context
+
+            # Add secondary slave contexts (Eurotherm zones)
+            devices.update(self._secondary_contexts)
+
             server_context = ModbusServerContext(  # type: ignore[no-untyped-call]
                 devices=devices, single=False,
             )
         else:
-            # Packaging single-slave mode: all requests go to primary context
+            # Single-slave mode: all requests go to primary context
             server_context = ModbusServerContext(  # type: ignore[no-untyped-call]
                 devices=self._device_context, single=True,
             )
