@@ -122,7 +122,7 @@
                 "prd/06-configuration.md (6.3)"
             ],
             "depends_on": ["5.9"],
-            "passes": false
+            "passes": true
         },
         {
             "id": "5.11",

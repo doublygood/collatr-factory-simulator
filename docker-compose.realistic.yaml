@@ -1,0 +1,47 @@
+# Collatr Factory Simulator — Docker Compose override for realistic topology
+#
+# Usage (merged with the base file):
+#   docker compose -f docker-compose.yml -f docker-compose.realistic.yaml up
+#
+# This override:
+#   1. Adds per-controller Modbus ports (5020-5035) and extra OPC-UA ports (4841, 4842)
+#   2. Switches the simulator to realistic network mode via SIM_NETWORK_MODE
+#
+# Port reference (realistic mode):
+#   Packaging Modbus:
+#     5020 — press (UID 1) + energy (UID 5)
+#     5021 — laminator (UID 1)
+#     5022 — slitter (UID 1)
+#   F&B Modbus:
+#     5030 — mixer (UID 1)
+#     5031 — oven gateway (UIDs 1/2/3 zones + UID 10 energy)
+#     5032 — filler (UID 1)
+#     5033 — sealer (UID 1)
+#     5034 — chiller (UID 1)
+#     5035 — CIP (UID 1)
+#   OPC-UA:
+#     4840 — PackagingLine (full tree, packaging profile)
+#     4841 — FoodBevLine.Filler1 (F&B profile)
+#     4842 — FoodBevLine.QC1 / checkweigher (F&B profile)
+#
+# PRD Reference: Section 3a.4 (Realistic port mappings), Task 5.10
+
+services:
+  factory-simulator:
+    ports:
+      # Packaging Modbus per-controller ports
+      - "5020:5020"
+      - "5021:5021"
+      - "5022:5022"
+      # F&B Modbus per-controller ports
+      - "5030:5030"
+      - "5031:5031"
+      - "5032:5032"
+      - "5033:5033"
+      - "5034:5034"
+      - "5035:5035"
+      # Additional OPC-UA servers (F&B profile)
+      - "4841:4841"
+      - "4842:4842"
+    environment:
+      - SIM_NETWORK_MODE=realistic

@@ -380,10 +380,18 @@ async def _run_realtime(config: FactoryConfig, engine: Any) -> int:
 
     Starts enabled protocol servers as concurrent asyncio tasks, then runs
     the engine until cancelled (Ctrl-C / SIGINT).  Servers are shut down
-    in reverse start order on exit.
+    in reverse start order on exit.  A lightweight health server is also
+    started on port 8080 for Docker health checks.
     """
+    from factory_simulator.health.server import HealthServer
+
     servers: list[Any] = []
     tasks: list[asyncio.Task[None]] = []
+
+    health = HealthServer(port=8080, store=engine.store)
+    health.update(profile=config.factory.name)
+    health_task: asyncio.Task[None] = asyncio.create_task(health.start())
+    await asyncio.sleep(0.05)  # allow health server to bind
 
     try:
         if config.protocols.modbus.enabled:
@@ -392,6 +400,7 @@ async def _run_realtime(config: FactoryConfig, engine: Any) -> int:
                 tasks.append(task)
                 servers.append(srv)
                 await asyncio.sleep(0.05)  # allow server to bind
+            health.update(modbus="up")
 
         if config.protocols.opcua.enabled:
             for srv in engine.create_opcua_servers():
@@ -399,6 +408,7 @@ async def _run_realtime(config: FactoryConfig, engine: Any) -> int:
                 tasks.append(task)
                 servers.append(srv)
                 await asyncio.sleep(0.05)
+            health.update(opcua="up")
 
         if config.protocols.mqtt.enabled:
             from factory_simulator.protocols.mqtt_publisher import MqttPublisher
@@ -407,6 +417,9 @@ async def _run_realtime(config: FactoryConfig, engine: Any) -> int:
             task = asyncio.create_task(mqtt.start())
             tasks.append(task)
             servers.append(mqtt)
+            health.update(mqtt="up")
+
+        health.update(status="running")
 
         logger.info(
             "Simulator running: profile=%s time_scale=%.1fx",
@@ -418,6 +431,7 @@ async def _run_realtime(config: FactoryConfig, engine: Any) -> int:
     except asyncio.CancelledError:
         pass
     finally:
+        health.update(status="stopping")
         engine.stop()
         for srv in reversed(servers):
             with contextlib.suppress(Exception):
@@ -425,6 +439,9 @@ async def _run_realtime(config: FactoryConfig, engine: Any) -> int:
         for task in tasks:
             if not task.done():
                 task.cancel()
+        health_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await health_task
 
     return 0
 

@@ -12,7 +12,7 @@
 - [x] 5.7: Evaluation CLI and Run Manifests
 - [x] 5.8: Batch Output: CSV and Parquet
 - [x] 5.9: CLI Entry Point
-- [ ] 5.10: Docker Compose with Health Checks
+- [x] 5.10: Docker Compose with Health Checks
 - [ ] 5.11: README and Example Configs
 - [ ] 5.12: Performance Profiling
 - [ ] 5.13: Final Acceptance Test and CI Pipeline
@@ -170,3 +170,22 @@
 - `BatchWriter | None` type annotation avoids mypy inference conflict between `CsvWriter` and `ParquetWriter` assignment branches.
 
 **Test count:** 2882 passed (was 2818 before).
+
+### Task 5.10: Docker Compose with Health Checks
+**Files created/modified:**
+- `src/factory_simulator/health/__init__.py` (NEW) — module package, exports `HealthServer`.
+- `src/factory_simulator/health/server.py` (NEW) — `HealthServer` asyncio HTTP server on configurable port (default 8080). `GET /health` returns JSON status dict (status, profile, sim_time, signals, modbus, opcua, mqtt). `GET /status` returns all current signal values from the store. `update()` method lets the CLI set static fields; sim_time and signal count are computed live from the store on each request. `actual_port` property resolves OS-assigned port when `port=0` (for tests).
+- `src/factory_simulator/cli.py` — `_run_realtime()` updated to start a `HealthServer` background task before protocol servers. Status updated to "running" once all protocols are up; "stopping" in the finally block. Health task cancelled cleanly on shutdown.
+- `Dockerfile` (NEW) — `python:3.12-slim` base, installs `curl` for health check, installs requirements, copies source + config, `pip install -e .`, EXPOSE 502/4840/8080, `HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 CMD curl -f http://localhost:8080/health`, `ENTRYPOINT ["python", "-m", "factory_simulator", "run"]`.
+- `docker-compose.yml` (UPDATED) — Added `factory-simulator` service: `build: .`, `depends_on: mqtt-broker: condition: service_healthy`, ports 502/4840/8080, config volume mount, env vars (`SIM_CONFIG_PATH`, `MQTT_BROKER_HOST`, `MQTT_BROKER_PORT`, `SIM_LOG_LEVEL`, `SIM_TIME_SCALE`, `SIM_NETWORK_MODE`), health check `curl -f http://localhost:8080/health`.
+- `docker-compose.realistic.yaml` (NEW) — Override file: adds per-controller Modbus ports (5020-5035) and F&B OPC-UA ports (4841-4842), sets `SIM_NETWORK_MODE=realistic`.
+- `tests/unit/test_health.py` (NEW) — 61 tests covering: `update()` mutations (all fields, none args, multiple at once), `/health` 200 response and all 7 required JSON keys, live signal count from store, live sim_time from store, status/profile/modbus reflect update, no-store defaults, `/status` 200 and signal map, `/status` empty dict without store, 404 for unknown paths, `actual_port` before/after start, Dockerfile content validation, docker-compose.yml content validation, docker-compose.realistic.yaml content validation, mosquitto.conf validation.
+
+**Decisions:**
+- `HealthServer(port=0)` uses OS-assigned port — enables conflict-free unit tests.
+- sim_time and signals read from store on each `/health` request (not cached) — always reflects latest tick without needing a callback.
+- `_run_realtime` health server task cancelled via `health_task.cancel()` in finally with `contextlib.suppress(CancelledError)` — same pattern as other protocol tasks.
+- No separate `start_period` logic needed in HealthServer itself — Docker's `start_period` in the HEALTHCHECK handles the warm-up grace period.
+- `docker-compose.realistic.yaml` uses merged ports (Docker Compose appends list fields) — realistic mode exposes both collapsed ports and per-controller ports.
+
+**Test count:** 2943 passed (was 2882 before).

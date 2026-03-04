@@ -1,3 +1,17 @@
+# Collatr Factory Simulator — Docker Compose (collapsed mode, default)
+#
+# Start:   docker compose up
+# Stop:    docker compose down
+#
+# Profiles:
+#   packaging (default) — 47 signals, Modbus port 502, OPC-UA port 4840
+#   food_bev            — 68 signals; set SIM_CONFIG_PATH to factory-foodbev.yaml
+#
+# Realistic multi-controller mode:
+#   docker compose -f docker-compose.yml -f docker-compose.realistic.yaml up
+#
+# PRD Reference: Section 6.3 (Docker Compose), Task 5.10
+
 services:
   mqtt-broker:
     image: eclipse-mosquitto:2
@@ -11,4 +25,40 @@ services:
       test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-W", "3"]
       interval: 5s
       timeout: 3s
+      retries: 3
+
+  factory-simulator:
+    build: .
+    container_name: factory-simulator
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
+    ports:
+      # Collapsed mode: single Modbus TCP server
+      - "502:502"
+      # OPC-UA server
+      - "4840:4840"
+      # Health / status endpoint
+      - "8080:8080"
+    volumes:
+      # Mount the host config directory read-only so configs can be tweaked
+      # without rebuilding the image
+      - ./config:/app/config:ro
+    environment:
+      # --- Config file path ---
+      - SIM_CONFIG_PATH=/app/config/factory.yaml
+      # --- MQTT broker (points to the mqtt-broker sidecar) ---
+      - MQTT_BROKER_HOST=mqtt-broker
+      - MQTT_BROKER_PORT=1883
+      # --- Simulation tunables (override as needed) ---
+      - SIM_LOG_LEVEL=info
+      - SIM_TIME_SCALE=1.0
+      # --- Network topology (collapsed = single-port per protocol) ---
+      - SIM_NETWORK_MODE=collapsed
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
       retries: 3
