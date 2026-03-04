@@ -74,7 +74,7 @@
                 "prd/12-evaluation-protocol.md (ALL)"
             ],
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "5.7",

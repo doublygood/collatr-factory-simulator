@@ -1153,6 +1153,76 @@ class ShiftsConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Evaluation framework config (PRD Section 12)
+# ---------------------------------------------------------------------------
+
+
+class EvaluationConfig(BaseModel):
+    """Evaluation framework configuration (PRD Section 12.4).
+
+    Controls tolerance windows, severity weights, and random baseline seed
+    used by the ``Evaluator`` class in ``factory_simulator.evaluation``.
+    """
+
+    pre_margin_seconds: float = 30.0
+    """Detections within [start - pre_margin, start] count as TP."""
+
+    post_margin_seconds: float = 60.0
+    """Detections within [end, end + post_margin] count as TP."""
+
+    severity_weights: dict[str, float] = Field(
+        default_factory=lambda: {
+            "web_break": 10.0,
+            "unplanned_stop": 5.0,
+            "seal_integrity_failure": 8.0,
+            "cold_chain_break": 10.0,
+            "bearing_wear": 8.0,
+            "dryer_drift": 3.0,
+            "oven_excursion": 3.0,
+            "fill_weight_drift": 3.0,
+            "ink_viscosity_excursion": 2.0,
+            "registration_drift": 2.0,
+            "contextual_anomaly": 5.0,
+            "intermittent_fault": 4.0,
+            "micro_stop": 1.0,
+            "sensor_disconnect": 2.0,
+            "stuck_sensor": 3.0,
+        }
+    )
+
+    seeds: int = 1
+    """Number of independent seeds for multi-seed evaluation (≥1)."""
+
+    latency_targets: dict[str, float] = Field(
+        default_factory=lambda: {
+            "web_break": 2.0,
+            "unplanned_stop": 10.0,
+            "seal_integrity_failure": 60.0,
+            "cold_chain_break": 300.0,
+            "bearing_wear": 86400.0,
+            "dryer_drift": 900.0,
+            "fill_weight_drift": 600.0,
+            "contextual_anomaly": 300.0,
+            "intermittent_fault": 172800.0,
+        }
+    )
+
+    @field_validator("pre_margin_seconds", "post_margin_seconds")
+    @classmethod
+    def _non_negative(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError("margin must be non-negative")
+        return v
+
+    @field_validator("seeds")
+    @classmethod
+    def _seeds_positive(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("seeds must be >= 1")
+        return v
+
+
+# ---------------------------------------------------------------------------
 # Network topology configs (PRD 3a)
 # ---------------------------------------------------------------------------
 

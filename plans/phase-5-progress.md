@@ -8,7 +8,7 @@
 - [x] 5.3: Multi-Port OPC-UA Servers and Clock Drift
 - [x] 5.4: Scan Cycle Quantisation and Phase Jitter
 - [x] 5.5: Independent Connection Drops per Controller
-- [ ] 5.6: Evaluation Framework: Core Engine
+- [x] 5.6: Evaluation Framework: Core Engine
 - [ ] 5.7: Evaluation CLI and Run Manifests
 - [ ] 5.8: Batch Output: CSV and Parquet
 - [ ] 5.9: CLI Entry Point
@@ -99,3 +99,20 @@
 - Each server in DataEngine realistic mode gets two separate `SeedSequence.spawn()` calls — one for scan_cycle, one for drop_rng — preserving independence from the scan cycle RNG stream.
 
 **Test count:** 2665 passed (was 2629 before).
+
+### Task 5.6: Evaluation Framework: Core Engine
+**Files created/modified:**
+- `src/factory_simulator/evaluation/evaluator.py` (NEW) — `Evaluator` class with `load_ground_truth()` (JSONL parser, FIFO start/end pairing), `load_detections()` (CSV parser with ISO or float UNIX timestamps), `evaluate_from_data()`, and internal `_compute()`. `match_events()` function implements PRD 12.4 tolerance windows: effective window `[start - pre_margin, end + post_margin]`, overlapping window tie-breaking by nearest start, multi-detection deduplication (one TP per event).
+- `src/factory_simulator/evaluation/metrics.py` (NEW) — Data classes: `EventMatch`, `ScenarioMetrics`, `RandomBaseline`, `EvaluationResult`. `DEFAULT_SEVERITY_WEIGHTS` and `DEFAULT_LATENCY_TARGETS` from PRD 12.4.
+- `src/factory_simulator/evaluation/__init__.py` (NEW) — Public API exports.
+- `src/factory_simulator/config.py` — Added `EvaluationConfig` Pydantic model with `pre_margin_seconds`, `post_margin_seconds`, `severity_weights`, `seeds`, `latency_targets`, and `@field_validator` rejecting negative margins and non-positive seeds.
+- `tests/unit/test_evaluator.py` (NEW) — 58 tests covering: match_events (boundary conditions, overlapping windows, FP/TP/FN), overall metrics (perfect/no/partial/mixed detections), severity-weighted recall and F1, detection latency (median, p90, negative latency), per-scenario breakdown, random baseline (structure, density, determinism), JSONL loading (pairs, open events, FIFO, non-scenario events), CSV loading (ISO/float timestamps, minimal columns), EvaluationConfig validation.
+
+**Decisions:**
+- FIFO pairing for overlapping same-type scenarios (first start → first end). This matches the natural chronological order of scenario injection.
+- Overlapping window tie-breaking: `|detection_time - event.start_time|` as distance metric per PRD 12.4.
+- Random baseline uses seeded `np.random.default_rng` for reproducibility. Anomaly density computed over time range extended by margins.
+- `_parse_iso()` handles both `Z` suffix (replace with `+00:00`) and proper ISO 8601 offsets.
+- `EvaluationConfig` lives in `config.py` alongside all other config models (not in `evaluation/`).
+
+**Test count:** 2723 passed (was 2665 before).
