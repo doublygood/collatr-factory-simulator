@@ -54,6 +54,8 @@ These are non-negotiable. Every agent working on this project must follow them.
 
 Never dismiss a test failure. Never write "tests failed due to timing issues... moving on." If a test fails, understand why, fix the root cause, or stop and document.
 
+**"Flaky test" is not a valid diagnosis.** A test that passes alone but fails in the full suite is a signal that something is wrong: different RNG state, unseeded random generator, shared port, leaked resource, or a feature bleeding across test boundaries. Identify the specific mechanism. Do not document the failure as "known flaky" and move on. The correct response is always to find the cause and fix it.
+
 ### Rule 2: Tests Prove Behaviour, Not Coverage
 
 Test priority order:
@@ -108,6 +110,14 @@ Equipment generators, signal models, and scenarios are instantiated per-profile.
 ### Rule 13: Reproducible Runs
 
 When a seed is configured, the simulation must produce byte-identical output on the same platform. Use numpy.random.Generator with SeedSequence. Never use the random module. Each subsystem gets an isolated Generator spawned from the root SeedSequence.
+
+### Rule 14: Test Fixtures Must Explicitly Control All Injectable Behaviour
+
+When a component has optional injectable behaviour (exception injection, comm drops, noise, data quality), every test fixture that creates that component must explicitly decide whether the behaviour is on or off — never rely on defaults. Specifically:
+
+- If a fixture is testing X (e.g. register encoding), it must disable everything that is not X (e.g. set `exception_probability=0.0`, `modbus_drop.enabled=False`).
+- If a new feature is added that affects all instances of a component (e.g. Modbus exception injection added to `ModbusServer`), audit every existing test fixture that creates that component and update it to either opt in or opt out explicitly.
+- An unseeded `np.random.default_rng()` in a constructor is a red flag: if a test fixture does not supply the RNG, the behaviour is non-deterministic and will eventually cause failures.
 
 ---
 

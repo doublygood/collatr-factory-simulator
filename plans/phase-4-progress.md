@@ -63,9 +63,44 @@
 - `WebBreak` not firing with `frequency_per_week: [1, 2]` because `mean_interval ≈ 403200s`;
   P(zero events in 1 day) ≈ 80%.
 
-**Test counts:** 15 new tests (2453 + 15 = 2468 total passing).
-**Known pre-existing flaky test:** `test_oven_humidity_hr_1124` fails intermittently in
-full-suite runs due to Modbus port contention; passes in isolation.
+**Test counts:** 15 new tests. Full suite: 2454 passing, 0 failing.
+
+**Post-commit bug found and fixed — Modbus exception injection in register-encoding tests:**
+
+After committing task 4.16, the full suite produced one failure:
+`test_oven_humidity_hr_1124` returned `ExceptionResponse` instead of register data.
+
+Initial diagnosis was "flaky test / port contention". This was wrong. Pushed to
+investigate properly. Actual root cause:
+
+- `ModbusServer.__init__` accepts an optional `exception_rng` parameter. When `None`
+  (the default, and what both `modbus_system` and `fnb_modbus_system` fixtures use),
+  the exception injector falls back to `np.random.default_rng()` — an **unseeded**
+  generator different on every process invocation.
+- Both fixtures loaded the config without disabling `exception_probability=0.001`.
+- With 79 Modbus register-encoding tests each calling `read_holding_registers`, every
+  read had a 0.1% chance of the server returning a `0x04 Device Failure` response.
+  Across a full suite run (~100+ reads in those two files), the expected hit rate is
+  ~1-2 failures per run.
+- The failure appeared "intermittent" because the unseeded RNG is different every time.
+  It was not actually intermittent — the code had a genuine defect.
+
+**Fix:** Set `config.data_quality.exception_probability = 0.0`,
+`partial_modbus_response.probability = 0.0`, and `modbus_drop.enabled = False` in
+both fixtures. These tests verify register encoding correctness; exception injection
+behaviour is tested separately and must not bleed into encoding tests.
+
+**How it was missed:** Task 4.10 implemented Modbus exception injection and tested it
+in isolation. Task 4.16 added integration tests that exercised the Modbus fixtures
+alongside the injection feature, but did not audit whether pre-existing fixtures were
+still valid in the presence of the new injection code. The lesson: when adding a
+feature that affects all protocol reads, audit every existing test fixture that creates
+a protocol server to ensure it opts in or out of the feature explicitly.
+
+**"Flaky test" is not a valid explanation.** A test that passes alone but fails in
+the suite is a signal that something is wrong — different RNG state, shared port,
+leaked resource, or a feature bleeding across test boundaries. The correct response
+is to identify the specific mechanism, not to document the failure and move on.
 
 ### Task 4.15 — Counter Rollover Testing Support (COMPLETE)
 
