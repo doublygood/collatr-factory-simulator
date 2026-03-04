@@ -1,0 +1,96 @@
+{
+    "phase": "6a",
+    "name": "Critical Fixes",
+    "tasks": [
+        {
+            "id": "6a.1",
+            "name": "Wire Ground Truth Logger into CLI",
+            "group": "RED Fixes",
+            "file": "src/factory_simulator/cli.py",
+            "description": "Create GroundTruthLogger in _async_run() and pass to DataEngine. Add --ground-truth-path CLI arg. Call write_header() after construction. Ensure close() in finally block. Test batch mode produces JSONL with header + scenario events.",
+            "review_ref": "R1 (review-architecture.md)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6a.2",
+            "name": "Fix Ground Truth Header — Add Missing Scenarios",
+            "group": "RED Fixes",
+            "file": "src/factory_simulator/engine/ground_truth.py",
+            "description": "Add 10 missing scenario types to write_header(): micro_stop, contextual_anomaly, intermittent_fault (Phase 4) + batch_cycle, oven_thermal_excursion, fill_weight_drift, seal_integrity_failure, chiller_door_alarm, cip_cycle, cold_chain_break (F&B). Guard F&B scenarios with None checks. Test both profiles produce complete scenario lists.",
+            "review_ref": "R2 (review-architecture.md)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6a.3",
+            "name": "Dockerfile Hardening",
+            "group": "RED Fixes",
+            "file": "Dockerfile",
+            "description": "Create .dockerignore (exclude .git, tests, output, plans, prd, __pycache__, caches). Add non-root 'simulator' user to Dockerfile. Change editable install to regular install. Ensure output dir writable by non-root user.",
+            "review_ref": "R3 + R4 (review-architecture.md)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6a.4",
+            "name": "OPC-UA EngineeringUnits Property",
+            "group": "RED Fixes",
+            "file": "src/factory_simulator/protocols/opcua_server.py",
+            "description": "Add EngineeringUnits property (EUInformation type) to all OPC-UA variable nodes using signal config units field. Use OPC Foundation UNECE namespace. UnitId=-1. Test: asyncua client browse verifies EngineeringUnits present with correct unit string.",
+            "review_ref": "R5 (review-protocol-fidelity.md)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6a.5",
+            "name": "Fix Oven Gateway UID Routing in Realistic Mode",
+            "group": "RED Fixes",
+            "file": "src/factory_simulator/topology.py",
+            "description": "In realistic mode, remap oven gateway secondary slaves to UIDs 1/2/3 (not 11/12/13). Keep collapsed mode UIDs 11/12/13 unchanged. UID 10 stays on primary context for energy. Test: realistic mode read IR 0 at UID 1 on port 5031 returns zone 1 PV. Test collapsed mode unaffected.",
+            "review_ref": "R6 (review-protocol-fidelity.md)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6a.6",
+            "name": "Fix Severity Weight Key Mismatch",
+            "group": "YELLOW Data Correctness",
+            "file": "src/factory_simulator/evaluation/evaluator.py",
+            "description": "Normalise ground truth event types (PascalCase) to snake_case before looking up in severity_weights and latency_targets. Helper: re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower(). Test: evaluator with PascalCase GT events + non-default weights produces weighted_recall != unweighted_recall.",
+            "review_ref": "Y1 (review-signal-integrity.md)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6a.7",
+            "name": "Fix Double-Logging of Ground Truth Events",
+            "group": "YELLOW Data Correctness",
+            "file": "src/factory_simulator/engine/scenario_engine.py",
+            "description": "Remove duplicate log_scenario_start/log_scenario_end calls from individual scenarios (bearing_wear, micro_stop, contextual_anomaly, intermittent_fault, batch_cycle, cip_cycle, cold_chain_break). ScenarioEngine is the single source of truth for start/end GT events. Keep scenario-specific detail logging (phase transitions, parameter changes). Test: deterministic sim produces exactly one start + one end per scenario instance.",
+            "review_ref": "Y2 (review-signal-integrity.md)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6a.8",
+            "name": "Handle Open Scenarios in Evaluator",
+            "group": "YELLOW Data Correctness",
+            "file": "src/factory_simulator/evaluation/evaluator.py",
+            "description": "For scenario_start with no matching scenario_end, use simulation end time (last event timestamp) as end time. Add optional 'open' field to GroundTruthEvent. Test: GT file with open BearingWear is included in evaluation, detection within window counts as TP.",
+            "review_ref": "Y3 (review-signal-integrity.md)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6a.9",
+            "name": "Validate All Fixes — Full Suite + Integration Check",
+            "group": "Validation",
+            "file": null,
+            "description": "Run ruff + mypy + pytest full suite. Run short batch simulation end-to-end. Verify ground truth JSONL produced with events. Verify no regressions. Fix any failures.",
+            "review_ref": "All",
+            "depends_on": ["6a.1", "6a.2", "6a.3", "6a.4", "6a.5", "6a.6", "6a.7", "6a.8"],
+            "passes": false
+        }
+    ]
+}

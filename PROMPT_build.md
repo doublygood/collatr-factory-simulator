@@ -1,205 +1,125 @@
 Read CLAUDE.md for project rules and conventions.
 
-You are implementing Phase 5 (Network Topology, Evaluation, and Polish) of the Collatr Factory Simulator.
+You are implementing Phase 6a (Critical Fixes) of the Collatr Factory Simulator.
 
 ## CONTEXT
 
-Phases 0-4 are complete. Both profiles are fully operational:
+Phases 0-5 are complete. The simulator is feature-complete and release-ready:
 - **Packaging**: 47 signals, 7 equipment generators, 17 scenario types, all 3 protocols
-- **F&B**: 68 signals, 10 equipment generators (6 new + 4 shared), 7 F&B scenarios, CDAB + multi-slave Modbus
-- 2459+ tests passing, ruff + mypy clean
-- Ground truth JSONL logging operational
-- Poisson scheduling, priority/conflict resolution, 4 advanced scenarios (bearing wear, micro-stops, contextual anomalies, intermittent faults)
-- Full data quality injection: comm drops (3 protocols), sensor disconnect/stuck, Modbus exceptions/partial, duplicate timestamps, timezone offset
-- Noise calibration for both profiles (AR(1), Student-t, Gaussian per PRD 10.3)
-- Reproducibility verified (seed=42 → identical output)
+- **F&B**: 68 signals, 10 equipment generators, 7 F&B scenarios, CDAB + multi-slave Modbus
+- **Network topology**: collapsed + realistic modes, multi-port Modbus/OPC-UA, scan cycle quantisation, clock drift, independent connection drops
+- **Evaluation framework**: event-level matching, severity-weighted metrics, random baseline, CLI
+- **Batch output**: CSV and Parquet, CLI entry point, Docker Compose, README
+- 2963+ tests passing, ruff + mypy clean
 
-Phase 5 adds three major workstreams:
-1. **Network topology** — Multi-controller Modbus/OPC-UA servers with per-controller connection behaviour
-2. **Evaluation framework** — Event-level anomaly detection metrics per PRD Section 12
-3. **Productisation** — CLI, batch output (CSV/Parquet), Docker Compose, README, example configs
+Three independent code reviewers (protocol fidelity, signal integrity, architecture) audited the entire codebase and found 54 issues: 6 RED, 27 YELLOW, 21 GREEN.
 
-The full plan is in `plans/phase-5-topology-eval-polish.md`. Read it.
+**Phase 6a addresses the 6 RED issues + 3 highest-impact YELLOWs (data correctness).**
+
+The full review reports are in:
+- `plans/review-architecture.md`
+- `plans/review-signal-integrity.md`
+- `plans/review-protocol-fidelity.md`
+- `plans/consolidated-review-action-plan.md`
+
+The Phase 6a plan with detailed per-task instructions is in `plans/phase-6a-critical-fixes.md`. Read it.
 
 ## CRITICAL: ONE TASK PER SESSION
 
 You MUST implement exactly ONE task per session, then STOP.
 
-1. Read `plans/phase-5-topology-eval-polish.md` for the full plan
-2. Read `plans/phase-5-tasks.json` to find the **first** task with `"passes": false`
+1. Read `plans/phase-6a-critical-fixes.md` for the full plan
+2. Read `plans/phase-6a-tasks.json` to find the **first** task with `"passes": false`
 3. Check `depends_on` — if any dependency has `"passes": false`, skip to the next eligible task
-4. Read the relevant source files and PRD sections referenced in that task
-5. Implement ONLY that single task
-6. Run tests: `ruff check src tests && mypy src && pytest` — ALL must pass
-7. Update `plans/phase-5-tasks.json`: set `"passes": true` for your completed task
-8. Update `plans/phase-5-progress.md` with what you built and any decisions
-9. Commit: `phase-5: <what> (task 5.X)`
-10. Do NOT push. Pushing is handled externally.
-11. Output TASK_COMPLETE and STOP. Do NOT continue to the next task.
+4. Read the relevant review file for full context on the issue (the `review_ref` field tells you which)
+5. Read the relevant source files before changing anything
+6. Implement ONLY that single task's fix
+7. Run the new/modified test file alone first: `ruff check src tests && pytest tests/path/to/test.py -v --tb=short`
+8. Run ALL tests: `ruff check src tests && mypy src && pytest` — ALL must pass
+9. Update `plans/phase-6a-tasks.json`: set `"passes": true` for your completed task
+10. Update `plans/phase-6a-progress.md` with what you fixed and any decisions
+11. Commit: `phase-6a: <what> (task 6a.X)`
+12. Do NOT push. Pushing is handled externally.
+13. Output TASK_COMPLETE and STOP. Do NOT continue to the next task.
 
 ## PHASE-SPECIFIC NOTES
 
-### Network Topology Manager (Task 5.1)
+### Ground Truth Logger (Task 6a.1)
 
-The topology manager is the foundation for realistic mode. Key design points:
+This is the biggest bug. The CLI creates the DataEngine but never creates or passes a GroundTruthLogger. The `ground_truth` parameter defaults to `None`, so all scenario events are silently dropped.
 
-- **Collapsed mode** is the current behaviour — single port per protocol. This MUST remain the default and continue to work exactly as it does now. Do NOT break existing tests.
-- **Realistic mode** spawns per-controller servers per PRD Section 3a.4. Port mappings:
-  - Packaging Modbus: 5020 (press+energy), 5021 (laminator), 5022 (slitter)
-  - F&B Modbus: 5030 (mixer), 5031 (oven+energy, UIDs 1/2/3/10), 5032 (filler), 5033 (sealer), 5034 (chiller), 5035 (CIP)
-  - Packaging OPC-UA: 4840 (full tree)
-  - F&B OPC-UA: 4841 (filler), 4842 (QC/checkweigher)
-- Config models go in `config.py`. Topology manager goes in a new `topology.py`.
-- Add `network: NetworkConfig | None = None` to `FactoryConfig`. When None, use collapsed defaults.
+Key files:
+- `src/factory_simulator/cli.py` — the `_async_run()` function
+- `src/factory_simulator/engine/ground_truth.py` — the `GroundTruthLogger` class
+- `src/factory_simulator/engine/data_engine.py` — accepts `ground_truth` parameter
 
-### Multi-Port Modbus Servers (Task 5.2)
+The DataEngine already handles the logger correctly when it receives one. The fix is in the CLI: create the logger, pass it in, manage its lifecycle.
 
-Key points for realistic mode:
+### Ground Truth Header (Task 6a.2)
 
-- Each `ModbusServer` instance gets an `endpoint` spec defining its port, unit_id(s), register range, byte_order, and controller type
-- **Out-of-range reads must return Modbus exception 0x02** (Illegal Data Address). This is how real PLCs behave.
-- **Multi-slave on shared ports**: oven gateway at 5031 serves UIDs 1,2,3 (zones) and UID 10 (energy). Press port at 5020 serves UID 1 (press) and UID 5 (energy). Each UID maps to different register ranges.
-- **Connection limits**: S7-1500 max 16 TCP connections, S7-1200 max 3, CompactLogix max 8, Eurotherm gateway max 2, Danfoss max 2, PM5560 max 4
-- **Response latency**: inject configurable delay per read per controller type (S7-1500 50ms typical, Eurotherm 150ms typical)
-- `DataEngine` must accept `NetworkTopologyManager` and create servers accordingly
-- **Do not break collapsed mode.** All existing tests must still pass.
+The `write_header()` method in `ground_truth.py` (around line 60-105) uses individual `if scfg.<name>.enabled` checks for each scenario. Only 11 packaging scenarios are listed. Missing: 3 Phase 4 scenarios + 7 F&B scenarios.
 
-### Multi-Port OPC-UA and Clock Drift (Task 5.3)
+F&B scenarios are on optional config fields — the `ScenariosConfig` attributes may be `None` for the packaging profile. Guard with `if scfg.<name> is not None and scfg.<name>.enabled`.
 
-- Packaging: 1 OPC-UA server on 4840 (no change from current)
-- F&B: 2 OPC-UA servers — filler on 4841, QC on 4842
-- **Clock drift model**: `drifted_time = sim_time + initial_offset_ms/1000 + drift_rate_s_per_day * elapsed_hours / 24`
-- Each controller gets a `ClockDriftModel` instance
-- OPC-UA `SourceTimestamp` uses drifted time. MQTT JSON timestamp uses drifted time.
-- Ground truth ALWAYS uses true `sim_time` — never drifted time
-- Modbus has no timestamps — drift does not apply
-- Eurotherm controllers drift 5-10 s/day. Siemens S7-1500 drifts 0.1-0.5 s/day.
+### OPC-UA EngineeringUnits (Task 6a.4)
 
-### Scan Cycle Quantisation (Task 5.4)
-
-This was listed in Phase 4 PRD but correctly deferred to Phase 5 (requires per-controller topology).
-
-The key concept: real PLCs update registers once per scan cycle. Between scans, values are stale.
+Use asyncua's `EUInformation` type. The signal config already has a `units` field (string like "m/min", "N", "°C"). Example:
 
 ```python
-if sim_time >= next_scan_boundary:
-    register_value = current_generated_value
-    next_scan_boundary += scan_cycle_ms * (1.0 + rng.uniform(0, jitter_pct))
-else:
-    register_value = last_scan_output  # stale
+from asyncua import ua
+eu = ua.EUInformation(
+    NamespaceUri="http://www.opcfoundation.org/UA/units/un/cefact",
+    UnitId=-1,
+    DisplayName=ua.LocalizedText(sig_cfg.units or ""),
+    Description=ua.LocalizedText(sig_cfg.units or ""),
+)
+await var_node.add_property(ua.NodeId(0, 0), "EngineeringUnits", eu)
 ```
 
-- Only applies in realistic mode. Collapsed mode: direct passthrough (no quantisation).
-- Wire into `ModbusServer.sync_registers()` — pass values through `ScanCycleModel.tick()` before writing to context.
-- Per-controller scan times from PRD 3a.8: S7-1500=10ms, S7-1200=20ms, CompactLogix=15ms, Eurotherm=100ms, Danfoss=100ms
+### Oven Gateway UID Routing (Task 6a.5)
 
-### Independent Connection Drops (Task 5.5)
+The issue is in the topology builder for realistic mode. Currently, UIDs 1,2,3 on port 5031 map to the primary context (which serves IR 100+). The per-zone IR 0/1/2 registers are on secondary slaves at UIDs 11-13 (from collapsed-mode multi-slave).
 
-- In realistic mode, each controller endpoint gets its own `CommDropScheduler` (reuse Phase 4 class from `comm_drop.py`)
-- Controller-specific MTBF: Eurotherm gateway 8-24h (drops frequently), S7-1500 72h+ (very stable)
-- Key test: drop one controller, verify ALL other controllers continue serving data
-- In collapsed mode, keep existing Phase 4 behaviour (single comm drop per protocol)
+In realistic mode, remap secondary slaves to UIDs 1,2,3. In collapsed mode, keep UIDs 11/12/13.
 
-### Evaluation Framework (Tasks 5.6-5.7)
+Check `topology.py` around the `_foodbev_modbus()` method and how secondary slaves are configured.
 
-The evaluator consumes two inputs:
-1. **Ground truth JSONL** — the sidecar file the simulator already produces
-2. **Detection alerts CSV** — produced by whatever anomaly detection system is being evaluated (not by the simulator)
+### Severity Weight Keys (Task 6a.6)
 
-The evaluator matches alerts to ground truth events and computes metrics. It does NOT run anomaly detection itself.
+Ground truth logs `type(scenario).__name__` which produces PascalCase (`"WebBreak"`, `"BearingWear"`). The severity weight dict in `metrics.py` uses snake_case (`"web_break"`, `"bearing_wear"`).
 
-Key matching rules:
-- An event is detected if at least one alert falls within `[start - pre_margin, end + post_margin]`
-- Multiple alerts in the same window count as one TP
-- Alerts outside all windows are FP
-- If two events have overlapping windows, alert goes to the nearest event by start time
-- **Random baseline**: compute anomaly density (total anomaly ticks / total ticks), generate random alerts at that rate, compute baseline metrics. Any useful detector must beat this baseline.
+Fix in the evaluator: normalise PascalCase to snake_case before looking up weights. Apply the same normalisation for latency target lookups.
 
-### Batch Output (Task 5.8)
+### Double-Logging (Task 6a.7)
 
-- CSV column order: `timestamp, signal_id, value, quality`
-- Parquet: columnar per-signal layout (each signal is a column, timestamps are the index)
-- Event-driven signals (machine_state, fault_code) have a `changed` boolean column — only rows where `changed=True` represent actual state transitions
-- Wire into `DataEngine`: when `batch_output.format != "none"`, call `writer.write_tick()` after each engine tick
-- `pyarrow` is an optional dependency (only needed for Parquet output)
+The ScenarioEngine detects PENDING→ACTIVE and ACTIVE→COMPLETED transitions and logs GT events. But several scenarios ALSO log their own start/end events internally. This produces duplicates.
 
-### CLI Entry Point (Task 5.9)
+**Decision: ScenarioEngine is the single source of truth.** Remove the duplicate `log_scenario_start()` and `log_scenario_end()` calls from individual scenarios. Keep any scenario-specific detail logging that provides extra information beyond start/end (e.g. phase transitions within intermittent faults).
 
-Use `argparse` (no external dependency). Subcommands: `run`, `evaluate`, `version`.
+Scenarios with internal GT logging to clean up:
+- `bearing_wear.py`
+- `micro_stop.py`
+- `contextual_anomaly.py` (end only)
+- `intermittent_fault.py`
+- `batch_cycle.py`
+- `cip_cycle.py`
+- `cold_chain_break.py`
 
-```bash
-# Start simulator (default: collapsed, real-time, packaging)
-python -m factory_simulator run
+### Validation Task (Task 6a.9)
 
-# Batch mode (7 days, 100x, CSV output)
-python -m factory_simulator run --batch-output ./output --batch-duration 7d --batch-format csv --time-scale 100 --seed 42
-
-# Evaluate detections against ground truth
-python -m factory_simulator evaluate --ground-truth output/ground_truth.jsonl --detections output/detections.csv
-
-# Print version
-python -m factory_simulator version
-```
-
-### Docker Compose (Task 5.10)
-
-The health endpoint is a simple `asyncio`-based HTTP server on port 8080:
-
-```python
-# GET /health
-{"status": "running", "profile": "packaging", "sim_time": "2026-01-01T08:30:00Z", "signals": 47, "modbus": "up", "opcua": "up", "mqtt": "up"}
-```
-
-Port mappings in `docker-compose.yaml` (collapsed mode):
-- 502:502 (Modbus), 4840:4840 (OPC-UA), 1883:1883 (MQTT), 8080:8080 (health)
-
-Realistic mode override (`docker-compose.realistic.yaml`):
-- 5020-5035:5020-5035 (Modbus), 4840-4842:4840-4842 (OPC-UA)
-
-### Performance Profiling (Task 5.12)
-
-These are benchmarks, not functional tests. Use `@pytest.mark.performance` marker.
-
-Key targets (not hard assertions — just measure and record):
-- 10x protocol serving: tick latency < 100ms target (engine generates + serves data fast enough)
-- 100x batch: 24h simulation completes in < 15 minutes wall time
-- Realistic mode overhead: < 2x slowdown vs collapsed
-- 7-day memory: RSS < 2x initial
-
-### Acceptance Test (Task 5.13)
-
-The acceptance test is the "done" gate. It verifies everything from PRD Section 11.
-
-Key check: a fresh engineer experience. The README must be accurate enough that someone who has never seen the project can get data flowing in 15 minutes.
+This is the "done gate." No new code — just verify everything works end-to-end. The full test suite must pass, and a batch simulation must produce a ground truth JSONL file that the evaluate subcommand can consume.
 
 ## STOPPING RULES
 
 **After completing ONE task:** Output `TASK_COMPLETE` and stop immediately.
 Do not look for the next task. Do not start another task.
-The ralph.sh loop will call you again for the next iteration.
 
-**If a test cannot pass after 3 genuine attempts:** STOP. Document the issue in `plans/phase-5-progress.md`. Output `TASK_BLOCKED: <reason>` and stop.
+**If a test cannot pass after 3 genuine attempts:** STOP. Document the issue in `plans/phase-6a-progress.md`. Output `TASK_BLOCKED: <reason>` and stop.
 
 **Dependency check:** If the first `"passes": false` task has unsatisfied dependencies, find the next task whose dependencies are all satisfied. If NO tasks are eligible, output `PHASE_BLOCKED: waiting on <task IDs>` and stop.
 
 ## COMPLETION
 
 When ALL tasks in the task JSON have `"passes": true`:
-1. Do NOT output PHASE_COMPLETE yet.
-2. Spawn a sub-agent code review.
-3. Write the review to `plans/phase-5-review.md`
-4. Review checks:
-   - Collapsed mode fully backward-compatible (no existing test regressions)
-   - Realistic mode: correct ports, register ranges, UIDs per PRD 3a.4
-   - Scan cycle quantisation produces stale reads between boundaries
-   - Clock drift offsets visible in OPC-UA timestamps
-   - One controller drop does not affect others
-   - Evaluation framework metrics correct for known test data
-   - Batch output produces valid CSV/Parquet
-   - CLI subcommands work
-   - Docker Compose builds and starts
-   - README is accurate and complete
-5. Address all RED Must Fix findings. Re-run `ruff check src tests && mypy src && pytest` after each fix.
-6. Commit fixes: `phase-5: address code review findings`
-7. Push all commits.
-8. THEN output: PHASE_COMPLETE
+1. Push all commits.
+2. Output: PHASE_COMPLETE
