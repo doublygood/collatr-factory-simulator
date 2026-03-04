@@ -255,12 +255,17 @@ class DataEngine:
         servers: list[ModbusServer] = []
         for ep in self._topology.modbus_endpoints():
             scan_rng = np.random.default_rng(self._root_ss.spawn(1)[0])
+            # Independent RNG for per-controller drop scheduler (PRD 3a.5, Rule 13).
+            # Each endpoint gets its own isolated RNG so drops are statistically
+            # independent and reproducible across endpoints.
+            drop_rng = np.random.default_rng(self._root_ss.spawn(1)[0])
             scan_model = ScanCycleModel(ep.scan_cycle, scan_rng)
             server = ModbusServer(
                 self._config,
                 self._store,
                 endpoint=ep,
                 scan_cycle_model=scan_model,
+                comm_drop_rng=drop_rng,
             )
             servers.append(server)
         return servers

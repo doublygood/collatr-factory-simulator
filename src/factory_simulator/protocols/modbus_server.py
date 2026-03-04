@@ -40,10 +40,12 @@ from pymodbus.datastore import (
 from pymodbus.pdu.register_message import ExcCodes  # type: ignore[attr-defined]
 from pymodbus.server import ModbusTcpServer
 
+from factory_simulator.config import CommDropConfig
 from factory_simulator.protocols.comm_drop import CommDropScheduler
 
 if TYPE_CHECKING:
     from factory_simulator.config import (
+        ConnectionDropConfig,
         FactoryConfig,
         PartialModbusResponseConfig,
     )
@@ -618,6 +620,30 @@ def build_register_map(
     return rmap
 
 
+def _connection_drop_to_comm_drop(conn_drop: ConnectionDropConfig) -> CommDropConfig:
+    """Convert MTBF-based ConnectionDropConfig to CommDropConfig for CommDropScheduler.
+
+    MTBF (mean time between failures) is the inverse of frequency:
+    - min frequency = 1 / mtbf_hours_max  (most reliable → least frequent drops)
+    - max frequency = 1 / mtbf_hours_min  (least reliable → most frequent drops)
+
+    Duration corresponds to the reconnection delay range.
+
+    PRD Reference: Section 3a.5 (Connection Behaviour)
+    """
+    return CommDropConfig(
+        enabled=True,
+        frequency_per_hour=[
+            1.0 / conn_drop.mtbf_hours_max,   # min freq (max MTBF → most reliable)
+            1.0 / conn_drop.mtbf_hours_min,    # max freq (min MTBF → least reliable)
+        ],
+        duration_seconds=[
+            conn_drop.reconnection_delay_s_min,
+            conn_drop.reconnection_delay_s_max,
+        ],
+    )
+
+
 def _compute_block_size(addresses: list[int], min_size: int = 16) -> int:
     """Compute the data block size needed to hold all register addresses.
 
@@ -677,11 +703,17 @@ class ModbusServer:
             self._host = host or self._modbus_cfg.bind_address
             self._port = port or self._modbus_cfg.port
 
-        # Communication drop scheduler (PRD 10.2)
+        # Communication drop scheduler (PRD 10.2 / 3a.5).
+        # Realistic mode: use per-controller drop config from endpoint spec so
+        # each controller endpoint has an independent CommDropScheduler with its
+        # own MTBF (e.g. Eurotherm 8-24h vs S7-1500 72h+).
+        # Collapsed mode: use global modbus_drop config — existing behaviour.
         _rng = comm_drop_rng if comm_drop_rng is not None else np.random.default_rng()
-        self._drop_scheduler = CommDropScheduler(
-            config.data_quality.modbus_drop, _rng,
-        )
+        if endpoint is not None:
+            drop_cfg = _connection_drop_to_comm_drop(endpoint.connection_drop)
+        else:
+            drop_cfg = config.data_quality.modbus_drop
+        self._drop_scheduler = CommDropScheduler(drop_cfg, _rng)
 
         # Exception / partial response injector (PRD 10.6, 10.11)
         _exc_rng = exception_rng if exception_rng is not None else np.random.default_rng()

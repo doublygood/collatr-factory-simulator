@@ -7,7 +7,7 @@
 - [x] 5.2: Multi-Port Modbus Servers
 - [x] 5.3: Multi-Port OPC-UA Servers and Clock Drift
 - [x] 5.4: Scan Cycle Quantisation and Phase Jitter
-- [ ] 5.5: Independent Connection Drops per Controller
+- [x] 5.5: Independent Connection Drops per Controller
 - [ ] 5.6: Evaluation Framework: Core Engine
 - [ ] 5.7: Evaluation CLI and Run Manifests
 - [ ] 5.8: Batch Output: CSV and Parquet
@@ -86,3 +86,16 @@
 - Secondary slave (Eurotherm) IR blocks also quantised since they share the same controller endpoint.
 
 **Test count:** 2629 passed (was 2593 before).
+
+### Task 5.5: Independent Connection Drops per Controller
+**Files created/modified:**
+- `src/factory_simulator/protocols/modbus_server.py` — Added `_connection_drop_to_comm_drop()` helper: converts `ConnectionDropConfig` (MTBF-based) to `CommDropConfig` (frequency-based) by mapping `frequency = 1/mtbf_hours`. In `ModbusServer.__init__`, when `endpoint` is provided (realistic mode), the drop scheduler is created from the endpoint's `connection_drop` spec instead of the global `config.data_quality.modbus_drop`. Added runtime import of `CommDropConfig`; added `ConnectionDropConfig` to TYPE_CHECKING block.
+- `src/factory_simulator/engine/data_engine.py` — In `create_modbus_servers()` realistic mode, each endpoint now spawns an isolated `comm_drop_rng` (`self._root_ss.spawn(1)[0]`) and passes it to `ModbusServer`, giving each controller an independent, reproducible drop RNG (Rule 13).
+- `tests/unit/test_protocols/test_independent_comm_drops.py` (NEW) — 36 tests covering: MTBF→CommDropConfig conversion (Eurotherm, S7-1500, Danfoss), frequency ordering (short MTBF = high freq), duration mapping, drop scheduler independence (distinct objects, one drop does not affect others), DataEngine realistic mode server counts (packaging=3, F&B=6), per-controller MTBF rates verified (press S7-1500 at 1/72, oven Eurotherm at 1/8, chiller Danfoss at 1/24), RNG isolation, collapsed mode backward compatibility.
+
+**Decisions:**
+- `_connection_drop_to_comm_drop`: freq_min = 1/mtbf_max, freq_max = 1/mtbf_min — inverted because higher MTBF = lower drop frequency. Duration maps 1:1 from reconnection_delay to CommDropConfig.duration_seconds.
+- Collapsed mode unchanged: `endpoint is None` → uses `config.data_quality.modbus_drop` exactly as before. No existing tests regressed.
+- Each server in DataEngine realistic mode gets two separate `SeedSequence.spawn()` calls — one for scan_cycle, one for drop_rng — preserving independence from the scan cycle RNG stream.
+
+**Test count:** 2665 passed (was 2629 before).
