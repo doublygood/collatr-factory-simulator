@@ -19,6 +19,8 @@ asyncio_mode = "auto"
 markers = [
     "integration: requires external services (Docker Compose)",
     "slow: long-running tests (7-day simulation runs); skip with -m 'not slow'",
+    "performance: benchmark tests; skip with -m 'not performance'",
+    "acceptance: acceptance tests verifying PRD Section 11; skip with -m 'not acceptance'",
 ]
 
 # ── ruff ────────────────────────────────────────────────────────────
@@ -56,5 +58,7 @@ module = [
     "asyncua.*",
     "paho.*",
     "uvloop",
+    "pyarrow",
+    "pyarrow.*",
 ]
 ignore_missing_imports = true

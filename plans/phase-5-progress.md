@@ -10,7 +10,7 @@
 - [x] 5.5: Independent Connection Drops per Controller
 - [x] 5.6: Evaluation Framework: Core Engine
 - [x] 5.7: Evaluation CLI and Run Manifests
-- [ ] 5.8: Batch Output: CSV and Parquet
+- [x] 5.8: Batch Output: CSV and Parquet
 - [ ] 5.9: CLI Entry Point
 - [ ] 5.10: Docker Compose with Health Checks
 - [ ] 5.11: README and Example Configs
@@ -133,3 +133,25 @@
 - `clean_config_overlay` uses `frozenset` internally to enumerate normal-operation vs anomaly scenarios, consistent with PRD 12.3 categorisation.
 
 **Test count:** 2788 passed (was 2723 before).
+
+### Task 5.8: Batch Output: CSV and Parquet
+**Files created/modified:**
+- `src/factory_simulator/output/__init__.py` (NEW) — Public API exports (`BatchWriter`, `CsvWriter`, `ParquetWriter`).
+- `src/factory_simulator/output/writer.py` (NEW) — `BatchWriter` ABC with `write_tick(sim_time, store)` and `close()`. `CsvWriter`: long format (`timestamp, signal_id, value, quality`), buffers rows in memory, flushes at `buffer_size` rows or `close()`. Event-driven signals written only on change. NaN/Inf filtered out. `ParquetWriter`: wide format (one row per tick, one column per signal), event-driven signals get additional `<signal_id>_changed` boolean column. NaN/Inf stored as null to preserve row alignment. Both writers flush to a single file incrementally.
+- `src/factory_simulator/config.py` — Added `BatchOutputConfig` Pydantic model (`format`, `path`, `buffer_size`, `event_driven_signals`). Added `batch_output: BatchOutputConfig` field to `FactoryConfig` with default `format="none"` (disabled).
+- `src/factory_simulator/engine/data_engine.py` — Added `batch_writer: BatchWriter | None = None` parameter to `DataEngine.__init__`. `tick()` calls `batch_writer.write_tick()` after data quality injection (post all signal updates). `run()` finally block calls `batch_writer.close()`. Added `batch_writer` property.
+- `requirements.txt` — Added `pyarrow>=14.0` (optional, required for Parquet output).
+- `pyproject.toml` — Added `pyarrow`/`pyarrow.*` to mypy `ignore_missing_imports` overrides. Added `performance` and `acceptance` pytest markers.
+- `tests/unit/test_batch_output.py` (NEW) — 30 tests covering: CSV column order, string/float values, quality preservation, event-driven only-on-change, state transitions, continuous signals every tick, buffer flush at configured size, correct row counts, empty store, NaN/Inf filtering, DataEngine integration, `BatchOutputConfig` validation, Parquet readable by pyarrow, timestamp column, per-signal columns, row count, event-driven changed column, null for NaN, buffer flush.
+
+**Decisions:**
+- CSV uses long (tall) format — simpler for arbitrary signal sets; one row per signal per tick.
+- Parquet uses wide format — columnar layout efficient for time-series analysis; one row per tick, one column per signal.
+- Event-driven signals in CSV: filtered by value comparison, only one row per distinct value. No extra column needed (row absence signals "no change").
+- Event-driven signals in Parquet: always present in every row (preserves time alignment), but companion `_changed` boolean column marks actual transitions.
+- NaN/Inf in CSV: dropped (no row written). NaN/Inf in Parquet: stored as null/None (row kept for alignment).
+- `BatchOutputConfig.format = "none"` is the default — batch output is opt-in, so all existing tests are unaffected.
+- `ParquetWriter._pq_writer` opened on first flush (schema inferred from first batch) — no empty Parquet file if `close()` is called without any `write_tick()`.
+- pyarrow imports inside `try/except ImportError` in `ParquetWriter.__init__` — gives a clear `ImportError` message if pyarrow is absent. Mypy `ignore_missing_imports = true` override for `pyarrow.*` suppresses the `import-untyped` warning.
+
+**Test count:** 2818 passed (was 2788 before).

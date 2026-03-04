@@ -48,6 +48,7 @@ from factory_simulator.store import SignalStore
 if TYPE_CHECKING:
     from factory_simulator.config import EquipmentConfig, FactoryConfig
     from factory_simulator.models.counter import CounterModel
+    from factory_simulator.output.writer import BatchWriter
     from factory_simulator.protocols.modbus_server import ModbusServer
     from factory_simulator.protocols.opcua_server import OpcuaServer
     from factory_simulator.topology import NetworkTopologyManager
@@ -117,6 +118,7 @@ class DataEngine:
         clock: SimulationClock | None = None,
         ground_truth: GroundTruthLogger | None = None,
         topology: NetworkTopologyManager | None = None,
+        batch_writer: BatchWriter | None = None,
     ) -> None:
         self._config = config
         self._store = store
@@ -127,6 +129,7 @@ class DataEngine:
         self._running = False
         self._ground_truth = ground_truth
         self._topology = topology
+        self._batch_writer = batch_writer
 
         # Master RNG -- child rngs are spawned per generator (Rule 13)
         # Use SeedSequence hierarchy for proper statistical independence (Y1 fix)
@@ -225,6 +228,11 @@ class DataEngine:
     def topology(self) -> NetworkTopologyManager | None:
         """The network topology manager, if configured."""
         return self._topology
+
+    @property
+    def batch_writer(self) -> BatchWriter | None:
+        """The batch output writer, if configured."""
+        return self._batch_writer
 
     # -- Protocol server creation (PRD 3a.4) ----------------------------------
 
@@ -396,6 +404,11 @@ class DataEngine:
         # before protocol servers read the store (PRD 8.2, Task 4.12)
         self._data_quality.tick(sim_time, self._store, self._ground_truth)
 
+        # Batch output: written after all injections so the file reflects
+        # the same values protocol adapters would see (PRD Appendix F, Task 5.8)
+        if self._batch_writer is not None:
+            self._batch_writer.write_tick(sim_time, self._store)
+
         return sim_time
 
     # -- Async run loop -------------------------------------------------------
@@ -428,6 +441,8 @@ class DataEngine:
         finally:
             self._running = False
             logger.info("DataEngine stopped at sim_time=%.3fs", self._clock.sim_time)
+            if self._batch_writer is not None:
+                self._batch_writer.close()
 
     def stop(self) -> None:
         """Signal the run loop to stop after the current tick."""

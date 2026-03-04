@@ -1223,6 +1223,40 @@ class EvaluationConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Batch output config (PRD Appendix F, Phase 5)
+# ---------------------------------------------------------------------------
+
+
+class BatchOutputConfig(BaseModel):
+    """Batch output configuration for offline analysis runs.
+
+    When ``format`` is not ``"none"``, the :class:`~factory_simulator.output.writer.BatchWriter`
+    writes all signal values to disk after each engine tick.
+
+    PRD Reference: Appendix F (Phase 5 — batch output)
+    """
+
+    format: Literal["csv", "parquet", "none"] = "none"
+    """Output format: csv (long format), parquet (wide format), or none (disabled)."""
+
+    path: str = "."
+    """Output directory path."""
+
+    buffer_size: int = 10000
+    """Number of rows to buffer in memory before flushing to disk."""
+
+    event_driven_signals: list[str] = Field(default_factory=list)
+    """Signal IDs written only when their value changes (e.g. machine_state, fault_code)."""
+
+    @field_validator("buffer_size")
+    @classmethod
+    def _buffer_positive(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("buffer_size must be positive")
+        return v
+
+
+# ---------------------------------------------------------------------------
 # Network topology configs (PRD 3a)
 # ---------------------------------------------------------------------------
 
@@ -1360,6 +1394,7 @@ class FactoryConfig(BaseModel):
     scenarios: ScenariosConfig = Field(default_factory=ScenariosConfig)
     shifts: ShiftsConfig = Field(default_factory=ShiftsConfig)
     data_quality: DataQualityConfig = Field(default_factory=DataQualityConfig)
+    batch_output: BatchOutputConfig = Field(default_factory=BatchOutputConfig)
     network: NetworkConfig | None = None
 
 
