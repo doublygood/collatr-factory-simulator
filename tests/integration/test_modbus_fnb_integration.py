@@ -70,6 +70,14 @@ async def fnb_modbus_system() -> (  # type: ignore[override]
     config.simulation.tick_interval_ms = 100
     config.simulation.time_scale = 1.0
 
+    # Disable all data quality injection: these tests check register encoding,
+    # not exception/drop injection.  Exception injection uses an unseeded RNG
+    # (no exception_rng passed to ModbusServer) so non-zero probability causes
+    # intermittent ExceptionResponse failures.
+    config.data_quality.exception_probability = 0.0
+    config.data_quality.partial_modbus_response.probability = 0.0
+    config.data_quality.modbus_drop.enabled = False
+
     store = SignalStore()
     clock = SimulationClock.from_config(config.simulation)
     engine = DataEngine(config, store, clock)
