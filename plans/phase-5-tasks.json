@@ -1,0 +1,165 @@
+{
+    "phase": 5,
+    "name": "Network Topology, Evaluation, and Polish",
+    "tasks": [
+        {
+            "id": "5.1",
+            "name": "Network Topology Manager and Config",
+            "group": "A: Network Topology",
+            "file": "src/factory_simulator/topology.py",
+            "description": "Create NetworkTopologyManager class with collapsed/realistic mode support. Add NetworkConfig, ClockDriftConfig, ScanCycleConfig, ConnectionLimitConfig, ConnectionDropConfig Pydantic models. Topology resolves port mappings per profile (packaging: 4 Modbus + 1 OPC-UA; F&B: 7 Modbus + 2 OPC-UA). Update both YAML configs with network section.",
+            "prd_refs": [
+                "prd/03a-network-topology.md (3a.4)",
+                "prd/appendix-d-configuration-reference.md"
+            ],
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "5.2",
+            "name": "Multi-Port Modbus Servers",
+            "group": "A: Network Topology",
+            "file": "src/factory_simulator/protocols/modbus_server.py",
+            "description": "Wire topology manager into DataEngine to spawn per-controller Modbus servers in realistic mode. Each server serves only its register range (out-of-range = 0x02). CDAB byte order on mixer. Connection limit enforcement. Response latency injection. Multi-slave UID routing on shared ports (oven gateway UIDs 1/2/3/10, press port UID 1 + energy UID 5).",
+            "prd_refs": [
+                "prd/03a-network-topology.md (3a.2, 3a.3, 3a.4, 3a.5)"
+            ],
+            "depends_on": ["5.1"],
+            "passes": false
+        },
+        {
+            "id": "5.3",
+            "name": "Multi-Port OPC-UA Servers and Clock Drift",
+            "group": "A: Network Topology",
+            "file": "src/factory_simulator/protocols/opcua_server.py",
+            "description": "Wire topology manager for OPC-UA servers (packaging: 1 server; F&B: 2 servers on ports 4841/4842). Implement ClockDriftModel: drifted_time = sim_time + initial_offset + drift_rate * elapsed_hours/24. Apply to OPC-UA SourceTimestamp and MQTT JSON timestamps. Ground truth always uses true sim_time.",
+            "prd_refs": [
+                "prd/03a-network-topology.md (3a.2, 3a.3, 3a.5)"
+            ],
+            "depends_on": ["5.1"],
+            "passes": false
+        },
+        {
+            "id": "5.4",
+            "name": "Scan Cycle Quantisation and Phase Jitter",
+            "group": "A: Network Topology",
+            "file": "src/factory_simulator/topology.py",
+            "description": "Implement ScanCycleModel: values snap to last scan cycle output between boundaries. actual_cycle = cycle_ms * (1.0 + uniform(0, jitter_pct)). Per-controller: S7-1500 10ms/5%, S7-1200 20ms/8%, CompactLogix 15ms/6%, Eurotherm 100ms/10%, Danfoss 100ms/10%. Wire into Modbus server sync_registers() in realistic mode. Collapsed mode: no quantisation.",
+            "prd_refs": [
+                "prd/03a-network-topology.md (3a.8)",
+                "prd/appendix-d-configuration-reference.md"
+            ],
+            "depends_on": ["5.1", "5.2"],
+            "passes": false
+        },
+        {
+            "id": "5.5",
+            "name": "Independent Connection Drops per Controller",
+            "group": "A: Network Topology",
+            "file": "src/factory_simulator/protocols/modbus_server.py",
+            "description": "In realistic mode, each controller endpoint gets its own CommDropScheduler with controller-specific MTBF (Eurotherm 8-24h, S7-1500 72h+, etc). One controller dropping does not affect others. Reuse Phase 4 CommDropScheduler. Collapsed mode keeps existing single-drop-per-protocol behaviour.",
+            "prd_refs": [
+                "prd/03a-network-topology.md (3a.5)"
+            ],
+            "depends_on": ["5.2", "5.3"],
+            "passes": false
+        },
+        {
+            "id": "5.6",
+            "name": "Evaluation Framework: Core Engine",
+            "group": "B: Evaluation Framework",
+            "file": "src/factory_simulator/evaluation/evaluator.py",
+            "description": "Event-level anomaly detection evaluation per PRD Section 12. Load ground truth JSONL, load detection alerts CSV, match events with tolerance windows (pre_margin 30s, post_margin 60s). Compute precision, recall, F1, weighted variants, detection latency (median, p90), random baseline. Per-scenario breakdown. Severity weights from PRD 12.4.",
+            "prd_refs": [
+                "prd/12-evaluation-protocol.md (ALL)"
+            ],
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "5.7",
+            "name": "Evaluation CLI and Run Manifests",
+            "group": "B: Evaluation Framework",
+            "file": "src/factory_simulator/evaluation/cli.py",
+            "description": "CLI evaluate subcommand, run manifest YAML (config, seed, profile, duration, version, git hash), clean/impaired pairing config helpers, example evaluation configs for Run A/B/C from PRD 12.5, multi-seed evaluation with confidence intervals.",
+            "prd_refs": [
+                "prd/12-evaluation-protocol.md (12.2, 12.3, 12.5)"
+            ],
+            "depends_on": ["5.6"],
+            "passes": false
+        },
+        {
+            "id": "5.8",
+            "name": "Batch Output: CSV and Parquet",
+            "group": "C: Batch Output",
+            "file": "src/factory_simulator/output/writer.py",
+            "description": "BatchWriter ABC with CsvWriter and ParquetWriter. CSV: timestamp, signal_id, value, quality. Parquet: columnar per-signal layout. Event-driven signals (machine_state, fault_code) written only on change with changed flag. Periodic flush (10k row buffer). Wire into DataEngine when time_scale > 10.",
+            "prd_refs": [
+                "prd/appendix-f-implementation-phases.md (Phase 5)"
+            ],
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "5.9",
+            "name": "CLI Entry Point",
+            "group": "D: CLI and Productisation",
+            "file": "src/factory_simulator/cli.py",
+            "description": "argparse CLI with subcommands: run, evaluate, version. Flags: --config, --profile, --seed, --time-scale, --batch-output, --batch-duration, --batch-format, --network-mode, --log-level, --version. Entry point in pyproject.toml. __main__.py for python -m factory_simulator.",
+            "prd_refs": [
+                "prd/appendix-f-implementation-phases.md (Phase 5)"
+            ],
+            "depends_on": ["5.8"],
+            "passes": false
+        },
+        {
+            "id": "5.10",
+            "name": "Docker Compose with Health Checks",
+            "group": "D: CLI and Productisation",
+            "file": "docker-compose.yaml",
+            "description": "Dockerfile (python:3.12-slim), docker-compose.yaml with Mosquitto sidecar + simulator, health checks, port mappings, env var overrides. docker-compose.realistic.yaml override for realistic mode ports. Health endpoint (GET /health, GET /status) on port 8080. config/mosquitto.conf.",
+            "prd_refs": [
+                "prd/06-configuration.md (6.3)"
+            ],
+            "depends_on": ["5.9"],
+            "passes": false
+        },
+        {
+            "id": "5.11",
+            "name": "README and Example Configs",
+            "group": "D: CLI and Productisation",
+            "file": "README.md",
+            "description": "Quick start guide (clone, docker compose up, verify data within 15 min). Architecture overview. Two profiles. Protocol endpoints. Config reference. Batch mode. Evaluation framework. Dev setup. Example CollatrEdge configs (packaging, F&B, realistic). Example evaluation configs (Run A/B/C).",
+            "prd_refs": [
+                "prd/11-success-criteria.md (11.1)"
+            ],
+            "depends_on": ["5.9", "5.10"],
+            "passes": false
+        },
+        {
+            "id": "5.12",
+            "name": "Performance Profiling",
+            "group": "D: CLI and Productisation",
+            "file": "tests/performance/test_performance.py",
+            "description": "Performance benchmarks: both profiles at 10x (tick latency mean/p95/p99), both profiles at 100x batch (wall time, ticks/sec), realistic mode overhead at 10x, 7-day memory stability. Marked @pytest.mark.performance. Results to performance-results.json.",
+            "prd_refs": [
+                "prd/appendix-f-implementation-phases.md (Phase 5)"
+            ],
+            "depends_on": ["5.2", "5.3", "5.4"],
+            "passes": false
+        },
+        {
+            "id": "5.13",
+            "name": "Final Acceptance Test and CI Pipeline",
+            "group": "D: CLI and Productisation",
+            "file": "tests/integration/test_acceptance.py",
+            "description": "Acceptance tests verifying PRD Section 11 criteria: both profiles 24h collapsed, realistic topology port verification, controller independence (one drop doesn't affect others), evaluation framework end-to-end, batch CSV/Parquet output, CLI --help, clock drift visibility. CI pipeline (.github/workflows/ci.yml). Marked @pytest.mark.acceptance.",
+            "prd_refs": [
+                "prd/11-success-criteria.md (ALL)",
+                "prd/appendix-f-implementation-phases.md (Phase 5 exit criteria)"
+            ],
+            "depends_on": ["5.1", "5.2", "5.3", "5.4", "5.5", "5.6", "5.7", "5.8", "5.9", "5.10", "5.11", "5.12"],
+            "passes": false
+        }
+    ]
+}
