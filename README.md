@@ -19,7 +19,7 @@ curl http://localhost:8080/health
 # Expected: {"status": "running", "profile": "packaging", "signals": 47, ...}
 
 # Connect CollatrEdge using the example config
-collatr-edge --config config/examples/collatr-edge-packaging.yaml
+collatr-edge --config configs/collatr-edge-packaging.toml
 ```
 
 Data starts flowing immediately. The health endpoint responds within 15 seconds of `docker compose up`.
@@ -191,7 +191,7 @@ Start realistic mode:
 docker compose -f docker-compose.yml -f docker-compose.realistic.yaml up -d
 ```
 
-Use `config/examples/collatr-edge-realistic.yaml` to connect CollatrEdge to all per-controller endpoints simultaneously.
+Use `configs/collatr-edge-realistic.toml` to connect CollatrEdge to all per-controller endpoints simultaneously.
 
 ### MQTT Topics
 
@@ -402,14 +402,14 @@ collatr-factory-simulator/
 │   ├── factory.yaml               # Packaging profile config
 │   ├── factory-foodbev.yaml       # F&B profile config
 │   ├── mosquitto.conf             # Mosquitto broker config
-│   ├── examples/                  # CollatrEdge example configs
-│   │   ├── collatr-edge-packaging.yaml
-│   │   ├── collatr-edge-foodbev.yaml
-│   │   └── collatr-edge-realistic.yaml
 │   └── scenarios/                 # Standard evaluation run configs
 │       ├── normal-operations.yaml  # Run A
 │       ├── heavy-anomaly.yaml      # Run B
 │       └── long-term-degradation.yaml  # Run C
+├── configs/                       # CollatrEdge example configs (TOML)
+│   ├── collatr-edge-packaging.toml   # Packaging profile, collapsed mode
+│   ├── collatr-edge-foodbev.toml     # F&B profile, collapsed mode
+│   └── collatr-edge-realistic.toml   # Packaging profile, realistic mode
 ├── src/factory_simulator/
 │   ├── cli.py                     # CLI entry point
 │   ├── config.py                  # Pydantic config models
