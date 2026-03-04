@@ -373,6 +373,27 @@ class GroundTruthLogger:
             "affected_signals": affected_signals,
         })
 
+    def log_counter_rollover(
+        self,
+        sim_time: float,
+        signal_id: str,
+        rollover_value: float,
+        value_after: float,
+    ) -> None:
+        """Log a counter_rollover event (PRD 10.4, Task 4.15).
+
+        Fired when a counter wraps from near ``rollover_value`` back to
+        zero.  Engineers can use this to test CollatrEdge counter-wrap
+        detection without waiting decades for a uint32 to overflow.
+        """
+        self._write_line({
+            "sim_time": self._format_time(sim_time),
+            "event": "counter_rollover",
+            "signal_id": signal_id,
+            "rollover_value": rollover_value,
+            "value_after": value_after,
+        })
+
     # -- Internals -------------------------------------------------------------
 
     def _write_line(self, record: dict[str, Any]) -> None:

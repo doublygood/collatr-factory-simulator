@@ -110,6 +110,7 @@ class CounterModel(SignalModel):
 
         self._value: float = self._initial_value
         self._speed: float = 0.0
+        self._rollover_occurred: bool = False
 
     @property
     def rate(self) -> float:
@@ -132,6 +133,11 @@ class CounterModel(SignalModel):
         return self._max_before_reset
 
     @property
+    def rollover_occurred(self) -> bool:
+        """True if rollover fired on the most recent ``generate()`` call."""
+        return self._rollover_occurred
+
+    @property
     def value(self) -> float:
         """Current counter value."""
         return self._value
@@ -140,6 +146,21 @@ class CounterModel(SignalModel):
     def speed(self) -> float:
         """Current speed input."""
         return self._speed
+
+    def set_rollover_value(self, value: float | None) -> None:
+        """Override the rollover threshold at runtime.
+
+        Used by :class:`~factory_simulator.engine.data_engine.DataEngine`
+        to apply ``DataQualityConfig.counter_rollover`` overrides (PRD 10.4).
+
+        Parameters
+        ----------
+        value:
+            New rollover threshold, or *None* to disable rollover.
+        """
+        if value is not None and value <= 0.0:
+            raise ValueError("rollover_value must be > 0")
+        self._rollover_value = value
 
     def set_speed(self, speed: float) -> None:
         """Set the current machine speed.
@@ -176,6 +197,9 @@ class CounterModel(SignalModel):
         float
             The current counter value.
         """
+        # Reset per-tick rollover flag
+        self._rollover_occurred = False
+
         # Accumulate: rate * speed * dt
         increment = self._rate * self._speed * dt
         self._value += increment
@@ -183,6 +207,7 @@ class CounterModel(SignalModel):
         # Rollover: wrap to zero
         if self._rollover_value is not None and self._value >= self._rollover_value:
             self._value = self._value % self._rollover_value
+            self._rollover_occurred = True
 
         # Max-before-reset: auto-reset to zero
         if self._max_before_reset is not None and self._value >= self._max_before_reset:

@@ -47,6 +47,7 @@ from factory_simulator.store import SignalStore
 
 if TYPE_CHECKING:
     from factory_simulator.config import EquipmentConfig, FactoryConfig
+    from factory_simulator.models.counter import CounterModel
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +138,18 @@ class DataEngine:
         self._gen_last_time: list[float] = []   # sim_time of last generation
 
         self._build_generators()
+
+        # Precompute counter models per generator (PRD 10.4, Task 4.15)
+        # Apply DataQualityConfig.counter_rollover overrides after generators build.
+        self._gen_counter_models: list[dict[str, CounterModel]] = []
+        flat_counter_map: dict[str, CounterModel] = {}
+        for gen in self._generators:
+            cm = gen.get_counter_models()
+            self._gen_counter_models.append(cm)
+            flat_counter_map.update(cm)
+        for sig_id, rollover_val in config.data_quality.counter_rollover.items():
+            if sig_id in flat_counter_map:
+                flat_counter_map[sig_id].set_rollover_value(rollover_val)
 
         # Scenario engine (PRD 8.2 step 3: evaluated before generators)
         # Y1: Use SeedSequence.spawn for child RNG
@@ -274,6 +287,16 @@ class DataEngine:
                     self._store.set(
                         sv.signal_id, sv.value, sv.timestamp, sv.quality,
                     )
+                # Log counter rollover events (PRD 10.4, Task 4.15)
+                if self._ground_truth is not None:
+                    for sig_id, counter in self._gen_counter_models[i].items():
+                        if counter.rollover_occurred:
+                            self._ground_truth.log_counter_rollover(
+                                sim_time,
+                                sig_id,
+                                counter.rollover_value or 0.0,
+                                counter.value,
+                            )
                 self._gen_last_time[i] = sim_time
 
         # Post-generator injection: active scenarios that override store values

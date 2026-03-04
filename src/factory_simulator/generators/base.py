@@ -21,6 +21,7 @@ from factory_simulator.config import EquipmentConfig, SignalConfig
 from factory_simulator.models.noise import NoiseGenerator
 
 if TYPE_CHECKING:
+    from factory_simulator.models.counter import CounterModel
     from factory_simulator.store import SignalStore, SignalValue
 
 
@@ -175,6 +176,20 @@ class EquipmentGenerator(ABC):
             mappings[signal_id] = mapping
 
         return mappings
+
+    def get_counter_models(self) -> dict[str, CounterModel]:
+        """Return ``{signal_id: CounterModel}`` for this generator's counters.
+
+        Used by :class:`~factory_simulator.engine.data_engine.DataEngine` to:
+
+        1. Apply ``DataQualityConfig.counter_rollover`` overrides (PRD 10.4).
+        2. Detect and log counter rollover events to ground truth.
+
+        Default implementation returns an empty dict.  Subclasses that own
+        :class:`~factory_simulator.models.counter.CounterModel` instances
+        override this method.
+        """
+        return {}
 
     # -- Helpers for subclasses -----------------------------------------------
 

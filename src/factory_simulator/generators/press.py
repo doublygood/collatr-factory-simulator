@@ -324,6 +324,15 @@ class PressGenerator(EquipmentGenerator):
         """Return all 22 press signal IDs."""
         return [self._signal_id(name) for name in self._signal_configs]
 
+    def get_counter_models(self) -> dict[str, CounterModel]:
+        """Return counter models keyed by fully-qualified signal ID."""
+        return {
+            self._signal_id("impression_count"): self._impression_count,
+            self._signal_id("good_count"): self._good_count,
+            self._signal_id("waste_count"): self._waste_count,
+            self._signal_id("rewind_diameter"): self._rewind_diameter,
+        }
+
     def generate(
         self,
         sim_time: float,

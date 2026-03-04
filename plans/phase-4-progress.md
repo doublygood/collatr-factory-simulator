@@ -17,7 +17,7 @@
 - [x] 4.12: Data Quality Engine Integration
 - [x] 4.13: Noise Calibration — Packaging Profile
 - [x] 4.14: Noise Calibration — F&B Profile
-- [ ] 4.15: Counter Rollover Testing Support
+- [x] 4.15: Counter Rollover Testing Support
 - [ ] 4.16: Reproducibility Test and Final Integration
 
 ## Carried Forward Items
@@ -26,6 +26,20 @@
 - gutter_fault probability 18x too high → Fixed in Task 4.13 (code already had correct rate; YAML calibrated)
 
 ## Notes
+
+### Task 4.15 — Counter Rollover Testing Support (COMPLETE)
+
+**What was built:**
+- `CounterModel`: added `_rollover_occurred` flag (reset at start of each `generate()`), `rollover_occurred` property, and `set_rollover_value()` method (raises `ValueError` for ≤ 0).
+- `EquipmentGenerator.get_counter_models()`: new public method returning `{}` by default; overridden in Press, Energy, Slitter, Coder, Mixer generators.
+- `GroundTruthLogger.log_counter_rollover()`: writes `counter_rollover` JSONL event with `signal_id`, `rollover_value`, `value_after`.
+- `DataEngine.__init__`: builds `_gen_counter_models` list; applies `DataQualityConfig.counter_rollover` overrides via `set_rollover_value()`.
+- `DataEngine.tick()`: after each generator fires, checks each counter's `rollover_occurred` flag and logs GT event when True.
+- `tests/unit/test_counter_rollover.py`: 23 tests across 4 classes covering flag behaviour, runtime override, PRD 10.4 wrapping spec, GT logging, and DataEngine config wiring.
+
+**Key design notes:**
+- `get_counter_models()` pattern avoids generator internal access; counters are shared objects (same instance in generator and `_gen_counter_models`).
+- GT integration test uses `EnergyGenerator.cumulative_kwh` (always has positive base-load power) with `set_rollover_value(1e-10)` to guarantee wrap on tick 1 without depending on press FSM state.
 
 ### Task 4.14 — Noise Calibration — F&B Profile (COMPLETE)
 

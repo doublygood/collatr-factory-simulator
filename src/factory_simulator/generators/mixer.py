@@ -314,6 +314,10 @@ class MixerGenerator(EquipmentGenerator):
         """Return all 8 mixer signal IDs."""
         return [self._signal_id(name) for name in self._signal_configs]
 
+    def get_counter_models(self) -> dict[str, CounterModel]:
+        """Return counter models keyed by fully-qualified signal ID."""
+        return {self._signal_id("mix_time_elapsed"): self._mix_time_model}
+
     def generate(
         self,
         sim_time: float,
