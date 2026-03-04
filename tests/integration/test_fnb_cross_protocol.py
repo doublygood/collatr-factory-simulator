@@ -184,6 +184,9 @@ async def fnb_modbus_only() -> (  # type: ignore[override]
     """Start F&B Modbus server with pre-populated store; yield (client, server, store)."""
     config = load_config(_FNB_CONFIG_PATH, apply_env=False)
     config.simulation.random_seed = 42
+    config.data_quality.exception_probability = 0.0
+    config.data_quality.partial_modbus_response.probability = 0.0
+    config.data_quality.modbus_drop.enabled = False
 
     store = SignalStore()
     clock = SimulationClock.from_config(config.simulation)
@@ -217,6 +220,10 @@ async def fnb_modbus_opcua() -> (  # type: ignore[override]
     """
     config = load_config(_FNB_CONFIG_PATH, apply_env=False)
     config.simulation.random_seed = 42
+    config.data_quality.exception_probability = 0.0
+    config.data_quality.partial_modbus_response.probability = 0.0
+    config.data_quality.modbus_drop.enabled = False
+    config.data_quality.opcua_stale.enabled = False
 
     store = SignalStore()
     clock = SimulationClock.from_config(config.simulation)
@@ -284,6 +291,11 @@ async def fnb_all_protocols() -> (  # type: ignore[override]
     config.simulation.random_seed = 42
     config.simulation.tick_interval_ms = 100
     config.simulation.time_scale = 1.0
+    config.data_quality.exception_probability = 0.0
+    config.data_quality.partial_modbus_response.probability = 0.0
+    config.data_quality.modbus_drop.enabled = False
+    config.data_quality.opcua_stale.enabled = False
+    config.data_quality.mqtt_drop.enabled = False
 
     store = SignalStore()
     clock = SimulationClock.from_config(config.simulation)

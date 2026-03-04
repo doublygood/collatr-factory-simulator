@@ -157,6 +157,11 @@ async def all_protocols() -> (  # type: ignore[override]
     config.simulation.random_seed = 42
     config.simulation.tick_interval_ms = 100
     config.simulation.time_scale = 1.0
+    config.data_quality.exception_probability = 0.0
+    config.data_quality.partial_modbus_response.probability = 0.0
+    config.data_quality.modbus_drop.enabled = False
+    config.data_quality.opcua_stale.enabled = False
+    config.data_quality.mqtt_drop.enabled = False
 
     store = SignalStore()
     clock = SimulationClock.from_config(config.simulation)
