@@ -174,6 +174,24 @@ pytest tests/integration
 pytest tests/unit/test_steady_state.py -v
 ```
 
+### Running the Full Test Suite
+
+The full test suite takes **up to 15 minutes**. Follow these rules every time:
+
+**Rule: Always run the full test suite via a sub-agent.**
+
+Never run `pytest` (the full suite) inline in the main agent — the log volume wastes context window. Instead, delegate to a `general-purpose` sub-agent with this pattern:
+
+```
+Run: ruff check src tests && mypy src && pytest --tb=short -q
+Timeout: 900000ms (15 minutes — increase if the suite grows further)
+Report: on SUCCESS print only the summary line (N passed, N warnings, time).
+        on FAILURE print the full failure output verbatim so the error is visible.
+```
+
+- Increase the timeout if the suite consistently approaches 15 minutes.
+- Never skip the full suite before committing. ruff + mypy + pytest must all pass.
+
 ### Project Structure
 See `prd/appendix-e-project-structure.md` for the full layout.
 
