@@ -1,6 +1,6 @@
 # Phase 4: Full Scenario System and Data Quality — Progress
 
-## Status: In Progress
+## Status: COMPLETE
 
 ## Tasks
 - [x] 4.1: Poisson Scheduling Engine
@@ -18,7 +18,7 @@
 - [x] 4.13: Noise Calibration — Packaging Profile
 - [x] 4.14: Noise Calibration — F&B Profile
 - [x] 4.15: Counter Rollover Testing Support
-- [ ] 4.16: Reproducibility Test and Final Integration
+- [x] 4.16: Reproducibility Test and Final Integration
 
 ## Carried Forward Items
 - Y1 (Phase 2): `_spawn_rng` uses `integers()` not `SeedSequence.spawn()` → Fixed in Task 4.1
@@ -26,6 +26,46 @@
 - gutter_fault probability 18x too high → Fixed in Task 4.13 (code already had correct rate; YAML calibrated)
 
 ## Notes
+
+### Task 4.16 — Reproducibility Test and Final Integration (COMPLETE)
+
+**What was built:**
+- `tests/integration/test_reproducibility.py`: 15 integration tests across 5 classes.
+- `TestReproducibility` (5 tests): seed=42 reproducibility for packaging and F&B profiles at
+  500 ticks and 8640 ticks (1 simulated day); different seeds produce different output.
+  Uses sorted `(sig_id, value, quality)` snapshot for byte-identical comparison.
+- `TestFinalIntegrationPackaging` / `TestFinalIntegrationFnB` (4 tests each): 1-day run
+  verifying no NaN/Inf, all expected scenario types fire, GT JSONL well-formed (header +
+  events), sensor_disconnect and stuck_sensor GT events present.
+- `TestPackagingMemory` / `TestFnBMemory` (1 test each): `tracemalloc`-based heap
+  allocation test; final_peak / initial_peak must be < 2.0.
+- Module-scoped fixtures (`packaging_run`, `fnb_run`) using `tmp_path_factory`: run
+  8640-tick simulation once per module to avoid redundant computation.
+- `_make_integration_engine`: applies frequency overrides so every scenario type fires
+  reliably within 86 400s regardless of seed:
+  - `web_break.frequency_per_week = [70, 100]` (default 1-2/week; P(zero in 1 day)≈80%)
+  - `bearing_wear.start_after_hours = 0.01`, `duration_hours = 2.0`
+  - `contextual_anomaly.frequency_per_week = [70, 100]`
+  - IntermittentFault subtypes: `start_after_hours = 0.01`, `phase1_duration_hours = [0.5, 1.0]`
+  - `seal_integrity_failure.frequency_per_week = [70, 140]`
+  - `chiller_door_alarm.frequency_per_week = [70, 140]`
+  - `cold_chain_break.frequency_per_month = [420, 630]`
+  - `cip_cycle.frequency_per_day = [10, 20]` (default 1-3/day; P(zero in 1 day)≈13.5%)
+  - `sensor_disconnect.frequency_per_24h_per_signal = [2.0, 4.0]`
+  - `stuck_sensor.frequency_per_week_per_signal = [14.0, 21.0]`
+
+**Root cause fixes found during testing:**
+- `BatchCycle` and `ColdChainBreak` log their GT `scenario_start` with snake_case names
+  (`"batch_cycle"`, `"cold_chain_break"`) inside `_on_activate` in addition to the
+  PascalCase name from `ScenarioEngine`. Expected sets use PascalCase (ScenarioEngine name).
+- `CipCycle` not scheduling with default `frequency_per_day: [1, 3]` because Poisson
+  `mean_interval = 43200s` → P(first gap > 86400s) ≈ 13.5%; seed=42 hit this case.
+- `WebBreak` not firing with `frequency_per_week: [1, 2]` because `mean_interval ≈ 403200s`;
+  P(zero events in 1 day) ≈ 80%.
+
+**Test counts:** 15 new tests (2453 + 15 = 2468 total passing).
+**Known pre-existing flaky test:** `test_oven_humidity_hr_1124` fails intermittently in
+full-suite runs due to Modbus port contention; passes in isolation.
 
 ### Task 4.15 — Counter Rollover Testing Support (COMPLETE)
 
