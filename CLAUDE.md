@@ -129,10 +129,11 @@ Each phase follows this pattern. See `plans/WORKFLOW.md` for the full workflow.
 1. **Read the plan** in `plans/phase-N-<name>.md`
 2. **Find the first failing task** in `plans/phase-N-tasks.json`
 3. **Implement one task**: code + tests + commit
-4. **Run ALL tests** (`pytest`) -- every test must pass
-5. **Update progress** in `plans/phase-N-progress.md`
-6. **Output TASK_COMPLETE and STOP**
-7. When all tasks pass: spawn internal review sub-agent, fix findings, then PHASE_COMPLETE
+4. **Run the new test file alone first**: `ruff check src tests && pytest tests/path/to/new_test.py -v --tb=short` -- catches import errors, wrong fixtures, and lint issues in seconds before the expensive full suite
+5. **Run ALL tests** (`pytest` via sub-agent, 15-min timeout) -- every test must pass
+6. **Update progress** in `plans/phase-N-progress.md`
+7. **Output TASK_COMPLETE and STOP**
+8. When all tasks pass: spawn internal review sub-agent, fix findings, then PHASE_COMPLETE
 
 ---
 
