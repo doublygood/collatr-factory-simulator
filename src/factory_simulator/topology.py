@@ -4,16 +4,21 @@ Resolves logical controller endpoints to simulator port bindings in both
 collapsed (single port per protocol) and realistic (per-controller ports)
 modes.
 
-Also provides the :class:`ClockDriftModel` for per-controller timestamp
-drift in OPC-UA SourceTimestamp and MQTT JSON payloads.
+Also provides:
+- :class:`ClockDriftModel` for per-controller timestamp drift in OPC-UA
+  SourceTimestamp and MQTT JSON payloads.
+- :class:`ScanCycleModel` for PLC scan cycle quantisation of Modbus register
+  values (PRD 3a.8).
 
-PRD Reference: Section 3a.4, 3a.5 (clock drift)
+PRD Reference: Section 3a.4, 3a.5 (clock drift), 3a.8 (scan cycle)
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Literal
+
+import numpy as np
 
 from factory_simulator.config import (
     ClockDriftConfig,
@@ -140,6 +145,110 @@ class ClockDriftModel:
         """
         elapsed_hours = sim_time / 3600.0
         return self._initial_offset_s + self._drift_rate_s_per_day * elapsed_hours / 24.0
+
+
+# ---------------------------------------------------------------------------
+# Scan cycle model (PRD 3a.8)
+# ---------------------------------------------------------------------------
+
+
+class ScanCycleModel:
+    """Quantises Modbus register values to PLC scan cycle boundaries.
+
+    Real PLCs update registers once per scan cycle. Between scans, register
+    values are stale. This model tracks the next scan boundary and returns
+    the last-snapped value when the boundary has not yet been crossed.
+
+    Usage::
+
+        model = ScanCycleModel(config, rng)
+        # Once per update loop iteration (before any get_value calls):
+        model.prepare_tick(sim_time)
+        # For each signal value written to Modbus registers:
+        quantised = model.get_value(signal_id, current_value)
+
+    Formula (PRD 3a.8)::
+
+        actual_cycle = cycle_ms * (1.0 + uniform(0, jitter_pct))
+
+    Parameters
+    ----------
+    config:
+        :class:`ScanCycleConfig` with ``cycle_ms`` and ``jitter_pct``.
+    rng:
+        Numpy random generator for jitter sampling (Rule 13: isolated RNG).
+    """
+
+    def __init__(self, config: ScanCycleConfig, rng: np.random.Generator) -> None:
+        self._cycle_ms = config.cycle_ms
+        self._jitter_pct = config.jitter_pct
+        self._rng = rng
+        # Start at 0.0 so the first prepare_tick call always crosses the boundary.
+        self._next_boundary_ms: float = 0.0
+        self._scan_active: bool = True
+        self._last_outputs: dict[str, float] = {}
+
+    @property
+    def scan_active(self) -> bool:
+        """True if the scan boundary was crossed on the last :meth:`prepare_tick` call."""
+        return self._scan_active
+
+    @property
+    def next_boundary_ms(self) -> float:
+        """Next scan boundary in milliseconds (from sim_time=0)."""
+        return self._next_boundary_ms
+
+    def prepare_tick(self, sim_time: float) -> None:
+        """Determine scan state for the current tick.
+
+        Must be called exactly once per update loop iteration, before any
+        :meth:`get_value` calls for that iteration.
+
+        If ``sim_time`` (converted to milliseconds) is at or past the next
+        scan boundary, the boundary advances by one jittered cycle and all
+        subsequent :meth:`get_value` calls for this tick will return the fresh
+        (current) value.  Otherwise they return the cached stale value.
+
+        Parameters
+        ----------
+        sim_time:
+            Current simulation time in seconds.
+        """
+        sim_time_ms = sim_time * 1000.0
+        if sim_time_ms >= self._next_boundary_ms:
+            self._scan_active = True
+            actual_cycle = self._cycle_ms * (
+                1.0 + self._rng.uniform(0.0, self._jitter_pct)
+            )
+            self._next_boundary_ms += actual_cycle
+        else:
+            self._scan_active = False
+
+    def get_value(self, signal_id: str, current_value: float) -> float:
+        """Return the scan-cycle-quantised value for a signal.
+
+        If the scan boundary was just crossed (:attr:`scan_active` is True),
+        the current value is cached and returned.  Otherwise the stale cached
+        value from the last boundary crossing is returned.
+
+        :meth:`prepare_tick` must have been called at least once before this.
+
+        Parameters
+        ----------
+        signal_id:
+            Unique signal identifier for per-signal cache lookup.
+        current_value:
+            Current value from the signal store.
+
+        Returns
+        -------
+        float
+            Quantised value: ``current_value`` if scan active, else stale.
+        """
+        if self._scan_active:
+            self._last_outputs[signal_id] = current_value
+            return current_value
+        return self._last_outputs.get(signal_id, current_value)
 
 
 # ---------------------------------------------------------------------------

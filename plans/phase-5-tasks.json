@@ -50,7 +50,7 @@
                 "prd/appendix-d-configuration-reference.md"
             ],
             "depends_on": ["5.1", "5.2"],
-            "passes": false
+            "passes": true
         },
         {
             "id": "5.5",

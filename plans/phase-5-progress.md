@@ -6,7 +6,7 @@
 - [x] 5.1: Network Topology Manager and Config
 - [x] 5.2: Multi-Port Modbus Servers
 - [x] 5.3: Multi-Port OPC-UA Servers and Clock Drift
-- [ ] 5.4: Scan Cycle Quantisation and Phase Jitter
+- [x] 5.4: Scan Cycle Quantisation and Phase Jitter
 - [ ] 5.5: Independent Connection Drops per Controller
 - [ ] 5.6: Evaluation Framework: Core Engine
 - [ ] 5.7: Evaluation CLI and Run Manifests
@@ -71,3 +71,18 @@
 - No SourceTimestamp when drift is None: asyncua assigns its own server-side timestamp, which is correct default behaviour per OPC-UA spec.
 
 **Test count:** 2593 passed (was 2555 before).
+
+### Task 5.4: Scan Cycle Quantisation and Phase Jitter
+**Files created/modified:**
+- `src/factory_simulator/topology.py` — Added `ScanCycleModel` class. `prepare_tick(sim_time)` determines if scan boundary crossed; `get_value(signal_id, current_value)` returns cached stale value or fresh value. Formula: `actual_cycle = cycle_ms * (1.0 + rng.uniform(0, jitter_pct))`. First tick always active (boundary starts at 0.0ms).
+- `src/factory_simulator/protocols/modbus_server.py` — Added `scan_cycle_model: ScanCycleModel | None = None` parameter to `ModbusServer.__init__`. Changed `sync_registers()` to `sync_registers(sim_time: float = 0.0)` — calls `prepare_tick(sim_time)` when model is set. Scan quantisation applied in `_sync_holding_registers()`, `_sync_input_registers()`, and `_sync_secondary_slaves()`. `_update_loop()` derives sim_time from max signal timestamp in the store before calling `sync_registers(sim_time)`.
+- `src/factory_simulator/engine/data_engine.py` — `create_modbus_servers()` in realistic mode spawns a dedicated `ScanCycleModel` RNG (isolated via `_root_ss.spawn(1)[0]`) and creates a `ScanCycleModel` for each endpoint, passing it to `ModbusServer`.
+- `tests/unit/test_scan_cycle.py` (NEW) — 36 tests covering: ScanCycleModel basic operation, stale/active boundary transitions, jitter range and determinism, per-controller PRD defaults (S7-1500/S7-1200/Eurotherm/Danfoss), ModbusServer integration (HR quantisation, stale reads, boundary update), DataEngine server creation in collapsed and realistic mode, consecutive stale read stability.
+
+**Decisions:**
+- Scan quantisation only applies to numeric HR and IR values, not coils/discrete inputs (booleans don't benefit from scan stale modelling).
+- `_update_loop()` reads max signal timestamp from the store as a proxy for current sim_time. This is correct since the engine always updates signals to the current tick's sim_time before protocols read the store.
+- Collapsed mode: `scan_cycle_model=None` always, no quantisation — existing tests unchanged.
+- Secondary slave (Eurotherm) IR blocks also quantised since they share the same controller endpoint.
+
+**Test count:** 2629 passed (was 2593 before).

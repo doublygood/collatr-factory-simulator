@@ -48,7 +48,7 @@ if TYPE_CHECKING:
         PartialModbusResponseConfig,
     )
     from factory_simulator.store import SignalStore
-    from factory_simulator.topology import ModbusEndpointSpec
+    from factory_simulator.topology import ModbusEndpointSpec, ScanCycleModel
 
 logger = logging.getLogger(__name__)
 
@@ -659,11 +659,15 @@ class ModbusServer:
         exception_rng: np.random.Generator | None = None,
         duplicate_rng: np.random.Generator | None = None,
         endpoint: ModbusEndpointSpec | None = None,
+        scan_cycle_model: ScanCycleModel | None = None,
     ) -> None:
         self._config = config
         self._store = store
         self._modbus_cfg = config.protocols.modbus
         self._endpoint = endpoint
+        # Scan cycle quantisation (PRD 3a.8): realistic mode only.
+        # In collapsed mode, scan_cycle_model is None (no quantisation).
+        self._scan_cycle_model: ScanCycleModel | None = scan_cycle_model
 
         # Port/host resolution: endpoint overrides config
         if endpoint is not None:
@@ -869,14 +873,31 @@ class ModbusServer:
 
     # -- Register synchronisation ---------------------------------------------
 
-    def sync_registers(self) -> None:
+    def sync_registers(self, sim_time: float = 0.0) -> None:
         """Synchronise all signal values from store to Modbus registers.
 
         Also updates machine state transition tracking so that the
         exception injector can fire 0x06 on reads that follow a state change.
 
+        In realistic mode (when a :class:`ScanCycleModel` is set), HR and IR
+        values are quantised to the controller's scan cycle boundary.  Between
+        boundaries, registers hold their last-snapped (stale) value.  This
+        models real PLC behaviour per PRD 3a.8.
+
+        In collapsed mode (no scan cycle model), values pass through directly.
+
+        Parameters
+        ----------
+        sim_time:
+            Current simulation time in seconds.  Used by the scan cycle model
+            to determine whether the scan boundary has been crossed.
+
         Call this periodically or explicitly before reading in tests.
         """
+        # Advance the scan cycle model for this tick (realistic mode only).
+        if self._scan_cycle_model is not None:
+            self._scan_cycle_model.prepare_tick(sim_time)
+
         self._check_machine_state_transition()
         self._sync_holding_registers()
         self._sync_input_registers()
@@ -933,6 +954,13 @@ class ModbusServer:
             value = sv.value
             if isinstance(value, str):
                 continue
+
+            # Scan cycle quantisation (PRD 3a.8): in realistic mode, snap to
+            # the last scan boundary value between scan cycle crossings.
+            if self._scan_cycle_model is not None:
+                value = self._scan_cycle_model.get_value(
+                    entry.signal_id, float(value)
+                )
 
             if entry.data_type == "float32":
                 if entry.byte_order == "CDAB":
@@ -991,6 +1019,12 @@ class ModbusServer:
             value = sv.value
             if isinstance(value, str):
                 continue
+
+            # Scan cycle quantisation (PRD 3a.8)
+            if self._scan_cycle_model is not None:
+                value = self._scan_cycle_model.get_value(
+                    entry.signal_id, float(value)
+                )
 
             addr = entry.address + 1  # +1: ModbusDeviceContext offset
             if entry.data_type == "int16_x10":
@@ -1063,6 +1097,11 @@ class ModbusServer:
                 value = sv.value
                 if isinstance(value, str):
                     continue
+                # Scan cycle quantisation (PRD 3a.8)
+                if self._scan_cycle_model is not None:
+                    value = self._scan_cycle_model.get_value(
+                        entry.signal_id, float(value)
+                    )
                 addr = entry.address + 1  # +1: ModbusDeviceContext offset
                 if entry.data_type == "int16_x10":
                     encoded = encode_int16_x10(float(value))
@@ -1163,7 +1202,14 @@ class ModbusServer:
                     and self._dup_rng.random() < self._dup_prob
                 )
                 if not is_drop and not is_dup:
-                    self.sync_registers()
+                    # Determine current sim_time from signal store for scan
+                    # cycle quantisation.  Use the maximum signal timestamp
+                    # (most recently updated signal reflects current tick).
+                    sim_time = max(
+                        (sv.timestamp for sv in self._store.get_all().values()),
+                        default=0.0,
+                    )
+                    self.sync_registers(sim_time)
                 await asyncio.sleep(0.05)  # 50ms update interval
         except asyncio.CancelledError:
             pass

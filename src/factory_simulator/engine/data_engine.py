@@ -245,16 +245,22 @@ class DataEngine:
         from factory_simulator.protocols.modbus_server import ModbusServer
 
         if self._topology is None or self._topology.mode == "collapsed":
-            # Collapsed mode: single server, all registers
+            # Collapsed mode: single server, all registers, no scan quantisation
             return [ModbusServer(self._config, self._store)]
 
-        # Realistic mode: one server per endpoint
+        # Realistic mode: one server per endpoint, each with its own
+        # ScanCycleModel and isolated RNG (PRD 3a.8, Rule 13).
+        from factory_simulator.topology import ScanCycleModel
+
         servers: list[ModbusServer] = []
         for ep in self._topology.modbus_endpoints():
+            scan_rng = np.random.default_rng(self._root_ss.spawn(1)[0])
+            scan_model = ScanCycleModel(ep.scan_cycle, scan_rng)
             server = ModbusServer(
                 self._config,
                 self._store,
                 endpoint=ep,
+                scan_cycle_model=scan_model,
             )
             servers.append(server)
         return servers
