@@ -5,7 +5,7 @@
 ## Tasks
 - [x] 6a.1: Wire Ground Truth Logger into CLI (R1)
 - [x] 6a.2: Fix Ground Truth Header — Add Missing Scenarios (R2)
-- [ ] 6a.3: Dockerfile Hardening (R3 + R4)
+- [x] 6a.3: Dockerfile Hardening (R3 + R4)
 - [ ] 6a.4: OPC-UA EngineeringUnits Property (R5)
 - [ ] 6a.5: Fix Oven Gateway UID Routing in Realistic Mode (R6)
 - [ ] 6a.6: Fix Severity Weight Key Mismatch (Y1)
@@ -16,6 +16,20 @@
 ## Notes
 
 Tasks 6a.1-6a.8 are all independent (no dependencies between them). Task 6a.9 depends on all others.
+
+## Task 6a.3 — Dockerfile Hardening
+
+**What was fixed:**
+- Created `.dockerignore` excluding `.git`, `.github`, `tests`, `output`, `plans`, `prd`, `*.egg-info`, `__pycache__`, `.mypy_cache`, `.ruff_cache`, `.pytest_cache`, and `*.md` (with `!README.md` exception)
+- Changed `pip install --no-cache-dir -e .` to `pip install --no-cache-dir .` (regular install for production)
+- Added `useradd -m -r simulator` to create non-root user
+- Created `/app/output` with `chown simulator:simulator` so batch output is writable
+- Added `USER simulator` directive before `ENTRYPOINT`
+
+**Decisions:**
+- Non-root user created as a system user (`-r`) with home directory (`-m`) per review recommendation
+- Output dir `/app/output` pre-created so the non-root user can write batch output without needing root
+- `.md` files excluded from Docker context except `README.md` (plans/prd docs not needed in image)
 
 ## Task 6a.2 — Fix Ground Truth Header — Add Missing Scenarios
 

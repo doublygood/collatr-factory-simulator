@@ -1,0 +1,13 @@
+.git
+.github
+tests
+output
+plans
+prd
+*.egg-info
+__pycache__
+.mypy_cache
+.ruff_cache
+.pytest_cache
+*.md
+!README.md

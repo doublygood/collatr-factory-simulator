@@ -30,7 +30,7 @@
             "description": "Create .dockerignore (exclude .git, tests, output, plans, prd, __pycache__, caches). Add non-root 'simulator' user to Dockerfile. Change editable install to regular install. Ensure output dir writable by non-root user.",
             "review_ref": "R3 + R4 (review-architecture.md)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6a.4",

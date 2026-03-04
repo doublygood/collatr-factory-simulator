@@ -24,8 +24,15 @@ COPY src/ src/
 COPY config/ config/
 COPY pyproject.toml .
 
-# Install the package in editable mode so imports resolve correctly
-RUN pip install --no-cache-dir -e .
+# Install the package (regular install for production)
+RUN pip install --no-cache-dir .
+
+# Create non-root user and writable output directory
+RUN useradd -m -r simulator \
+    && mkdir -p /app/output \
+    && chown simulator:simulator /app/output
+
+USER simulator
 
 # Expose ports used in collapsed mode
 #   502  — Modbus TCP
