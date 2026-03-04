@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from factory_simulator.models.counter import CounterModel
     from factory_simulator.output.writer import BatchWriter
     from factory_simulator.protocols.modbus_server import ModbusServer
+    from factory_simulator.protocols.mqtt_publisher import MqttPublisher
     from factory_simulator.protocols.opcua_server import OpcuaServer
     from factory_simulator.topology import NetworkTopologyManager
 
@@ -312,6 +313,33 @@ class DataEngine:
             )
             servers.append(server)
         return servers
+
+    def create_mqtt_publishers(self) -> list[MqttPublisher]:
+        """Create MQTT publisher(s) based on topology configuration.
+
+        In collapsed mode (or no topology): returns a single
+        :class:`MqttPublisher` with no clock drift — current behaviour.
+
+        In realistic mode: returns a single :class:`MqttPublisher` with
+        clock drift from the topology's MQTT endpoint, applying a
+        representative SCADA gateway drift to MQTT JSON timestamps.
+
+        Returns
+        -------
+        list[MqttPublisher]
+            List containing the single MQTT publisher to start.
+        """
+        from factory_simulator.protocols.mqtt_publisher import MqttPublisher
+
+        if self._topology is None or self._topology.mode == "collapsed":
+            return [MqttPublisher(self._config, self._store)]
+
+        # Realistic mode: apply clock drift from topology MQTT endpoint
+        from factory_simulator.topology import ClockDriftModel
+
+        ep = self._topology.mqtt_endpoint()
+        drift = ClockDriftModel(ep.clock_drift)
+        return [MqttPublisher(self._config, self._store, clock_drift=drift)]
 
     # -- Generator construction -----------------------------------------------
 

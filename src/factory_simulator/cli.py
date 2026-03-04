@@ -411,12 +411,10 @@ async def _run_realtime(config: FactoryConfig, engine: Any) -> int:
             health.update(opcua="up")
 
         if config.protocols.mqtt.enabled:
-            from factory_simulator.protocols.mqtt_publisher import MqttPublisher
-
-            mqtt = MqttPublisher(config, engine.store)
-            task = asyncio.create_task(mqtt.start())
-            tasks.append(task)
-            servers.append(mqtt)
+            for mqtt in engine.create_mqtt_publishers():
+                task = asyncio.create_task(mqtt.start())
+                tasks.append(task)
+                servers.append(mqtt)
             health.update(mqtt="up")
 
         health.update(status="running")

@@ -586,6 +586,17 @@ The ground truth always uses true `sim_time`, never clock-drifted time.
 
 ---
 
+## Known Limitations
+
+The following PRD requirements are partially implemented or deferred:
+
+| Limitation | Status | Detail |
+|-----------|--------|--------|
+| **Connection limit enforcement** | Config-only | `max_connections` per controller (PRD 3a.5) is stored in config and surfaced in the topology model, but pymodbus and asyncua do not natively support per-port TCP connection limits. Connections above `max_connections` are not rejected. A future implementation would require a custom server wrapper that tracks and rejects excess TCP connections. |
+| **Response latency injection** | Config-only | `response_timeout_ms_typical` per controller (PRD 3a.5) is stored in config, but no per-request delay is injected into Modbus or OPC-UA read handlers. Adding latency would require a custom pymodbus request handler with `asyncio.sleep`. |
+
+---
+
 ## PRD Reference
 
 The full product requirements document is in `prd/`. Key files:

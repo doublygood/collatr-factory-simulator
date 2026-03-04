@@ -424,8 +424,19 @@ class Evaluator:
                 anomaly_density=0.0, precision=0.0, recall=0.0, f1=0.0
             )
 
-        # Anomaly density: fraction of time covered by events
-        total_anomaly_time = sum(ev.end_time - ev.start_time for ev in events)
+        # Anomaly density: fraction of time covered by events.
+        # Merge overlapping intervals before summing to avoid double-counting
+        # when events overlap.
+        sorted_intervals = sorted(
+            [(ev.start_time, ev.end_time) for ev in events], key=lambda x: x[0]
+        )
+        merged: list[list[float]] = []
+        for start, end in sorted_intervals:
+            if merged and start <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], end)
+            else:
+                merged.append([start, end])
+        total_anomaly_time = sum(iv[1] - iv[0] for iv in merged)
         anomaly_density = min(total_anomaly_time / total_duration, 1.0)
 
         # Simulate random detector with seeded RNG

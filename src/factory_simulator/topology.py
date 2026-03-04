@@ -74,6 +74,7 @@ class MqttEndpointSpec:
 
     broker_host: str = "mqtt-broker"
     broker_port: int = 1883
+    clock_drift: ClockDriftConfig = field(default_factory=ClockDriftConfig)
 
 
 # ---------------------------------------------------------------------------
@@ -434,17 +435,27 @@ class NetworkTopologyManager:
         return self._realistic_opcua()
 
     def mqtt_endpoint(self) -> MqttEndpointSpec:
-        """Return MQTT broker spec (shared across modes and profiles)."""
+        """Return MQTT broker spec (shared across modes and profiles).
+
+        In realistic mode, a representative clock drift is applied to MQTT
+        timestamps (500 ms initial offset, 0.5 s/day drift), simulating
+        a typical SCADA gateway clock.  Collapsed mode has no drift.
+        """
+        if self.mode == "realistic":
+            drift = ClockDriftConfig(
+                initial_offset_ms=500.0,
+                drift_rate_s_per_day=0.5,
+            )
+            return MqttEndpointSpec(clock_drift=drift)
         return MqttEndpointSpec()
 
     # ---- collapsed mode ---------------------------------------------------
 
     def _collapsed_modbus(self) -> list[ModbusEndpointSpec]:
-        """Single Modbus server serving all registers."""
-        port = 5020 if self._profile == "packaging" else 5030
+        """Single Modbus server serving all registers (standard port 502)."""
         return [
             ModbusEndpointSpec(
-                port=port,
+                port=502,
                 unit_ids=[1],
                 register_range=None,
                 byte_order="ABCD",

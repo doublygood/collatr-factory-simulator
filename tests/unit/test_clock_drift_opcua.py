@@ -726,3 +726,69 @@ class TestOpcuaServerConstruction:
             comm_drop_rng=np.random.default_rng(42),
         )
         assert server._clock_drift is None
+
+
+# ---------------------------------------------------------------------------
+# DataEngine.create_mqtt_publishers()
+# ---------------------------------------------------------------------------
+
+
+class TestDataEngineMqttPublisherCreation:
+    """Test DataEngine.create_mqtt_publishers() for collapsed and realistic modes."""
+
+    def test_collapsed_mode_single_publisher_no_drift(self) -> None:
+        """Collapsed mode creates a single publisher with no clock drift."""
+        config = load_config(str(_PKG_CONFIG_PATH), apply_env=False)
+        store = SignalStore()
+        engine = DataEngine(config, store)
+        publishers = engine.create_mqtt_publishers()
+        assert len(publishers) == 1
+        assert publishers[0]._clock_drift is None
+
+    def test_no_topology_single_publisher_no_drift(self) -> None:
+        """No topology (None) creates a single publisher with no drift."""
+        config = load_config(str(_PKG_CONFIG_PATH), apply_env=False)
+        store = SignalStore()
+        engine = DataEngine(config, store, topology=None)
+        publishers = engine.create_mqtt_publishers()
+        assert len(publishers) == 1
+        assert publishers[0]._clock_drift is None
+
+    def test_realistic_mode_single_publisher_with_drift(self) -> None:
+        """Realistic mode creates a publisher with non-None clock drift."""
+        config = load_config(str(_PKG_CONFIG_PATH), apply_env=False)
+        store = SignalStore()
+        topology = NetworkTopologyManager(
+            config=NetworkConfig(mode="realistic"), profile="packaging"
+        )
+        engine = DataEngine(config, store, topology=topology)
+        publishers = engine.create_mqtt_publishers()
+        assert len(publishers) == 1
+        assert publishers[0]._clock_drift is not None
+
+    def test_realistic_drift_values_from_topology(self) -> None:
+        """Realistic publisher drift matches topology MQTT endpoint config."""
+        config = load_config(str(_PKG_CONFIG_PATH), apply_env=False)
+        store = SignalStore()
+        topology = NetworkTopologyManager(
+            config=NetworkConfig(mode="realistic"), profile="packaging"
+        )
+        engine = DataEngine(config, store, topology=topology)
+        publishers = engine.create_mqtt_publishers()
+        drift = publishers[0]._clock_drift
+        assert drift is not None
+        ep = topology.mqtt_endpoint()
+        assert drift.initial_offset_s == ep.clock_drift.initial_offset_ms / 1000.0
+        assert drift.drift_rate_s_per_day == ep.clock_drift.drift_rate_s_per_day
+
+    def test_realistic_foodbev_single_publisher_with_drift(self) -> None:
+        """Realistic F&B mode creates a single publisher with drift."""
+        config = load_config(str(_FNB_CONFIG_PATH), apply_env=False)
+        store = SignalStore()
+        topology = NetworkTopologyManager(
+            config=NetworkConfig(mode="realistic"), profile="food_bev"
+        )
+        engine = DataEngine(config, store, topology=topology)
+        publishers = engine.create_mqtt_publishers()
+        assert len(publishers) == 1
+        assert publishers[0]._clock_drift is not None

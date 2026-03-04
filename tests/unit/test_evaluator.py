@@ -476,6 +476,47 @@ class TestRandomBaseline:
             r2.random_baseline.precision
         )
 
+    def test_baseline_overlapping_events_not_double_counted(self) -> None:
+        """Overlapping event intervals are merged before computing anomaly density."""
+        # Two events that fully overlap — only 100s of anomaly time, not 200s
+        ev_a = _ev("web_break", 1000.0, 1100.0)   # 100s
+        ev_b = _ev("micro_stop", 1050.0, 1150.0)   # overlaps by 50s
+        ev = Evaluator(
+            settings=EvaluatorSettings(
+                pre_margin_seconds=5.0,
+                post_margin_seconds=5.0,
+                tick_interval_s=1.0,
+                random_seed=42,
+            )
+        )
+        result = ev.evaluate_from_data([ev_a, ev_b], [])
+        # Merged interval: [1000, 1150] = 150s (not 200s double-count)
+        # Total duration: (1000 - 5) to (1150 + 5) = 160s
+        expected_density = 150.0 / 160.0
+        assert result.random_baseline.anomaly_density == pytest.approx(
+            expected_density, abs=0.01
+        )
+
+    def test_baseline_non_overlapping_events_unchanged(self) -> None:
+        """Non-overlapping events are not affected by the merging logic."""
+        ev_a = _ev("web_break", 1000.0, 1060.0)   # 60s
+        ev_b = _ev("micro_stop", 2000.0, 2030.0)  # 30s, no overlap
+        ev = Evaluator(
+            settings=EvaluatorSettings(
+                pre_margin_seconds=0.0,
+                post_margin_seconds=0.0,
+                tick_interval_s=1.0,
+                random_seed=42,
+            )
+        )
+        result = ev.evaluate_from_data([ev_a, ev_b], [])
+        # total_anomaly_time = 60 + 30 = 90s
+        # total_duration = 2030 - 1000 = 1030s
+        expected_density = 90.0 / 1030.0
+        assert result.random_baseline.anomaly_density == pytest.approx(
+            expected_density, abs=0.01
+        )
+
 
 # ---------------------------------------------------------------------------
 # Ground truth JSONL loading

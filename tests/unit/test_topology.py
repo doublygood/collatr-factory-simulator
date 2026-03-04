@@ -161,7 +161,7 @@ class TestCollapsedModePackaging:
         endpoints = self.mgr.modbus_endpoints()
         assert len(endpoints) == 1
         assert isinstance(endpoints[0], ModbusEndpointSpec)
-        assert endpoints[0].port == 5020
+        assert endpoints[0].port == 502
 
     def test_single_opcua_endpoint(self) -> None:
         endpoints = self.mgr.opcua_endpoints()
@@ -173,6 +173,18 @@ class TestCollapsedModePackaging:
         ep = self.mgr.mqtt_endpoint()
         assert isinstance(ep, MqttEndpointSpec)
         assert ep.broker_port == 1883
+        # Collapsed mode: no clock drift
+        assert ep.clock_drift.initial_offset_ms == 0.0
+        assert ep.clock_drift.drift_rate_s_per_day == 0.0
+
+    def test_mqtt_endpoint_realistic_has_drift(self) -> None:
+        """Realistic mode MQTT endpoint has non-zero clock drift."""
+        mgr_realistic = NetworkTopologyManager(
+            config=NetworkConfig(mode="realistic"), profile="packaging"
+        )
+        ep = mgr_realistic.mqtt_endpoint()
+        assert ep.clock_drift.initial_offset_ms > 0.0
+        assert ep.clock_drift.drift_rate_s_per_day > 0.0
 
 
 class TestCollapsedModeFoodBev:
@@ -184,7 +196,7 @@ class TestCollapsedModeFoodBev:
     def test_single_modbus_endpoint(self) -> None:
         endpoints = self.mgr.modbus_endpoints()
         assert len(endpoints) == 1
-        assert endpoints[0].port == 5030
+        assert endpoints[0].port == 502
 
     def test_single_opcua_endpoint(self) -> None:
         endpoints = self.mgr.opcua_endpoints()
