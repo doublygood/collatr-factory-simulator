@@ -9,7 +9,7 @@
 - [x] 5.4: Scan Cycle Quantisation and Phase Jitter
 - [x] 5.5: Independent Connection Drops per Controller
 - [x] 5.6: Evaluation Framework: Core Engine
-- [ ] 5.7: Evaluation CLI and Run Manifests
+- [x] 5.7: Evaluation CLI and Run Manifests
 - [ ] 5.8: Batch Output: CSV and Parquet
 - [ ] 5.9: CLI Entry Point
 - [ ] 5.10: Docker Compose with Health Checks
@@ -116,3 +116,20 @@
 - `EvaluationConfig` lives in `config.py` alongside all other config models (not in `evaluation/`).
 
 **Test count:** 2723 passed (was 2665 before).
+
+### Task 5.7: Evaluation CLI and Run Manifests
+**Files created/modified:**
+- `src/factory_simulator/evaluation/cli.py` (NEW) — `RunManifest` dataclass with YAML I/O (`save_manifest`, `load_manifest`, `create_manifest` with version + git hash). Config overlays per PRD 12.3: `clean_config_overlay()`, `scenarios_only_config_overlay()`, `impairments_only_config_overlay()`, `full_impaired_config_overlay()`. PRD 12.5 run config generators: `run_a_simulation_config()`, `run_b_simulation_config()`, `run_c_simulation_config()`. Multi-seed evaluation: `ConfidenceInterval`, `MultiSeedResult`, `_ci()` (PRD 12.4 formula), `run_multi_seed_evaluation()`. Report formatters: `format_evaluation_report()`, `format_multi_seed_report()`. `evaluate_command()` handler for the evaluate CLI subcommand (called from task 5.9).
+- `tests/unit/test_evaluation_cli.py` (NEW) — 65 tests covering: RunManifest fields, YAML round-trip, `create_manifest`, all four config overlays, Run A/B/C config structure, `_ci` formula and edge cases, `run_multi_seed_evaluation` (length mismatch, single/multi seed, CI), report formatters, `evaluate_command` (missing args, single file, output file, multi-seed, mismatched lists).
+- `src/factory_simulator/evaluation/__init__.py` — Updated exports to include all new symbols from `cli.py`.
+- `examples/evaluation/run_a_normal.yaml` (NEW) — PRD 12.5 Run A example config.
+- `examples/evaluation/run_b_heavy_anomaly.yaml` (NEW) — PRD 12.5 Run B example config.
+- `examples/evaluation/run_c_long_term.yaml` (NEW) — PRD 12.5 Run C example config.
+
+**Decisions:**
+- `run_multi_seed_evaluation()` takes `Sequence[str | Path]` (covariant) not `list[str | Path]` (invariant) so callers can pass `list[str]` directly without a cast.
+- `strict=False` for zip in `run_multi_seed_evaluation`: lengths are validated manually before the loop.
+- `evaluate_command` accepts comma-separated path strings for multi-seed mode (avoiding need for multi-value CLI args before task 5.9 wires it up).
+- `clean_config_overlay` uses `frozenset` internally to enumerate normal-operation vs anomaly scenarios, consistent with PRD 12.3 categorisation.
+
+**Test count:** 2788 passed (was 2723 before).

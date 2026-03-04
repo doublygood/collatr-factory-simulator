@@ -1,0 +1,79 @@
+# Run C: Long-Term Degradation (7 simulated days)
+# PRD Reference: Section 12.5
+#
+# Purpose: Test trend detection over long horizons.
+#   Bearing wear starts at hour 0 and culminates in failure.
+#   Intermittent faults (bearing and electrical) evolve toward permanent failure.
+#   Runs in batch mode at 100x — no live protocol serving during generation.
+#   Import output CSV/Parquet into CollatrEdge for replay testing.
+#
+# Usage:
+#   python -m factory_simulator run --config examples/evaluation/run_c_long_term.yaml \
+#       --seed 1 --batch-output output/run_c --batch-format parquet --time-scale 100
+#
+#   python -m factory_simulator evaluate \
+#       --ground-truth output/run_c/ground_truth.jsonl \
+#       --detections output/run_c/detections.csv \
+#       --pre-margin 30 --post-margin 60
+
+simulation:
+  duration_seconds: 604800      # 7 days
+  time_scale: 100.0             # 100x batch mode (~1.7 real hours)
+  random_seed: 1                # Set for reproducibility; change per seed
+
+evaluation:
+  pre_margin_seconds: 30
+  post_margin_seconds: 60
+  seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+scenarios:
+  job_changeover:
+    enabled: true
+  shift_change:
+    enabled: true
+  micro_stop:
+    enabled: true
+  bearing_wear:
+    enabled: true
+    start_hour: 0
+    culminate_in_failure: true
+  intermittent_fault:
+    enabled: true
+    fault_types: [bearing, electrical]
+  web_break:
+    enabled: true
+  unplanned_stop:
+    enabled: true
+  dryer_drift:
+    enabled: true
+  ink_viscosity_excursion:
+    enabled: true
+  contextual_anomaly:
+    enabled: true
+  # F&B-only scenarios — disable for packaging profile:
+  seal_integrity_failure:
+    enabled: false
+  cold_chain_break:
+    enabled: false
+  oven_excursion:
+    enabled: false
+  fill_weight_drift:
+    enabled: false
+  registration_drift:
+    enabled: false
+  sensor_disconnect:
+    enabled: false
+  stuck_sensor:
+    enabled: false
+
+data_quality:
+  noise:
+    enabled: true
+  modbus_drop:
+    enabled: true
+  opcua_stale:
+    enabled: true
+  mqtt_drop:
+    enabled: true
+  duplicate_timestamps:
+    enabled: true

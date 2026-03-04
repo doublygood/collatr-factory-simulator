@@ -1,0 +1,82 @@
+# Run B: Heavy Anomaly (24 simulated hours)
+# PRD Reference: Section 12.5
+#
+# Purpose: Test detection rate under heavy fault load.
+#   All scenarios enabled. web_break and unplanned_stop at 2x frequency.
+#   contextual_anomaly at 3x frequency. All impairments on.
+#   sensor_disconnect doubled.
+#
+# Usage:
+#   python -m factory_simulator run --config examples/evaluation/run_b_heavy_anomaly.yaml \
+#       --seed 1 --batch-output output/run_b --batch-format csv
+#
+#   python -m factory_simulator evaluate \
+#       --ground-truth output/run_b/ground_truth.jsonl \
+#       --detections output/run_b/detections.csv \
+#       --pre-margin 30 --post-margin 60
+
+simulation:
+  duration_seconds: 86400       # 24 hours
+  time_scale: 10.0              # 10x (2.4 real hours)
+  random_seed: 1                # Set for reproducibility; change per seed
+
+evaluation:
+  pre_margin_seconds: 30
+  post_margin_seconds: 60
+  seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+scenarios:
+  job_changeover:
+    enabled: true
+  shift_change:
+    enabled: true
+  micro_stop:
+    enabled: true
+  web_break:
+    enabled: true
+    frequency_multiplier: 2.0
+  unplanned_stop:
+    enabled: true
+    frequency_multiplier: 2.0
+  seal_integrity_failure:
+    enabled: true
+  cold_chain_break:
+    enabled: true
+  bearing_wear:
+    enabled: true
+  dryer_drift:
+    enabled: true
+  oven_excursion:
+    enabled: true
+  fill_weight_drift:
+    enabled: true
+  ink_viscosity_excursion:
+    enabled: true
+  registration_drift:
+    enabled: true
+  contextual_anomaly:
+    enabled: true
+    frequency_multiplier: 3.0
+  intermittent_fault:
+    enabled: true
+  sensor_disconnect:
+    enabled: true
+  stuck_sensor:
+    enabled: true
+
+data_quality:
+  noise:
+    enabled: true
+  modbus_drop:
+    enabled: true
+  opcua_stale:
+    enabled: true
+  mqtt_drop:
+    enabled: true
+  sensor_disconnect:
+    enabled: true
+    frequency_multiplier: 2.0
+  stuck_sensor:
+    enabled: true
+  duplicate_timestamps:
+    enabled: true
