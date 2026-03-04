@@ -1326,3 +1326,210 @@ class TestNoiseCalibrationPackaging:
             assert sig.noise_sigma == pytest.approx(0.3), f"{axis} sigma"
             assert sig.noise_type == "student_t", f"{axis} type"
             assert sig.noise_df == pytest.approx(5.0), f"{axis} df"
+
+
+class TestNoiseCalibrationFoodBev:
+    """Verify F&B profile noise params match PRD Section 10.3 analogues.
+
+    Mapping rules (per PROMPT_build.md task 4.14):
+      - PID-controlled temps  → AR(1), phi=0.7
+      - Load/torque signals   → Student-t, df=8
+      - Motor/encoder speeds  → Gaussian
+      - Pressure transducers  → Gaussian (similar to press.nip_pressure)
+      - Other analogue        → Gaussian
+
+    PRD Reference: Section 10.3 Sensor Noise table.
+    """
+
+    @pytest.fixture(scope="class")
+    def cfg(self) -> FactoryConfig:
+        return load_config("config/factory-foodbev.yaml", apply_env=False)
+
+    # -- Mixer signals -------------------------------------------------------
+
+    def test_mixer_speed_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["mixer"].signals["speed"]
+        assert sig.noise_sigma == pytest.approx(5.0)   # encoder, ~0.17% of 3000 RPM
+        assert sig.noise_type == "gaussian"
+
+    def test_mixer_torque_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["mixer"].signals["torque"]
+        assert sig.noise_sigma == pytest.approx(0.5)   # load/torque → Student-t df=8
+        assert sig.noise_type == "student_t"
+        assert sig.noise_df == pytest.approx(8.0)
+
+    def test_mixer_batch_temp_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["mixer"].signals["batch_temp"]
+        assert sig.noise_sigma == pytest.approx(0.3)   # PID-controlled → AR(1)
+        assert sig.noise_type == "ar1"
+        assert sig.noise_phi == pytest.approx(0.7)
+
+    def test_mixer_batch_weight_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["mixer"].signals["batch_weight"]
+        assert sig.noise_sigma == pytest.approx(0.5)   # load cell, Gaussian
+        assert sig.noise_type == "gaussian"
+
+    # -- Oven signals --------------------------------------------------------
+
+    def test_oven_zone_temps_noise(self, cfg: FactoryConfig) -> None:
+        """All three oven zones: PID-controlled → AR(1), phi=0.7, 0.3 C."""
+        oven_sigs = cfg.equipment["oven"].signals
+        for zone in ("zone_1_temp", "zone_2_temp", "zone_3_temp"):
+            sig = oven_sigs[zone]
+            assert sig.noise_sigma == pytest.approx(0.3), f"{zone} sigma"
+            assert sig.noise_type == "ar1", f"{zone} type"
+            assert sig.noise_phi == pytest.approx(0.7), f"{zone} phi"
+
+    def test_oven_product_core_temp_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["oven"].signals["product_core_temp"]
+        assert sig.noise_sigma == pytest.approx(0.3)   # thermocouple probe, Gaussian
+        assert sig.noise_type == "gaussian"
+
+    def test_oven_humidity_zone_2_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["oven"].signals["humidity_zone_2"]
+        assert sig.noise_sigma == pytest.approx(0.5)   # similar to env.ambient_humidity
+        assert sig.noise_type == "gaussian"
+
+    def test_oven_output_power_noise(self, cfg: FactoryConfig) -> None:
+        """All three zone output powers: Gaussian, 0.5%."""
+        oven_sigs = cfg.equipment["oven"].signals
+        for z in ("zone_1_output_power", "zone_2_output_power", "zone_3_output_power"):
+            sig = oven_sigs[z]
+            assert sig.noise_sigma == pytest.approx(0.5), f"{z} sigma"
+            assert sig.noise_type == "gaussian", f"{z} type"
+
+    # -- Filler signals ------------------------------------------------------
+
+    def test_filler_fill_weight_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["filler"].signals["fill_weight"]
+        assert sig.noise_sigma == pytest.approx(1.0)   # load cell → Student-t df=8
+        assert sig.noise_type == "student_t"
+        assert sig.noise_df == pytest.approx(8.0)
+
+    def test_filler_hopper_level_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["filler"].signals["hopper_level"]
+        assert sig.noise_sigma == pytest.approx(0.5)   # proximity sensor, Gaussian
+        assert sig.noise_type == "gaussian"
+
+    # -- Sealer signals ------------------------------------------------------
+
+    def test_sealer_seal_temp_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["sealer"].signals["seal_temp"]
+        assert sig.noise_sigma == pytest.approx(0.5)   # PID-controlled → AR(1)
+        assert sig.noise_type == "ar1"
+        assert sig.noise_phi == pytest.approx(0.7)
+
+    def test_sealer_seal_pressure_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["sealer"].signals["seal_pressure"]
+        assert sig.noise_sigma == pytest.approx(0.05)  # similar to press.nip_pressure
+        assert sig.noise_type == "gaussian"
+
+    def test_sealer_gas_co2_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["sealer"].signals["gas_co2_pct"]
+        assert sig.noise_sigma == pytest.approx(0.3)   # gas analyser, Gaussian
+        assert sig.noise_type == "gaussian"
+
+    def test_sealer_gas_n2_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["sealer"].signals["gas_n2_pct"]
+        assert sig.noise_sigma == pytest.approx(0.3)
+        assert sig.noise_type == "gaussian"
+
+    def test_sealer_vacuum_level_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["sealer"].signals["vacuum_level"]
+        assert sig.noise_sigma == pytest.approx(0.01)  # vacuum transducer, Gaussian
+        assert sig.noise_type == "gaussian"
+
+    # -- QC signals ----------------------------------------------------------
+
+    def test_qc_actual_weight_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["qc"].signals["actual_weight"]
+        assert sig.noise_sigma == pytest.approx(1.0)   # checkweigher load cell, Gaussian
+        assert sig.noise_type == "gaussian"
+
+    def test_qc_throughput_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["qc"].signals["throughput"]
+        assert sig.noise_sigma == pytest.approx(0.2)   # similar to press.line_speed
+        assert sig.noise_type == "gaussian"
+
+    # -- Chiller signals -----------------------------------------------------
+
+    def test_chiller_room_temp_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["chiller"].signals["room_temp"]
+        assert sig.noise_sigma == pytest.approx(0.1)   # thermistor, similar to env.ambient_temp
+        assert sig.noise_type == "gaussian"
+
+    def test_chiller_suction_pressure_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["chiller"].signals["suction_pressure"]
+        assert sig.noise_sigma == pytest.approx(0.05)  # similar to press.nip_pressure
+        assert sig.noise_type == "gaussian"
+
+    def test_chiller_discharge_pressure_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["chiller"].signals["discharge_pressure"]
+        assert sig.noise_sigma == pytest.approx(0.1)   # higher pressure range, Gaussian
+        assert sig.noise_type == "gaussian"
+
+    # -- CIP signals ---------------------------------------------------------
+
+    def test_cip_wash_temp_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["cip"].signals["wash_temp"]
+        assert sig.noise_sigma == pytest.approx(0.5)   # PID-controlled → AR(1)
+        assert sig.noise_type == "ar1"
+        assert sig.noise_phi == pytest.approx(0.7)
+
+    def test_cip_flow_rate_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["cip"].signals["flow_rate"]
+        assert sig.noise_sigma == pytest.approx(0.5)   # flow meter, Gaussian
+        assert sig.noise_type == "gaussian"
+
+    def test_cip_conductivity_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["cip"].signals["conductivity"]
+        assert sig.noise_sigma == pytest.approx(0.3)   # conductivity sensor, Gaussian
+        assert sig.noise_type == "gaussian"
+
+    # -- Coder signals (shared equipment, same calibration as packaging) -----
+
+    def test_coder_printhead_temp_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["coder"].signals["printhead_temp"]
+        assert sig.noise_sigma == pytest.approx(0.5)   # PID-controlled, same as packaging
+        assert sig.noise_type == "ar1"
+        assert sig.noise_phi == pytest.approx(0.7)
+
+    def test_coder_ink_pump_speed_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["coder"].signals["ink_pump_speed"]
+        assert sig.noise_sigma == pytest.approx(0.5)   # pump encoder, same as packaging
+        assert sig.noise_type == "gaussian"
+
+    def test_coder_ink_pressure_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["coder"].signals["ink_pressure"]
+        assert sig.noise_sigma == pytest.approx(60.0)  # pneumatic transients, same as packaging
+        assert sig.noise_type == "student_t"
+        assert sig.noise_df == pytest.approx(6.0)
+
+    def test_coder_ink_viscosity_actual_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["coder"].signals["ink_viscosity_actual"]
+        assert sig.noise_sigma == pytest.approx(0.3)   # viscosity sensor, same as packaging
+        assert sig.noise_type == "gaussian"
+
+    def test_coder_supply_voltage_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["coder"].signals["supply_voltage"]
+        assert sig.noise_sigma == pytest.approx(0.1)   # PSU ripple, same as packaging
+        assert sig.noise_type == "gaussian"
+
+    # -- Environment signals (shared, same calibration as packaging) ---------
+
+    def test_env_ambient_temp_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["environment"].signals["ambient_temp"]
+        assert sig.noise_sigma == pytest.approx(0.1)   # IOLink resolution
+        assert sig.noise_type == "gaussian"
+
+    def test_env_ambient_humidity_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["environment"].signals["ambient_humidity"]
+        assert sig.noise_sigma == pytest.approx(0.5)   # IOLink resolution
+        assert sig.noise_type == "gaussian"
+
+    # -- Energy signals ------------------------------------------------------
+
+    def test_energy_line_power_noise(self, cfg: FactoryConfig) -> None:
+        sig = cfg.equipment["energy"].signals["line_power"]
+        assert sig.noise_sigma == pytest.approx(0.2)   # power meter resolution
+        assert sig.noise_type == "gaussian"

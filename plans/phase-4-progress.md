@@ -16,7 +16,7 @@
 - [x] 4.11: Duplicate Timestamps and Timezone Offset
 - [x] 4.12: Data Quality Engine Integration
 - [x] 4.13: Noise Calibration — Packaging Profile
-- [ ] 4.14: Noise Calibration — F&B Profile
+- [x] 4.14: Noise Calibration — F&B Profile
 - [ ] 4.15: Counter Rollover Testing Support
 - [ ] 4.16: Reproducibility Test and Final Integration
 
@@ -26,6 +26,53 @@
 - gutter_fault probability 18x too high → Fixed in Task 4.13 (code already had correct rate; YAML calibrated)
 
 ## Notes
+
+### Task 4.14 — Noise Calibration — F&B Profile (COMPLETE)
+
+Updated `config/factory-foodbev.yaml` with calibrated noise parameters per PRD Section 10.3 analogues.
+
+**Mapping rules applied:**
+- PID-controlled temps → AR(1), phi=0.7 (oven zones, sealer seal_temp, cip wash_temp, coder printhead_temp, mixer batch_temp)
+- Load/torque signals → Student-t, df=8 (mixer.torque, filler.fill_weight)
+- Motor/encoder speeds → Gaussian (mixer.speed)
+- Pressure transducers → Gaussian (seal_pressure, suction/discharge_pressure)
+- Other analogue → Gaussian
+
+**Changes made** (signal → old sigma → new sigma + distribution):
+- `mixer.speed`: 10.0 → **5.0** RPM, Gaussian (encoder)
+- `mixer.torque`: 1.0 → **0.5** %, Student-t df=8 (load/torque signal)
+- `mixer.batch_weight`: 2.0 → **0.5** kg, Gaussian (load cell)
+- `oven.zone_1/2/3_temp`: 0.8 → **0.3** C, AR(1) phi=0.7 (PID-controlled)
+- `oven.product_core_temp`: 0.5 → **0.3** C, Gaussian (thermocouple probe)
+- `oven.humidity_zone_2`: 2.0 → **0.5** %RH, Gaussian (similar to env.ambient_humidity)
+- `oven.zone_1/2/3_output_power`: 1.0 → **0.5** %, Gaussian
+- `filler.fill_weight`: 3.0 → **1.0** g, Student-t df=8 (gravimetric load cell)
+- `filler.hopper_level`: 1.0 → **0.5** %, Gaussian
+- `sealer.seal_temp`: 1.5, phi=0.6 → **0.5** C, AR(1) phi=**0.7** (PID-controlled)
+- `sealer.seal_pressure`: 0.1 → **0.05** bar, Gaussian (similar to press.nip_pressure)
+- `sealer.seal_dwell`: 0.05 → **0.02** s, Gaussian
+- `sealer.gas_co2_pct/gas_n2_pct`: 0.5 → **0.3** %, Gaussian
+- `sealer.vacuum_level`: 0.02 → **0.01** bar, Gaussian
+- `qc.actual_weight`: 2.0 → **1.0** g, Gaussian (checkweigher load cell)
+- `qc.throughput`: 0.3 → **0.2** items/min, Gaussian (similar to press.line_speed)
+- `chiller.room_temp`: 0.2 → **0.1** C, Gaussian (similar to env.ambient_temp)
+- `chiller.suction_pressure`: 0.1 → **0.05** bar, Gaussian
+- `chiller.discharge_pressure`: 0.3 → **0.1** bar, Gaussian
+- `cip.flow_rate`: 2.0 → **0.5** L/min, Gaussian
+- `cip.conductivity`: 1.0 → **0.3** mS/cm, Gaussian
+- `coder.printhead_temp`: 2.0 → **0.5** C, AR(1) phi=0.7 (same as packaging)
+- `coder.ink_pump_speed`: 10.0 → **0.5** RPM, Gaussian (same as packaging)
+- `coder.ink_pressure`: 10.0 → **60.0** mbar, Student-t df=6 (same as packaging)
+- `coder.ink_viscosity_actual`: 0.5 → **0.3** cP, Gaussian (same as packaging)
+- `coder.supply_voltage`: 0.2 → **0.1** V, Gaussian (same as packaging)
+- `environment.ambient_temp`: 0.2 → **0.1** C, Gaussian (same as packaging)
+- `environment.ambient_humidity`: 1.0 → **0.5** %RH, Gaussian (same as packaging)
+- `energy.line_power`: 3.0 → **0.2** kW, Gaussian (same as packaging)
+
+**Tests**: 31 new tests in `TestNoiseCalibrationFoodBev` in `test_config.py` verify
+each calibrated sigma, distribution type, df, and phi.
+
+2416 total tests passing.
 
 ### Task 4.13 — Noise Calibration — Packaging Profile (COMPLETE)
 

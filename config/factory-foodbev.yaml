@@ -73,7 +73,7 @@ equipment:
     signals:
       speed:
         model: "ramp"
-        noise_sigma: 10.0
+        noise_sigma: 5.0
         sample_rate_ms: 1000
         min_clamp: 0.0
         max_clamp: 3000.0
@@ -88,7 +88,9 @@ equipment:
         model: "correlated_follower"
         parent: "mixer.speed"
         transform: "linear"
-        noise_sigma: 1.0
+        noise_sigma: 0.5
+        noise_type: "student_t"
+        noise_df: 8
         sample_rate_ms: 1000
         min_clamp: 0.0
         max_clamp: 100.0
@@ -118,7 +120,7 @@ equipment:
 
       batch_weight:
         model: "ramp"
-        noise_sigma: 2.0
+        noise_sigma: 0.5
         sample_rate_ms: 5000
         min_clamp: 0.0
         max_clamp: 2000.0
@@ -189,7 +191,7 @@ equipment:
     signals:
       zone_1_temp:
         model: "first_order_lag"
-        noise_sigma: 0.8
+        noise_sigma: 0.3
         noise_type: "ar1"
         noise_phi: 0.7
         sample_rate_ms: 5000
@@ -207,7 +209,7 @@ equipment:
 
       zone_2_temp:
         model: "first_order_lag"
-        noise_sigma: 0.8
+        noise_sigma: 0.3
         noise_type: "ar1"
         noise_phi: 0.7
         sample_rate_ms: 5000
@@ -225,7 +227,7 @@ equipment:
 
       zone_3_temp:
         model: "first_order_lag"
-        noise_sigma: 0.8
+        noise_sigma: 0.3
         noise_type: "ar1"
         noise_phi: 0.7
         sample_rate_ms: 5000
@@ -300,7 +302,7 @@ equipment:
 
       product_core_temp:
         model: "first_order_lag"
-        noise_sigma: 0.5
+        noise_sigma: 0.3
         sample_rate_ms: 5000
         min_clamp: -5.0
         max_clamp: 95.0
@@ -314,7 +316,7 @@ equipment:
 
       humidity_zone_2:
         model: "steady_state"
-        noise_sigma: 2.0
+        noise_sigma: 0.5
         sample_rate_ms: 10000
         min_clamp: 30.0
         max_clamp: 90.0
@@ -340,7 +342,7 @@ equipment:
         model: "correlated_follower"
         parent: "oven.zone_1_temp"
         transform: "linear"
-        noise_sigma: 1.0
+        noise_sigma: 0.5
         sample_rate_ms: 5000
         min_clamp: 0.0
         max_clamp: 100.0
@@ -355,7 +357,7 @@ equipment:
         model: "correlated_follower"
         parent: "oven.zone_2_temp"
         transform: "linear"
-        noise_sigma: 1.0
+        noise_sigma: 0.5
         sample_rate_ms: 5000
         min_clamp: 0.0
         max_clamp: 100.0
@@ -370,7 +372,7 @@ equipment:
         model: "correlated_follower"
         parent: "oven.zone_3_temp"
         transform: "linear"
-        noise_sigma: 1.0
+        noise_sigma: 0.5
         sample_rate_ms: 5000
         min_clamp: 0.0
         max_clamp: 100.0
@@ -405,7 +407,9 @@ equipment:
 
       fill_weight:
         model: "steady_state"
-        noise_sigma: 3.0
+        noise_sigma: 1.0
+        noise_type: "student_t"
+        noise_df: 8
         sample_rate_ms: 1000
         min_clamp: 200.0
         max_clamp: 800.0
@@ -477,7 +481,7 @@ equipment:
 
       hopper_level:
         model: "depletion"
-        noise_sigma: 1.0
+        noise_sigma: 0.5
         sample_rate_ms: 10000
         min_clamp: 0.0
         max_clamp: 100.0
@@ -498,9 +502,9 @@ equipment:
     signals:
       seal_temp:
         model: "steady_state"
-        noise_sigma: 1.5
+        noise_sigma: 0.5
         noise_type: "ar1"
-        noise_phi: 0.6
+        noise_phi: 0.7
         sample_rate_ms: 5000
         min_clamp: 100.0
         max_clamp: 250.0
@@ -512,7 +516,7 @@ equipment:
 
       seal_pressure:
         model: "steady_state"
-        noise_sigma: 0.1
+        noise_sigma: 0.05
         sample_rate_ms: 5000
         min_clamp: 1.0
         max_clamp: 6.0
@@ -524,7 +528,7 @@ equipment:
 
       seal_dwell:
         model: "steady_state"
-        noise_sigma: 0.05
+        noise_sigma: 0.02
         sample_rate_ms: 5000
         min_clamp: 0.5
         max_clamp: 5.0
@@ -536,7 +540,7 @@ equipment:
 
       gas_co2_pct:
         model: "steady_state"
-        noise_sigma: 0.5
+        noise_sigma: 0.3
         sample_rate_ms: 10000
         min_clamp: 20.0
         max_clamp: 80.0
@@ -548,7 +552,7 @@ equipment:
 
       gas_n2_pct:
         model: "steady_state"
-        noise_sigma: 0.5
+        noise_sigma: 0.3
         sample_rate_ms: 10000
         min_clamp: 20.0
         max_clamp: 80.0
@@ -560,7 +564,7 @@ equipment:
 
       vacuum_level:
         model: "steady_state"
-        noise_sigma: 0.02
+        noise_sigma: 0.01
         sample_rate_ms: 5000
         min_clamp: -0.9
         max_clamp: 0.0
@@ -581,7 +585,7 @@ equipment:
     signals:
       actual_weight:
         model: "steady_state"
-        noise_sigma: 2.0
+        noise_sigma: 1.0
         sample_rate_ms: 1000
         min_clamp: 100.0
         max_clamp: 1000.0
@@ -631,7 +635,7 @@ equipment:
         model: "correlated_follower"
         parent: "filler.line_speed"
         transform: "linear"
-        noise_sigma: 0.3
+        noise_sigma: 0.2
         sample_rate_ms: 1000
         min_clamp: 10.0
         max_clamp: 120.0
@@ -662,7 +666,7 @@ equipment:
     signals:
       room_temp:
         model: "steady_state"
-        noise_sigma: 0.2
+        noise_sigma: 0.1
         sample_rate_ms: 30000
         min_clamp: -5.0
         max_clamp: 15.0
@@ -699,7 +703,7 @@ equipment:
 
       suction_pressure:
         model: "steady_state"
-        noise_sigma: 0.1
+        noise_sigma: 0.05
         sample_rate_ms: 30000
         min_clamp: 0.0
         max_clamp: 10.0
@@ -711,7 +715,7 @@ equipment:
 
       discharge_pressure:
         model: "steady_state"
-        noise_sigma: 0.3
+        noise_sigma: 0.1
         sample_rate_ms: 30000
         min_clamp: 5.0
         max_clamp: 25.0
@@ -779,7 +783,7 @@ equipment:
 
       flow_rate:
         model: "steady_state"
-        noise_sigma: 2.0
+        noise_sigma: 0.5
         sample_rate_ms: 5000
         min_clamp: 0.0
         max_clamp: 100.0
@@ -791,7 +795,7 @@ equipment:
 
       conductivity:
         model: "steady_state"
-        noise_sigma: 1.0
+        noise_sigma: 0.3
         sample_rate_ms: 10000
         min_clamp: 0.0
         max_clamp: 200.0
@@ -859,7 +863,7 @@ equipment:
 
       printhead_temp:
         model: "steady_state"
-        noise_sigma: 2.0
+        noise_sigma: 0.5
         noise_type: "ar1"
         noise_phi: 0.7
         sample_rate_ms: 30000
@@ -874,7 +878,7 @@ equipment:
         model: "correlated_follower"
         parent: "filler.line_speed"
         transform: "linear"
-        noise_sigma: 10.0
+        noise_sigma: 0.5
         sample_rate_ms: 5000
         min_clamp: 0.0
         max_clamp: 500.0
@@ -886,7 +890,7 @@ equipment:
 
       ink_pressure:
         model: "steady_state"
-        noise_sigma: 10.0
+        noise_sigma: 60.0
         noise_type: "student_t"
         noise_df: 6
         sample_rate_ms: 5000
@@ -899,7 +903,7 @@ equipment:
 
       ink_viscosity_actual:
         model: "steady_state"
-        noise_sigma: 0.5
+        noise_sigma: 0.3
         sample_rate_ms: 30000
         min_clamp: 2.0
         max_clamp: 15.0
@@ -910,7 +914,7 @@ equipment:
 
       supply_voltage:
         model: "steady_state"
-        noise_sigma: 0.2
+        noise_sigma: 0.1
         sample_rate_ms: 60000
         min_clamp: 22.0
         max_clamp: 26.0
@@ -962,7 +966,7 @@ equipment:
     signals:
       ambient_temp:
         model: "sinusoidal"
-        noise_sigma: 0.2
+        noise_sigma: 0.1
         sample_rate_ms: 60000
         min_clamp: 5.0
         max_clamp: 30.0
@@ -980,7 +984,7 @@ equipment:
 
       ambient_humidity:
         model: "sinusoidal"
-        noise_sigma: 1.0
+        noise_sigma: 0.5
         sample_rate_ms: 60000
         min_clamp: 30.0
         max_clamp: 80.0
@@ -1003,7 +1007,7 @@ equipment:
         model: "correlated_follower"
         parent: "filler.line_speed"
         transform: "linear"
-        noise_sigma: 3.0
+        noise_sigma: 0.2
         sample_rate_ms: 1000
         min_clamp: 0.0
         max_clamp: 300.0

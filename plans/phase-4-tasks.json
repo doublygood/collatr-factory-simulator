@@ -173,7 +173,7 @@
                 "prd/appendix-d-configuration-reference.md"
             ],
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "4.15",
