@@ -52,6 +52,7 @@ def _run_args(**kwargs: Any) -> SimpleNamespace:
         "batch_duration": None,
         "batch_format": "csv",
         "network_mode": "collapsed",
+        "ground_truth_path": None,
         "log_level": "info",
     }
     defaults.update(kwargs)
@@ -214,6 +215,12 @@ class TestBuildParser:
         assert args.time_scale is None
         assert args.batch_output is None
         assert args.batch_duration is None
+        assert args.ground_truth_path is None
+
+    def test_run_has_ground_truth_path_flag(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["run", "--ground-truth-path", "/tmp/gt.jsonl"])
+        assert args.ground_truth_path == "/tmp/gt.jsonl"
 
     def test_evaluate_has_pre_margin(self) -> None:
         parser = build_parser()
@@ -487,6 +494,57 @@ class TestRunCommandBatch:
         result = run_command(args)
         assert result == 0
         assert (tmp_path / "signals.csv").exists()
+
+    def test_batch_mode_produces_ground_truth_jsonl(self, tmp_path: Path) -> None:
+        """Batch mode writes ground_truth.jsonl alongside signals output."""
+        args = _run_args(
+            seed=42,
+            time_scale=1000.0,
+            batch_output=str(tmp_path),
+            batch_duration="1s",
+        )
+        result = run_command(args)
+        assert result == 0
+        gt_file = tmp_path / "ground_truth.jsonl"
+        assert gt_file.exists(), "ground_truth.jsonl was not created"
+        assert gt_file.stat().st_size > 0, "ground_truth.jsonl is empty"
+
+    def test_batch_mode_ground_truth_has_header(self, tmp_path: Path) -> None:
+        """First line of ground_truth.jsonl is a valid config header."""
+        import json as json_mod
+
+        args = _run_args(
+            seed=42,
+            time_scale=1000.0,
+            batch_output=str(tmp_path),
+            batch_duration="1s",
+        )
+        run_command(args)
+        gt_file = tmp_path / "ground_truth.jsonl"
+        first_line = gt_file.read_text(encoding="utf-8").splitlines()[0]
+        header = json_mod.loads(first_line)
+        assert header["event_type"] == "config"
+        assert "seed" in header
+        assert "profile" in header
+        assert "signals" in header
+        assert "scenarios" in header
+
+    def test_ground_truth_path_override(self, tmp_path: Path) -> None:
+        """--ground-truth-path writes the JSONL to the specified location."""
+        custom_path = tmp_path / "subdir" / "my_gt.jsonl"
+        args = _run_args(
+            seed=42,
+            time_scale=1000.0,
+            batch_output=str(tmp_path / "out"),
+            batch_duration="1s",
+            ground_truth_path=str(custom_path),
+        )
+        result = run_command(args)
+        assert result == 0
+        assert custom_path.exists(), "Custom ground truth path was not created"
+        assert (tmp_path / "out" / "ground_truth.jsonl").exists() is False, (
+            "Default path should not be created when override is set"
+        )
 
 
 # ---------------------------------------------------------------------------

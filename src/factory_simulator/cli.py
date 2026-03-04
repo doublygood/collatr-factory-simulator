@@ -209,6 +209,16 @@ def _add_run_subcommand(subparsers: Any) -> None:
         help="Network topology: collapsed (default) or realistic",
     )
     p.add_argument(
+        "--ground-truth-path",
+        metavar="FILE",
+        dest="ground_truth_path",
+        help=(
+            "Ground truth JSONL output path "
+            "(default: <batch-output>/ground_truth.jsonl in batch mode, "
+            "./ground_truth.jsonl otherwise)"
+        ),
+    )
+    p.add_argument(
         "--log-level",
         default="info",
         choices=["debug", "info", "warn", "warning", "error", "critical"],
@@ -447,6 +457,7 @@ async def _run_realtime(config: FactoryConfig, engine: Any) -> int:
 async def _async_run(args: argparse.Namespace) -> int:
     """Load config, build components, and dispatch to batch or real-time mode."""
     from factory_simulator.engine.data_engine import DataEngine
+    from factory_simulator.engine.ground_truth import GroundTruthLogger
     from factory_simulator.output.writer import BatchWriter
     from factory_simulator.store import SignalStore
 
@@ -486,16 +497,38 @@ async def _async_run(args: argparse.Namespace) -> int:
         else:
             batch_writer = CsvWriter(out_dir, batch_cfg)
 
+    # Ground truth logger — always created so scenario events are recorded.
+    # Path resolution: explicit arg > batch-output dir > cwd.
+    gt_path_override: str | None = getattr(args, "ground_truth_path", None)
+    if gt_path_override is not None:
+        gt_path = Path(gt_path_override)
+    elif config.batch_output.format != "none":
+        gt_path = Path(config.batch_output.path) / "ground_truth.jsonl"
+    else:
+        gt_path = Path("ground_truth.jsonl")
+
+    ground_truth = GroundTruthLogger(gt_path)
+    ground_truth.open()
+    ground_truth.write_header(config)
+
     store = SignalStore()
-    engine = DataEngine(config, store, topology=topology, batch_writer=batch_writer)
+    engine = DataEngine(
+        config, store,
+        topology=topology,
+        batch_writer=batch_writer,
+        ground_truth=ground_truth,
+    )
 
     sim_duration_s = config.simulation.sim_duration_s
     is_batch_mode = config.batch_output.format != "none"
 
-    if is_batch_mode or sim_duration_s is not None:
-        return await _run_batch(engine, sim_duration_s)
-    else:
-        return await _run_realtime(config, engine)
+    try:
+        if is_batch_mode or sim_duration_s is not None:
+            return await _run_batch(engine, sim_duration_s)
+        else:
+            return await _run_realtime(config, engine)
+    finally:
+        ground_truth.close()
 
 
 # ---------------------------------------------------------------------------

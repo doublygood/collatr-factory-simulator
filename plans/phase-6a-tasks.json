@@ -10,7 +10,7 @@
             "description": "Create GroundTruthLogger in _async_run() and pass to DataEngine. Add --ground-truth-path CLI arg. Call write_header() after construction. Ensure close() in finally block. Test batch mode produces JSONL with header + scenario events.",
             "review_ref": "R1 (review-architecture.md)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6a.2",
