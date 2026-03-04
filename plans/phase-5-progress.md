@@ -11,7 +11,7 @@
 - [x] 5.6: Evaluation Framework: Core Engine
 - [x] 5.7: Evaluation CLI and Run Manifests
 - [x] 5.8: Batch Output: CSV and Parquet
-- [ ] 5.9: CLI Entry Point
+- [x] 5.9: CLI Entry Point
 - [ ] 5.10: Docker Compose with Health Checks
 - [ ] 5.11: README and Example Configs
 - [ ] 5.12: Performance Profiling
@@ -155,3 +155,18 @@
 - pyarrow imports inside `try/except ImportError` in `ParquetWriter.__init__` — gives a clear `ImportError` message if pyarrow is absent. Mypy `ignore_missing_imports = true` override for `pyarrow.*` suppresses the `import-untyped` warning.
 
 **Test count:** 2818 passed (was 2788 before).
+
+### Task 5.9: CLI Entry Point
+**Files created/modified:**
+- `src/factory_simulator/cli.py` (NEW) — `build_parser()` creates argparse CLI with subcommands `run`, `evaluate`, `version`. `parse_duration()` parses `7d`/`24h`/`30m`/`3600s`/`3600` strings. `_load_config()` loads YAML and applies CLI overrides (seed, time_scale, log_level, network_mode, batch_output, batch_duration). `run_command()` dispatches to `_async_run()` which creates DataEngine + optional topology + batch writer and runs in batch mode (finite duration, no protocol servers) or real-time mode (protocol servers + engine). `evaluate_command()` delegates to `factory_simulator.evaluation.cli.evaluate_command`. `main()` is the top-level dispatcher.
+- `src/factory_simulator/__main__.py` (NEW) — `python -m factory_simulator` entry point, calls `main()` and `sys.exit()`.
+- `pyproject.toml` — Added `[project.scripts]` entry: `factory-simulator = "factory_simulator.cli:main"`.
+- `tests/unit/test_cli.py` (NEW) — 64 tests covering: duration parsing (all suffixes, whitespace, errors), default config path resolution, parser structure (all subcommands/flags/defaults), version command output, evaluate command delegation (missing args, real files, output file), `_load_config` overrides (seed/time_scale/network_mode/batch), batch mode run (CSV output, header columns, foodbev profile), main() dispatcher (help exits 0), `__main__` importability, `python -m factory_simulator version/--help`.
+
+**Decisions:**
+- Batch mode triggered when `batch_output.format != "none"` OR `sim_duration_s is not None` (either flag implies bounded run). Real-time mode: protocols started + engine runs indefinitely until SIGINT.
+- `_run_batch()` calls `engine.tick()` in a tight loop with `await asyncio.sleep(0)` between ticks (yields to event loop for SIGINT responsiveness). Stops when `sim_time >= sim_duration_s`.
+- `NetworkTopologyManager` constructed with `config.network` (not full `FactoryConfig`) and profile mapped: CLI "foodbev" → topology "food_bev".
+- `BatchWriter | None` type annotation avoids mypy inference conflict between `CsvWriter` and `ParquetWriter` assignment branches.
+
+**Test count:** 2882 passed (was 2818 before).

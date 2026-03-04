@@ -110,7 +110,7 @@
                 "prd/appendix-f-implementation-phases.md (Phase 5)"
             ],
             "depends_on": ["5.8"],
-            "passes": false
+            "passes": true
         },
         {
             "id": "5.10",
