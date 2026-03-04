@@ -913,3 +913,42 @@ class TestScenarioPriority:
         assert bg.phase == ScenarioPhase.ACTIVE, (
             "background scenario should NOT be preempted by state_changing"
         )
+
+    def test_simultaneous_state_changing_only_first_activates(self) -> None:
+        """When two state_changing scenarios are due on the same tick, only
+        the first (by priority-sort order) activates; the second is deferred
+        to the next tick to prevent conflicting state changes.
+
+        This guards against the Y4 edge case identified in the independent
+        review: without this guard both would activate and the last-evaluated
+        scenario's state change would silently overwrite the first's.
+        """
+        rng = np.random.default_rng(42)
+        sc1 = _StateChangingMock(start_time=0.0, rng=rng)
+        sc2 = _StateChangingMock(start_time=0.0, rng=rng)
+
+        se = _make_priority_engine([sc1, sc2])
+
+        mock_engine = cast(DataEngine, None)
+        # Both are due at t=0 — only one should activate.
+        se.tick(sim_time=0.0, dt=0.1, engine=mock_engine)
+
+        phases = {sc1.phase, sc2.phase}
+        assert ScenarioPhase.ACTIVE in phases, (
+            "At least one state_changing scenario should be ACTIVE at t=0"
+        )
+        assert ScenarioPhase.PENDING in phases, (
+            "The second state_changing scenario should remain PENDING (deferred)"
+        )
+
+        # Verify state immediately after tick t=0: exactly one ACTIVE, one PENDING.
+        # (The deferred scenario can activate on the next tick since
+        # activated_sc_this_tick resets per tick — only same-tick conflicts
+        # are prevented, not sequential ones.)
+        active_count = sum(
+            1 for s in (sc1, sc2) if s.phase == ScenarioPhase.ACTIVE
+        )
+        assert active_count == 1, (
+            f"Expected exactly 1 ACTIVE state_changing scenario after tick 0, "
+            f"got {active_count}"
+        )

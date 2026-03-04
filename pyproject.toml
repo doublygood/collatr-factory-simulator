@@ -18,6 +18,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = [
     "integration: requires external services (Docker Compose)",
+    "slow: long-running tests (7-day simulation runs); skip with -m 'not slow'",
 ]
 
 # ── ruff ────────────────────────────────────────────────────────────

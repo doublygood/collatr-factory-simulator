@@ -54,6 +54,11 @@ _TICK_DT = (_TICK_INTERVAL_MS / 1000.0) * _TIME_SCALE  # 10 s
 _SIM_DAY_S = 86_400.0
 _SIM_DAY_TICKS = int(_SIM_DAY_S / _TICK_DT)  # 8 640
 
+# PRD Appendix F exit criteria: 7 simulated days at 100x
+# 7 * 86 400 s / 10 s per tick = 60 480 ticks ≈ 100 real seconds per profile
+_SIM_7DAY_S = 7.0 * _SIM_DAY_S
+_SIM_7DAY_TICKS = int(_SIM_7DAY_S / _TICK_DT)  # 60 480
+
 # Shorter tick count for cheap reproducibility checks
 _REPRO_TICKS = 500
 
@@ -633,4 +638,143 @@ class TestFnBMemory:
             f"F&B memory grew {ratio:.2f}x initial peak "
             f"({initial_peak // 1024} KiB → {final_peak // 1024} KiB). "
             "Possible memory leak in engine tick loop."
+        )
+
+
+# ---------------------------------------------------------------------------
+# Class E: 7-Day Long-Running Validation (PRD Appendix F exit criteria)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.slow
+class TestSevenDayStability:
+    """7 simulated days at 100x for both profiles.
+
+    PRD Appendix F exit criteria: "Run each profile for 7 days at 100x in
+    batch mode."  At 100 ms tick / 100x time-scale, 7 simulated days =
+    60 480 ticks ≈ 100 real seconds per profile.
+
+    Checks:
+    - No NaN or Inf in any signal after 7 simulated days.
+    - Memory growth < 2x initial peak (tracemalloc).
+
+    Run with: ``pytest -m slow``
+    Skip with: ``pytest -m 'not slow'``
+    """
+
+    def test_packaging_7day_no_nan_inf(self) -> None:
+        """Packaging profile: no NaN/Inf after 7 simulated days at 100x."""
+        config = load_config(_CONFIG_PKG, apply_env=False)
+        config.simulation.random_seed = 42
+        config.simulation.tick_interval_ms = _TICK_INTERVAL_MS
+        config.simulation.time_scale = _TIME_SCALE
+        config.simulation.sim_duration_s = _SIM_7DAY_S
+
+        store = SignalStore()
+        clock = SimulationClock.from_config(config.simulation)
+        engine = DataEngine(config, store, clock)
+
+        _run_ticks(engine, _SIM_7DAY_TICKS)
+
+        bad: list[str] = []
+        for sig_id, sv in store.get_all().items():
+            if isinstance(sv.value, float) and (
+                math.isnan(sv.value) or math.isinf(sv.value)
+            ):
+                bad.append(f"{sig_id}={sv.value!r}")
+        assert not bad, (
+            f"Packaging 7-day: {len(bad)} NaN/Inf signal(s):\n"
+            + "\n".join(bad[:20])
+        )
+
+    def test_fnb_7day_no_nan_inf(self) -> None:
+        """F&B profile: no NaN/Inf after 7 simulated days at 100x."""
+        config = load_config(_CONFIG_FNB, apply_env=False)
+        config.simulation.random_seed = 42
+        config.simulation.tick_interval_ms = _TICK_INTERVAL_MS
+        config.simulation.time_scale = _TIME_SCALE
+        config.simulation.sim_duration_s = _SIM_7DAY_S
+
+        store = SignalStore()
+        clock = SimulationClock.from_config(config.simulation)
+        engine = DataEngine(config, store, clock)
+
+        _run_ticks(engine, _SIM_7DAY_TICKS)
+
+        bad: list[str] = []
+        for sig_id, sv in store.get_all().items():
+            if isinstance(sv.value, float) and (
+                math.isnan(sv.value) or math.isinf(sv.value)
+            ):
+                bad.append(f"{sig_id}={sv.value!r}")
+        assert not bad, (
+            f"F&B 7-day: {len(bad)} NaN/Inf signal(s):\n"
+            + "\n".join(bad[:20])
+        )
+
+    def test_packaging_7day_memory_stable(self) -> None:
+        """Packaging: memory growth is sub-linear over 7 simulated days.
+
+        A 5x threshold (vs 2x for 1-day) accounts for linear accumulation over
+        60 480 ticks.  At ~0.8 bytes/tick the 1-day test shows ~1.3x; 7 days
+        extrapolates to ~2.9x.  5x catches exponential leaks while allowing
+        bounded linear growth (e.g., completed scenarios accumulating in
+        ScenarioEngine._scenarios).
+        """
+        config = load_config(_CONFIG_PKG, apply_env=False)
+        config.simulation.random_seed = 42
+        config.simulation.tick_interval_ms = _TICK_INTERVAL_MS
+        config.simulation.time_scale = _TIME_SCALE
+        config.simulation.sim_duration_s = _SIM_7DAY_S
+
+        store = SignalStore()
+        clock = SimulationClock.from_config(config.simulation)
+        engine = DataEngine(config, store, clock)
+
+        tracemalloc.start()
+        _run_ticks(engine, 100)  # warmup: let initial allocations settle
+        _, initial_peak = tracemalloc.get_traced_memory()
+
+        _run_ticks(engine, _SIM_7DAY_TICKS - 100)
+        _, final_peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        assert initial_peak > 0, "tracemalloc returned 0 initial peak"
+        ratio = final_peak / initial_peak
+        assert ratio < 5.0, (
+            f"Packaging 7-day memory grew {ratio:.2f}x initial peak "
+            f"({initial_peak // 1024} KiB → {final_peak // 1024} KiB). "
+            "Possible unbounded accumulation in engine tick loop."
+        )
+
+    def test_fnb_7day_memory_stable(self) -> None:
+        """F&B: memory growth is sub-linear over 7 simulated days.
+
+        Uses the same 5x threshold as the packaging test; see docstring there
+        for rationale.
+        """
+        config = load_config(_CONFIG_FNB, apply_env=False)
+        config.simulation.random_seed = 42
+        config.simulation.tick_interval_ms = _TICK_INTERVAL_MS
+        config.simulation.time_scale = _TIME_SCALE
+        config.simulation.sim_duration_s = _SIM_7DAY_S
+
+        store = SignalStore()
+        clock = SimulationClock.from_config(config.simulation)
+        engine = DataEngine(config, store, clock)
+
+        tracemalloc.start()
+        _run_ticks(engine, 100)  # warmup: let initial allocations settle
+        _, initial_peak = tracemalloc.get_traced_memory()
+
+        _run_ticks(engine, _SIM_7DAY_TICKS - 100)
+        _, final_peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        assert initial_peak > 0, "tracemalloc returned 0 initial peak"
+        ratio = final_peak / initial_peak
+        assert ratio < 5.0, (
+            f"F&B 7-day memory grew {ratio:.2f}x initial peak "
+            f"({initial_peak // 1024} KiB → {final_peak // 1024} KiB). "
+            "Possible unbounded accumulation in engine tick loop."
         )

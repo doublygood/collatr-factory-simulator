@@ -195,10 +195,24 @@ class ScenarioEngine:
         skip_ids: set[int] = set()       # deferred this tick (stays PENDING)
         preempted_ids: set[int] = set()  # completed by preemption
 
+        # Whether a state_changing scenario was activated from pending_due THIS
+        # tick.  Distinct from active_state_changing (which includes scenarios
+        # already running from previous ticks).  Used to prevent two same-tick
+        # pending state_changing scenarios from both activating simultaneously
+        # and issuing conflicting state changes (Y4 — independent review).
+        activated_sc_this_tick = False
+
         for scenario in pending_due:
             prio = scenario.priority
 
             if prio == "state_changing":
+                if activated_sc_this_tick:
+                    # A second state_changing is due on this exact tick.
+                    # Defer it to the next tick to prevent non-deterministic
+                    # conflicting state changes (last-evaluated would "win").
+                    skip_ids.add(id(scenario))
+                    continue
+
                 # Preempt any currently-active non_state_changing scenarios.
                 for s in currently_active:
                     if s.priority == "non_state_changing":
@@ -211,6 +225,7 @@ class ScenarioEngine:
                             )
                 # A state_changing will be active after this tick.
                 active_state_changing = True
+                activated_sc_this_tick = True
 
             elif prio == "non_state_changing":
                 # Defer if a state_changing scenario is active.

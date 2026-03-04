@@ -213,11 +213,23 @@ def _make_subscriber(suffix: str = "") -> mqtt.Client:
 
 
 def _base_fnb_config() -> tuple[object, SignalStore, SimulationClock, DataEngine]:
-    """Create F&B config/store/clock/engine with fixed seed."""
+    """Create F&B config/store/clock/engine with fixed seed.
+
+    All data-quality injection (comm drops, exceptions, partial responses) is
+    disabled so that protocol integration tests verify value correctness without
+    random interference.  Rule 14: injectable behaviour must be explicitly
+    controlled in every fixture that creates a protocol server.
+    """
     config = load_config(_FNB_CONFIG_PATH, apply_env=False)
     config.simulation.random_seed = 42  # type: ignore[union-attr]
     config.simulation.tick_interval_ms = 100  # type: ignore[union-attr]
     config.simulation.time_scale = 1.0  # type: ignore[union-attr]
+    # Rule 14: disable all data-quality injection vectors.
+    config.data_quality.opcua_stale.enabled = False  # type: ignore[union-attr]
+    config.data_quality.mqtt_drop.enabled = False  # type: ignore[union-attr]
+    config.data_quality.modbus_drop.enabled = False  # type: ignore[union-attr]
+    config.data_quality.exception_probability = 0.0  # type: ignore[union-attr]
+    config.data_quality.partial_modbus_response.probability = 0.0  # type: ignore[union-attr]
     store = SignalStore()
     clock = SimulationClock.from_config(config.simulation)  # type: ignore[union-attr]
     engine = DataEngine(config, store, clock)  # type: ignore[arg-type]
