@@ -29,9 +29,10 @@ RUN pip install --no-cache-dir -e .
 
 # Expose ports used in collapsed mode
 #   502  — Modbus TCP
+#   1883 — MQTT (Mosquitto sidecar; exposed here for standalone operation)
 #   4840 — OPC-UA
 #   8080 — Health / status endpoint
-EXPOSE 502 4840 8080
+EXPOSE 502 1883 4840 8080
 
 # Docker health check — polls /health every 10 s after a 15 s grace period
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \

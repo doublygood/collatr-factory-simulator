@@ -233,10 +233,10 @@ class TestHealthEndpoint:
         """sim_time reflects the store's max timestamp."""
         _, body = await _http_get(health_server.actual_port, "/health")
         data = json.loads(body)
-        # Store seeded with timestamp=1000.0 (1970-01-01T00:16:40Z)
+        # Store seeded with timestamp=1000.0 → 2026-01-01T00:16:40Z (reference epoch + 1000s)
         assert "T" in data["sim_time"]
         assert data["sim_time"].endswith("Z")
-        assert data["sim_time"] != "1970-01-01T00:00:00Z"  # should be non-epoch
+        assert "2026" in data["sim_time"]  # should reflect reference epoch, not UNIX epoch
 
     async def test_status_reflects_update(self, health_server: HealthServer) -> None:
         health_server.update(status="running")
