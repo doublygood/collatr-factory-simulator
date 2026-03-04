@@ -118,6 +118,7 @@ When a component has optional injectable behaviour (exception injection, comm dr
 - If a fixture is testing X (e.g. register encoding), it must disable everything that is not X (e.g. set `exception_probability=0.0`, `modbus_drop.enabled=False`).
 - If a new feature is added that affects all instances of a component (e.g. Modbus exception injection added to `ModbusServer`), audit every existing test fixture that creates that component and update it to either opt in or opt out explicitly.
 - An unseeded `np.random.default_rng()` in a constructor is a red flag: if a test fixture does not supply the RNG, the behaviour is non-deterministic and will eventually cause failures.
+- **Before writing a new test file, read at least one existing test file in the same directory.** This project has no shared pytest fixtures in `conftest.py`; tests load configs via `load_config(path)` and construct `SignalStore()` directly. Assuming fixtures exist without checking will cause a rewrite.
 
 ---
 
