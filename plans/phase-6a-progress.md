@@ -4,7 +4,7 @@
 
 ## Tasks
 - [x] 6a.1: Wire Ground Truth Logger into CLI (R1)
-- [ ] 6a.2: Fix Ground Truth Header — Add Missing Scenarios (R2)
+- [x] 6a.2: Fix Ground Truth Header — Add Missing Scenarios (R2)
 - [ ] 6a.3: Dockerfile Hardening (R3 + R4)
 - [ ] 6a.4: OPC-UA EngineeringUnits Property (R5)
 - [ ] 6a.5: Fix Oven Gateway UID Routing in Realistic Mode (R6)
@@ -16,6 +16,20 @@
 ## Notes
 
 Tasks 6a.1-6a.8 are all independent (no dependencies between them). Task 6a.9 depends on all others.
+
+## Task 6a.2 — Fix Ground Truth Header — Add Missing Scenarios
+
+**What was fixed:**
+- Added 10 missing scenario types to `write_header()` in `ground_truth.py`
+- Phase 4 optionals (`micro_stop`, `contextual_anomaly`, `intermittent_fault`): guarded with `if scfg.X is not None and scfg.X.enabled`
+- F&B optionals (`batch_cycle`, `oven_thermal_excursion`, `fill_weight_drift`, `seal_integrity_failure`, `chiller_door_alarm`, `cip_cycle`, `cold_chain_break`): same None guard pattern
+- Added `TestHeaderScenarioCompleteness` class with 6 new tests to `test_ground_truth.py`
+- Updated imports in test file to include all new config classes
+
+**Decisions:**
+- Used `is not None` guard for all optional fields (Phase 4 + F&B) since they default to `None` in `ScenariosConfig` when not present in the YAML
+- The packaging profile test verifies none of the optional scenario names appear when fields are `None`
+- The F&B config file test (`test_fb_config_produces_complete_scenario_list`) loads the real YAML to verify end-to-end
 
 ## Task 6a.1 — Wire Ground Truth Logger into CLI
 

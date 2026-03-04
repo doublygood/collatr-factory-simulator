@@ -20,7 +20,7 @@
             "description": "Add 10 missing scenario types to write_header(): micro_stop, contextual_anomaly, intermittent_fault (Phase 4) + batch_cycle, oven_thermal_excursion, fill_weight_drift, seal_integrity_failure, chiller_door_alarm, cip_cycle, cold_chain_break (F&B). Guard F&B scenarios with None checks. Test both profiles produce complete scenario lists.",
             "review_ref": "R2 (review-architecture.md)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6a.3",

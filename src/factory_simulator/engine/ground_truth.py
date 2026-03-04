@@ -107,6 +107,30 @@ class GroundTruthLogger:
         if scfg.material_splice.enabled:
             scenarios_list.append("material_splice")
 
+        # Phase 4 advanced scenarios — optional fields, None when not configured
+        if scfg.micro_stop is not None and scfg.micro_stop.enabled:
+            scenarios_list.append("micro_stop")
+        if scfg.contextual_anomaly is not None and scfg.contextual_anomaly.enabled:
+            scenarios_list.append("contextual_anomaly")
+        if scfg.intermittent_fault is not None and scfg.intermittent_fault.enabled:
+            scenarios_list.append("intermittent_fault")
+
+        # F&B scenarios — optional fields, None when using packaging profile
+        if scfg.batch_cycle is not None and scfg.batch_cycle.enabled:
+            scenarios_list.append("batch_cycle")
+        if scfg.oven_thermal_excursion is not None and scfg.oven_thermal_excursion.enabled:
+            scenarios_list.append("oven_thermal_excursion")
+        if scfg.fill_weight_drift is not None and scfg.fill_weight_drift.enabled:
+            scenarios_list.append("fill_weight_drift")
+        if scfg.seal_integrity_failure is not None and scfg.seal_integrity_failure.enabled:
+            scenarios_list.append("seal_integrity_failure")
+        if scfg.chiller_door_alarm is not None and scfg.chiller_door_alarm.enabled:
+            scenarios_list.append("chiller_door_alarm")
+        if scfg.cip_cycle is not None and scfg.cip_cycle.enabled:
+            scenarios_list.append("cip_cycle")
+        if scfg.cold_chain_break is not None and scfg.cold_chain_break.enabled:
+            scenarios_list.append("cold_chain_break")
+
         header = {
             "event_type": "config",
             "sim_version": _SIM_VERSION,

@@ -22,17 +22,27 @@ import numpy as np
 import pytest
 
 from factory_simulator.config import (
+    BatchCycleConfig,
+    ChillerDoorAlarmConfig,
+    CipCycleConfig,
     CoderDepletionConfig,
+    ColdChainBreakConfig,
     ColdStartSpikeConfig,
+    ContextualAnomalyConfig,
     DryerDriftConfig,
     EquipmentConfig,
     FactoryConfig,
     FactoryInfo,
+    FillWeightDriftConfig,
     InkViscosityExcursionConfig,
+    IntermittentFaultConfig,
     JobChangoverConfig,
     MaterialSpliceConfig,
+    MicroStopConfig,
+    OvenThermalExcursionConfig,
     RegistrationDriftConfig,
     ScenariosConfig,
+    SealIntegrityFailureConfig,
     ShiftChangeConfig,
     ShiftsConfig,
     SignalConfig,
@@ -925,3 +935,194 @@ class TestScenarioIntermediateEvents:
         consumable = next(r for r in records if r["event"] == "consumable")
         assert consumable["signal"] == "press.unwind_diameter"
         assert consumable["new_value"] == 1500.0
+
+
+# ---------------------------------------------------------------------------
+# Header scenario list completeness tests (Task 6a.2)
+# ---------------------------------------------------------------------------
+
+
+class TestHeaderScenarioCompleteness:
+    """Verify write_header() includes Phase 4 and F&B scenarios when present."""
+
+    def test_packaging_profile_has_no_phase4_or_fb_scenarios(
+        self, logger_open: GroundTruthLogger, tmp_log: Path,
+    ) -> None:
+        """Default ScenariosConfig (packaging) must not include Phase4/F&B names."""
+        config = _minimal_config()
+        logger_open.write_header(config)
+        logger_open.close()
+
+        header = _read_lines(tmp_log)[0]
+        scenarios = header["scenarios"]
+
+        for name in (
+            "micro_stop",
+            "contextual_anomaly",
+            "intermittent_fault",
+            "batch_cycle",
+            "oven_thermal_excursion",
+            "fill_weight_drift",
+            "seal_integrity_failure",
+            "chiller_door_alarm",
+            "cip_cycle",
+            "cold_chain_break",
+        ):
+            assert name not in scenarios, f"'{name}' should not appear for packaging profile"
+
+    def test_phase4_scenarios_appear_when_enabled(
+        self, logger_open: GroundTruthLogger, tmp_log: Path,
+    ) -> None:
+        """Phase 4 optional scenarios appear in header when configured and enabled."""
+        config = _minimal_config()
+        config.scenarios.micro_stop = MicroStopConfig(
+            enabled=True,
+            frequency_per_shift=[10, 20],
+            duration_seconds=[5.0, 30.0],
+            speed_drop_percent=[30.0, 80.0],
+            ramp_down_seconds=[2.0, 5.0],
+            ramp_up_seconds=[5.0, 15.0],
+        )
+        config.scenarios.contextual_anomaly = ContextualAnomalyConfig(enabled=True)
+        config.scenarios.intermittent_fault = IntermittentFaultConfig(enabled=True)
+
+        logger_open.write_header(config)
+        logger_open.close()
+
+        header = _read_lines(tmp_log)[0]
+        scenarios = header["scenarios"]
+
+        assert "micro_stop" in scenarios
+        assert "contextual_anomaly" in scenarios
+        assert "intermittent_fault" in scenarios
+
+    def test_phase4_scenarios_absent_when_disabled(
+        self, logger_open: GroundTruthLogger, tmp_log: Path,
+    ) -> None:
+        """Phase 4 scenarios with enabled=False must not appear in header."""
+        config = _minimal_config()
+        config.scenarios.micro_stop = MicroStopConfig(
+            enabled=False,
+            frequency_per_shift=[10, 20],
+            duration_seconds=[5.0, 30.0],
+            speed_drop_percent=[30.0, 80.0],
+            ramp_down_seconds=[2.0, 5.0],
+            ramp_up_seconds=[5.0, 15.0],
+        )
+
+        logger_open.write_header(config)
+        logger_open.close()
+
+        header = _read_lines(tmp_log)[0]
+        assert "micro_stop" not in header["scenarios"]
+
+    def test_fb_scenarios_appear_when_enabled(
+        self, logger_open: GroundTruthLogger, tmp_log: Path,
+    ) -> None:
+        """F&B scenarios appear in header when configured and enabled."""
+        config = _minimal_config()
+        config.scenarios.batch_cycle = BatchCycleConfig(
+            enabled=True,
+            frequency_per_shift=[8, 16],
+            batch_duration_seconds=[1200, 2700],
+        )
+        config.scenarios.oven_thermal_excursion = OvenThermalExcursionConfig(
+            enabled=True,
+            frequency_per_shift=[1, 2],
+            duration_seconds=[1800, 5400],
+            max_drift_c=[3.0, 10.0],
+        )
+        config.scenarios.fill_weight_drift = FillWeightDriftConfig(
+            enabled=True,
+            frequency_per_shift=[1, 3],
+            duration_seconds=[600, 3600],
+            drift_rate=[0.05, 0.2],
+        )
+        config.scenarios.seal_integrity_failure = SealIntegrityFailureConfig(
+            enabled=True,
+            frequency_per_week=[1, 2],
+            duration_seconds=[300, 1800],
+        )
+        config.scenarios.chiller_door_alarm = ChillerDoorAlarmConfig(
+            enabled=True,
+            frequency_per_week=[1, 3],
+            duration_seconds=[300, 1200],
+        )
+        config.scenarios.cip_cycle = CipCycleConfig(
+            enabled=True,
+            frequency_per_day=[1, 3],
+            cycle_duration_seconds=[1800, 3600],
+        )
+        config.scenarios.cold_chain_break = ColdChainBreakConfig(
+            enabled=True,
+            frequency_per_month=[1, 2],
+            duration_seconds=[1800, 7200],
+        )
+
+        logger_open.write_header(config)
+        logger_open.close()
+
+        header = _read_lines(tmp_log)[0]
+        scenarios = header["scenarios"]
+
+        for name in (
+            "batch_cycle",
+            "oven_thermal_excursion",
+            "fill_weight_drift",
+            "seal_integrity_failure",
+            "chiller_door_alarm",
+            "cip_cycle",
+            "cold_chain_break",
+        ):
+            assert name in scenarios, f"'{name}' should appear when enabled"
+
+    def test_fb_scenarios_absent_when_disabled(
+        self, logger_open: GroundTruthLogger, tmp_log: Path,
+    ) -> None:
+        """F&B scenarios with enabled=False must not appear in header."""
+        config = _minimal_config()
+        config.scenarios.batch_cycle = BatchCycleConfig(
+            enabled=False,
+            frequency_per_shift=[8, 16],
+            batch_duration_seconds=[1200, 2700],
+        )
+
+        logger_open.write_header(config)
+        logger_open.close()
+
+        header = _read_lines(tmp_log)[0]
+        assert "batch_cycle" not in header["scenarios"]
+
+    def test_fb_config_produces_complete_scenario_list(
+        self, logger_open: GroundTruthLogger, tmp_log: Path,
+    ) -> None:
+        """Loading the F&B config file produces the expected enabled F&B scenarios."""
+        from factory_simulator.config import load_config
+
+        config_path = Path(__file__).resolve().parents[2] / "config" / "factory-foodbev.yaml"
+        config = load_config(config_path, apply_env=False)
+
+        logger_open.write_header(config)
+        logger_open.close()
+
+        header = _read_lines(tmp_log)[0]
+        scenarios = header["scenarios"]
+
+        # F&B profile has these enabled
+        for name in (
+            "batch_cycle",
+            "oven_thermal_excursion",
+            "fill_weight_drift",
+            "seal_integrity_failure",
+            "chiller_door_alarm",
+            "cip_cycle",
+            "cold_chain_break",
+        ):
+            assert name in scenarios, f"'{name}' missing from F&B header scenarios"
+
+        # shift_change is enabled in F&B
+        assert "shift_change" in scenarios
+
+        # Packaging-only scenarios are disabled in F&B
+        for name in ("web_break", "dryer_drift", "bearing_wear"):
+            assert name not in scenarios
