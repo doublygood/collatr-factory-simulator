@@ -1,6 +1,6 @@
 # Phase 5: Network Topology, Evaluation, and Polish — Progress
 
-## Status: IN PROGRESS
+## Status: COMPLETE
 
 ## Tasks
 - [x] 5.1: Network Topology Manager and Config
@@ -15,7 +15,7 @@
 - [x] 5.10: Docker Compose with Health Checks
 - [x] 5.11: README and Example Configs
 - [x] 5.12: Performance Profiling
-- [ ] 5.13: Final Acceptance Test and CI Pipeline
+- [x] 5.13: Final Acceptance Test and CI Pipeline
 
 ### Task 5.12: Performance Profiling
 **Files created:**
@@ -231,3 +231,33 @@
 - No code tests added (task specification: "No code tests — Verified by acceptance test in 5.13").
 
 **Test count:** 2943 passed (unchanged — documentation-only task).
+
+### Task 5.13: Final Acceptance Test and CI Pipeline
+**Files created:**
+- `tests/integration/test_acceptance.py` (NEW) — 14 acceptance tests marked `@pytest.mark.acceptance`.
+- `.github/workflows/ci.yml` (NEW) — GitHub Actions CI: lint (ruff), typecheck (mypy), unit-tests (pytest tests/unit), integration-tests (pytest -m "acceptance and not slow").
+
+**Tests implemented:**
+- `test_packaging_collapsed_24h` (@slow) — 8640 ticks at 100x; asserts ≥47 signals, all finite values.
+- `test_foodbev_collapsed_24h` (@slow) — 8640 ticks at 100x; asserts ≥68 signals, `mixer.state` and `filler.fill_weight` present.
+- `test_packaging_realistic_topology` — Checks 3 Modbus endpoints, S7-1500 press, 1 OPC-UA on 4840.
+- `test_foodbev_realistic_topology` — Checks 6 Modbus endpoints, oven UIDs {1,2,3,10}, CDAB mixer, 2 OPC-UA (4841/4842).
+- `test_packaging_realistic_modbus_responds` (@integration) — Starts server on port 18020, connects pymodbus client, reads HR 100-101.
+- `test_controller_independence` (@integration) — Two servers (18021/18022); stops server_a, verifies server_b still responds.
+- `test_evaluation_framework` — Synthetic JSONL + CSV; checks F1=1.0 precision=1.0 recall=1.0 with 1 event perfectly detected.
+- `test_evaluation_framework_false_positives` — 0 events, 1 spurious detection → precision=0.0 recall=N/A.
+- `test_batch_csv_output` — Runs 100 ticks with CsvWriter; checks header, signal_ids present, quality column.
+- `test_batch_parquet_output` — Skip if pyarrow absent; checks row count, signal columns, no mixed types.
+- `test_cli_help` — subprocess `python -m factory_simulator --help` exits 0 with "factory-simulator" in output.
+- `test_cli_version` — `python -m factory_simulator version` exits 0 with version string.
+- `test_cli_run_subcommand_flags` — `factory-simulator run --help` exits 0 with all expected flags.
+- `test_clock_drift_visible` — ClockDriftModel with 5s/day + 5000ms offset; after 24h sim_time, drift ≥ 8s.
+
+**Decisions:**
+- F&B profile uses `mixer.state` (not `mixer.machine_state`) — verified against config/factory-foodbev.yaml.
+- Modbus integration tests use test-safe ports (18020–18022) to avoid conflicts with real 5020+ ports.
+- `await asyncio.sleep(0.3)` required after each `server.start()` call before client connects — same timing pattern as existing integration tests.
+- Slow 24h tests excluded from CI (`-m "acceptance and not slow"`) — covered by local pre-merge and performance profiling.
+- MQTT-dependent integration tests would auto-skip when no broker is available (no such tests added — MQTT acceptance verified indirectly via batch output).
+
+**Test count:** 2963 passed (was 2943 before).
