@@ -1,0 +1,90 @@
+# Run A: Normal Operations (24 simulated hours)
+# PRD Reference: Section 12.5
+#
+# Purpose: Measure false positive rate under near-normal conditions.
+#   Three shifts, job changeovers, dryer drift, micro-stops.
+#   Low anomaly rate — most high-severity scenario types disabled.
+#   Any useful anomaly detector must show low FP rate on this run.
+#
+# Usage:
+#   python -m factory_simulator run \
+#       --config config/scenarios/normal-operations.yaml \
+#       --seed 1 \
+#       --batch-output output/run_a \
+#       --batch-format csv
+#
+#   python -m factory_simulator evaluate \
+#       --ground-truth output/run_a/ground_truth.jsonl \
+#       --detections output/run_a/detections.csv \
+#       --pre-margin 30 \
+#       --post-margin 60
+
+simulation:
+  duration_seconds: 86400       # 24 hours
+  time_scale: 10.0              # 10x (2.4 real hours)
+  random_seed: 1                # Set for reproducibility; change per seed run
+
+evaluation:
+  pre_margin_seconds: 30
+  post_margin_seconds: 60
+  seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]   # For multi-seed benchmarking
+
+scenarios:
+  # Normal operational events — not anomalies
+  job_changeover:
+    enabled: true
+  shift_change:
+    enabled: true
+  cold_start_spike:
+    enabled: true
+
+  # Low-severity anomalies present in normal operations
+  micro_stop:
+    enabled: true
+  dryer_drift:
+    enabled: true
+    frequency_per_hour: 0.333   # ~1 per shift
+  ink_viscosity_excursion:
+    enabled: true
+
+  # All high-severity scenarios disabled — FP measurement baseline
+  web_break:
+    enabled: false
+  unplanned_stop:
+    enabled: false
+  seal_integrity_failure:
+    enabled: false
+  cold_chain_break:
+    enabled: false
+  bearing_wear:
+    enabled: false
+  fill_weight_drift:
+    enabled: false
+  oven_excursion:
+    enabled: false
+  registration_drift:
+    enabled: false
+  contextual_anomaly:
+    enabled: false
+  intermittent_fault:
+    enabled: false
+  sensor_disconnect:
+    enabled: false
+  stuck_sensor:
+    enabled: false
+
+data_quality:
+  noise:
+    enabled: true
+  modbus_drop:
+    enabled: true
+  opcua_stale:
+    enabled: true
+  mqtt_drop:
+    enabled: true
+  sensor_disconnect:
+    enabled: false
+  stuck_sensor:
+    enabled: false
+  duplicate_timestamps:
+    enabled: true

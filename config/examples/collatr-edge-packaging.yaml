@@ -1,0 +1,399 @@
+# CollatrEdge Configuration — Factory Simulator (Packaging Profile)
+#
+# Connects to the Collatr Factory Simulator and collects all 47 packaging
+# signals across Modbus TCP, OPC-UA, and MQTT simultaneously.
+#
+# Prerequisites:
+#   1. Simulator running (collapsed mode):  docker compose up -d
+#   2. Mosquitto broker healthy:            docker compose ps
+#   3. CollatrEdge binary available
+#
+# Usage:
+#   collatr-edge --config config/examples/collatr-edge-packaging.yaml
+#
+# Protocol endpoints (collapsed mode):
+#   Modbus:  localhost:502   (Unit ID 1 for press/laminator/slitter, UID 5 for energy)
+#   OPC-UA:  opc.tcp://localhost:4840
+#   MQTT:    tcp://localhost:1883
+#
+# PRD Reference: Section 2.2-2.9, Appendix A, B, C
+
+agent:
+  hostname: factory-sim-packaging
+  interval: 1s
+  round_interval: true
+  flush_interval: 5s
+  precision: 1ms
+  log_level: info
+
+global_tags:
+  environment: simulator
+  profile: packaging
+  source: factory-simulator
+
+# ==========================================================================
+# MODBUS TCP — 29 signals (press, laminator, slitter, energy)
+# All on localhost:502, Unit ID 1. Byte order: ABCD (Siemens convention).
+# PRD: Appendix A (Packaging Profile Registers)
+# ==========================================================================
+
+inputs:
+  - type: modbus
+    alias: packaging_press_laminator_slitter_energy
+    controller: tcp://localhost:502
+    slave_id: 1
+    byte_order: ABCD
+    timeout: 5s
+    registers:
+      # --- Press process values (HR 100-125) ---
+      - address: 100
+        name: press.line_speed
+        type: holding
+        data_type: float32
+        unit: m/min
+      - address: 102
+        name: press.web_tension
+        type: holding
+        data_type: float32
+        unit: N
+      - address: 110
+        name: press.ink_viscosity
+        type: holding
+        data_type: float32
+        unit: seconds
+      - address: 112
+        name: press.ink_temperature
+        type: holding
+        data_type: float32
+        unit: C
+      - address: 120
+        name: press.dryer_temp_zone_1
+        type: holding
+        data_type: float32
+        unit: C
+      - address: 122
+        name: press.dryer_temp_zone_2
+        type: holding
+        data_type: float32
+        unit: C
+      - address: 124
+        name: press.dryer_temp_zone_3
+        type: holding
+        data_type: float32
+        unit: C
+      # --- Press setpoints (HR 140-145, writable) ---
+      - address: 140
+        name: press.dryer_setpoint_zone_1
+        type: holding
+        data_type: float32
+        unit: C
+      - address: 142
+        name: press.dryer_setpoint_zone_2
+        type: holding
+        data_type: float32
+        unit: C
+      - address: 144
+        name: press.dryer_setpoint_zone_3
+        type: holding
+        data_type: float32
+        unit: C
+      # --- Press counters and state (HR 200-211) ---
+      - address: 200
+        name: press.impression_count
+        type: holding
+        data_type: uint32
+      - address: 202
+        name: press.good_count
+        type: holding
+        data_type: uint32
+      - address: 204
+        name: press.waste_count
+        type: holding
+        data_type: uint32
+      - address: 210
+        name: press.machine_state
+        type: holding
+        data_type: uint16
+      - address: 211
+        name: press.fault_code
+        type: holding
+        data_type: uint16
+      # --- Press drive and mechanical (HR 300-323) ---
+      - address: 300
+        name: press.main_drive_current
+        type: holding
+        data_type: float32
+        unit: A
+      - address: 302
+        name: press.main_drive_speed
+        type: holding
+        data_type: float32
+        unit: RPM
+      - address: 310
+        name: press.nip_pressure
+        type: holding
+        data_type: float32
+        unit: bar
+      - address: 320
+        name: press.unwind_diameter
+        type: holding
+        data_type: float32
+        unit: mm
+      - address: 322
+        name: press.rewind_diameter
+        type: holding
+        data_type: float32
+        unit: mm
+      # --- Laminator (HR 400-409) ---
+      - address: 400
+        name: laminator.nip_temp
+        type: holding
+        data_type: float32
+        unit: C
+      - address: 402
+        name: laminator.nip_pressure
+        type: holding
+        data_type: float32
+        unit: bar
+      - address: 404
+        name: laminator.tunnel_temp
+        type: holding
+        data_type: float32
+        unit: C
+      - address: 406
+        name: laminator.web_speed
+        type: holding
+        data_type: float32
+        unit: m/min
+      - address: 408
+        name: laminator.adhesive_weight
+        type: holding
+        data_type: float32
+        unit: g/m2
+      # --- Slitter (HR 500-511) ---
+      - address: 500
+        name: slitter.speed
+        type: holding
+        data_type: float32
+        unit: m/min
+      - address: 502
+        name: slitter.web_tension
+        type: holding
+        data_type: float32
+        unit: N
+      - address: 510
+        name: slitter.reel_count
+        type: holding
+        data_type: uint32
+      # --- Energy (HR 600-603, shared via Unit ID 5 in realistic mode) ---
+      - address: 600
+        name: energy.line_power
+        type: holding
+        data_type: float32
+        unit: kW
+      - address: 602
+        name: energy.cumulative_kwh
+        type: holding
+        data_type: float32
+        unit: kWh
+      # --- Input registers: Eurotherm-style int16 x10 temperatures (IR 0-5) ---
+      - address: 0
+        name: press.dryer_temp_zone_1_ir
+        type: input
+        data_type: int16
+        scale: 0.1
+        unit: C
+      - address: 1
+        name: press.dryer_temp_zone_2_ir
+        type: input
+        data_type: int16
+        scale: 0.1
+        unit: C
+      - address: 2
+        name: press.dryer_temp_zone_3_ir
+        type: input
+        data_type: int16
+        scale: 0.1
+        unit: C
+      - address: 3
+        name: press.ink_temperature_ir
+        type: input
+        data_type: int16
+        scale: 0.1
+        unit: C
+      - address: 4
+        name: laminator.nip_temp_ir
+        type: input
+        data_type: int16
+        scale: 0.1
+        unit: C
+      - address: 5
+        name: laminator.tunnel_temp_ir
+        type: input
+        data_type: int16
+        scale: 0.1
+        unit: C
+      # --- Coils (FC01) ---
+      - address: 0
+        name: press.running
+        type: coil
+        data_type: bool
+      - address: 1
+        name: press.fault_active
+        type: coil
+        data_type: bool
+      - address: 2
+        name: press.emergency_stop
+        type: coil
+        data_type: bool
+      - address: 3
+        name: press.web_break
+        type: coil
+        data_type: bool
+      - address: 4
+        name: laminator.running
+        type: coil
+        data_type: bool
+      - address: 5
+        name: slitter.running
+        type: coil
+        data_type: bool
+      # --- Discrete inputs (FC02) ---
+      - address: 0
+        name: press.guard_door_open
+        type: discrete
+        data_type: bool
+      - address: 1
+        name: press.material_present
+        type: discrete
+        data_type: bool
+      - address: 2
+        name: press.cycle_complete
+        type: discrete
+        data_type: bool
+
+# ==========================================================================
+# OPC-UA — full PackagingLine node tree
+# Namespace: urn:collatr:factory-simulator (ns=2)
+# PRD: Appendix B, Section 3.2
+# ==========================================================================
+
+  - type: opcua
+    alias: packaging_opcua
+    endpoint: opc.tcp://localhost:4840
+    security_policy: None
+    security_mode: None
+    auth_method: anonymous
+    connect_timeout: 15s
+    request_timeout: 10s
+    timestamp: source
+    subscription:
+      publishing_interval: 1s
+      queue_size: 10
+    nodes:
+      # Press
+      - node_id: "ns=2;s=PackagingLine.Press1.LineSpeed"
+        name: press.line_speed
+      - node_id: "ns=2;s=PackagingLine.Press1.WebTension"
+        name: press.web_tension
+      - node_id: "ns=2;s=PackagingLine.Press1.State"
+        name: press.machine_state
+      - node_id: "ns=2;s=PackagingLine.Press1.FaultCode"
+        name: press.fault_code
+      - node_id: "ns=2;s=PackagingLine.Press1.ImpressionCount"
+        name: press.impression_count
+      - node_id: "ns=2;s=PackagingLine.Press1.GoodCount"
+        name: press.good_count
+      - node_id: "ns=2;s=PackagingLine.Press1.WasteCount"
+        name: press.waste_count
+      - node_id: "ns=2;s=PackagingLine.Press1.Registration.ErrorX"
+        name: press.registration_error_x
+      - node_id: "ns=2;s=PackagingLine.Press1.Registration.ErrorY"
+        name: press.registration_error_y
+      - node_id: "ns=2;s=PackagingLine.Press1.Ink.Viscosity"
+        name: press.ink_viscosity
+      - node_id: "ns=2;s=PackagingLine.Press1.Ink.Temperature"
+        name: press.ink_temperature
+      - node_id: "ns=2;s=PackagingLine.Press1.Dryer.Zone1.Temperature"
+        name: press.dryer_temp_zone_1
+      - node_id: "ns=2;s=PackagingLine.Press1.Dryer.Zone1.Setpoint"
+        name: press.dryer_setpoint_zone_1
+      - node_id: "ns=2;s=PackagingLine.Press1.Dryer.Zone2.Temperature"
+        name: press.dryer_temp_zone_2
+      - node_id: "ns=2;s=PackagingLine.Press1.Dryer.Zone2.Setpoint"
+        name: press.dryer_setpoint_zone_2
+      - node_id: "ns=2;s=PackagingLine.Press1.Dryer.Zone3.Temperature"
+        name: press.dryer_temp_zone_3
+      - node_id: "ns=2;s=PackagingLine.Press1.Dryer.Zone3.Setpoint"
+        name: press.dryer_setpoint_zone_3
+      - node_id: "ns=2;s=PackagingLine.Press1.MainDrive.Current"
+        name: press.main_drive_current
+      - node_id: "ns=2;s=PackagingLine.Press1.MainDrive.Speed"
+        name: press.main_drive_speed
+      - node_id: "ns=2;s=PackagingLine.Press1.NipPressure"
+        name: press.nip_pressure
+      - node_id: "ns=2;s=PackagingLine.Press1.Unwind.Diameter"
+        name: press.unwind_diameter
+      - node_id: "ns=2;s=PackagingLine.Press1.Rewind.Diameter"
+        name: press.rewind_diameter
+      # Laminator
+      - node_id: "ns=2;s=PackagingLine.Laminator1.NipTemperature"
+        name: laminator.nip_temp
+      - node_id: "ns=2;s=PackagingLine.Laminator1.NipPressure"
+        name: laminator.nip_pressure
+      - node_id: "ns=2;s=PackagingLine.Laminator1.TunnelTemperature"
+        name: laminator.tunnel_temp
+      - node_id: "ns=2;s=PackagingLine.Laminator1.WebSpeed"
+        name: laminator.web_speed
+      - node_id: "ns=2;s=PackagingLine.Laminator1.AdhesiveWeight"
+        name: laminator.adhesive_weight
+      # Slitter
+      - node_id: "ns=2;s=PackagingLine.Slitter1.Speed"
+        name: slitter.speed
+      - node_id: "ns=2;s=PackagingLine.Slitter1.WebTension"
+        name: slitter.web_tension
+      - node_id: "ns=2;s=PackagingLine.Slitter1.ReelCount"
+        name: slitter.reel_count
+      # Energy
+      - node_id: "ns=2;s=PackagingLine.Energy.LinePower"
+        name: energy.line_power
+      - node_id: "ns=2;s=PackagingLine.Energy.CumulativeKwh"
+        name: energy.cumulative_kwh
+
+# ==========================================================================
+# MQTT — 16 signals (coder, environment, vibration)
+# Broker: localhost:1883, anonymous, no TLS
+# PRD: Appendix C, Section 3.3
+# ==========================================================================
+
+  - type: mqtt_consumer
+    alias: packaging_mqtt
+    servers:
+      - tcp://localhost:1883
+    topics:
+      - collatr/factory/demo/packaging1/coder/#
+      - collatr/factory/demo/packaging1/env/#
+      - collatr/factory/demo/packaging1/vibration/#
+    qos: 1
+    data_format: json
+    topic_tag: topic
+    tags:
+      protocol: mqtt
+    reconnect:
+      initial_delay: 2s
+      max_delay: 30s
+
+# ==========================================================================
+# Outputs
+# ==========================================================================
+
+outputs:
+  - type: local_store
+    path: ./data/factory-sim-packaging
+    retention_days: 7
+    rotation: daily
+
+  - type: file
+    alias: verification_log
+    path: ./data/factory-sim-packaging/metrics.jsonl
+    data_format: json

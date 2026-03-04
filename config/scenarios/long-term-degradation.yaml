@@ -1,0 +1,102 @@
+# Run C: Long-Term Degradation (7 simulated days)
+# PRD Reference: Section 12.5
+#
+# Purpose: Test trend detection and escalating fault recognition over a long horizon.
+#   Bearing wear starts at hour 0 and culminates in failure.
+#   Intermittent faults (bearing and electrical) evolve from phase 1 (rare) to
+#   phase 3 (permanent). Web breaks and dryer drift on background frequency.
+#   Runs in batch mode at 100x (~1.7 real hours). No live protocol serving.
+#   Import output CSV/Parquet into CollatrEdge for replay testing.
+#
+# Usage:
+#   python -m factory_simulator run \
+#       --config config/scenarios/long-term-degradation.yaml \
+#       --seed 1 \
+#       --batch-output output/run_c \
+#       --batch-format parquet \
+#       --time-scale 100
+#
+#   python -m factory_simulator evaluate \
+#       --ground-truth output/run_c/ground_truth.jsonl \
+#       --detections output/run_c/detections.csv \
+#       --pre-margin 30 \
+#       --post-margin 60
+
+simulation:
+  duration_seconds: 604800      # 7 days
+  time_scale: 100.0             # 100x batch mode (~1.7 real hours)
+  random_seed: 1                # Set for reproducibility; change per seed run
+
+evaluation:
+  pre_margin_seconds: 30
+  post_margin_seconds: 60
+  seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+scenarios:
+  # Normal operational events
+  job_changeover:
+    enabled: true
+  shift_change:
+    enabled: true
+  cold_start_spike:
+    enabled: true
+  micro_stop:
+    enabled: true
+
+  # Long-term degradation scenarios (packaging profile)
+  bearing_wear:
+    enabled: true
+    start_hour: 0               # Starts immediately, not delayed
+    culminate_in_failure: true  # Vibration reaches alarm level at ~day 5-6
+  intermittent_fault:
+    enabled: true
+    fault_types:
+      - bearing                 # Phase 1→2→3 escalation over days 1-5
+      - electrical              # Current spikes, escalating
+
+  # Background anomaly rate
+  web_break:
+    enabled: true
+  unplanned_stop:
+    enabled: true
+  dryer_drift:
+    enabled: true
+  ink_viscosity_excursion:
+    enabled: true
+  contextual_anomaly:
+    enabled: true
+
+  # F&B-only scenarios — disable for packaging profile
+  seal_integrity_failure:
+    enabled: false
+  cold_chain_break:
+    enabled: false
+  oven_excursion:
+    enabled: false
+  fill_weight_drift:
+    enabled: false
+
+  # Data quality impairments — off to isolate trend signal
+  registration_drift:
+    enabled: false
+  sensor_disconnect:
+    enabled: false
+  stuck_sensor:
+    enabled: false
+
+data_quality:
+  noise:
+    enabled: true
+  modbus_drop:
+    enabled: true
+  opcua_stale:
+    enabled: true
+  mqtt_drop:
+    enabled: true
+  duplicate_timestamps:
+    enabled: true
+  # Sensor impairments off — keep degradation signal clean for trend detection
+  sensor_disconnect:
+    enabled: false
+  stuck_sensor:
+    enabled: false

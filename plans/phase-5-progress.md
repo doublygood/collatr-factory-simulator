@@ -13,7 +13,7 @@
 - [x] 5.8: Batch Output: CSV and Parquet
 - [x] 5.9: CLI Entry Point
 - [x] 5.10: Docker Compose with Health Checks
-- [ ] 5.11: README and Example Configs
+- [x] 5.11: README and Example Configs
 - [ ] 5.12: Performance Profiling
 - [ ] 5.13: Final Acceptance Test and CI Pipeline
 
@@ -189,3 +189,21 @@
 - `docker-compose.realistic.yaml` uses merged ports (Docker Compose appends list fields) — realistic mode exposes both collapsed ports and per-controller ports.
 
 **Test count:** 2943 passed (was 2882 before).
+
+### Task 5.11: README and Example Configs
+**Files created/modified:**
+- `README.md` (NEW) — Comprehensive user-facing documentation: 15-minute quick start, architecture diagram, both profiles (packaging 47 signals / F&B 68 signals), protocol endpoints for collapsed and realistic mode, config reference, batch mode, evaluation framework, CLI reference, Docker reference, scenario table, ground truth format, PRD reference index. Covers PRD 11.1 "new engineer within 15 min" success criterion.
+- `config/examples/collatr-edge-packaging.yaml` (NEW) — YAML CollatrEdge config for packaging profile: all Modbus HR/IR/coil/DI registers, full OPC-UA node list (PackagingLine tree), MQTT topic subscriptions.
+- `config/examples/collatr-edge-foodbev.yaml` (NEW) — YAML CollatrEdge config for F&B profile: separate Modbus inputs for mixer (CDAB) and all other equipment (ABCD), OPC-UA (Filler + QC), MQTT F&B topics.
+- `config/examples/collatr-edge-realistic.yaml` (NEW) — YAML CollatrEdge config for realistic multi-controller mode (packaging): 4 separate Modbus inputs on ports 5020/5021/5022 with correct UIDs, OPC-UA on 4840, MQTT unchanged. Includes energy meter on port 5020 UID 5.
+- `config/scenarios/normal-operations.yaml` (NEW) — Run A: 24h/10x, low anomaly rate, FP measurement baseline.
+- `config/scenarios/heavy-anomaly.yaml` (NEW) — Run B: 24h/10x, all scenarios enabled at 2-3x frequency, recall measurement.
+- `config/scenarios/long-term-degradation.yaml` (NEW) — Run C: 7d/100x batch, bearing_wear culminates in failure, intermittent faults escalate, trend detection focus.
+
+**Decisions:**
+- Example configs are YAML (not TOML) to match the project's primary config language. The existing `configs/*.toml` are preserved for reference.
+- Run A/B/C configs in `config/scenarios/` duplicate the content in `examples/evaluation/` — both locations are present so users find them via either the scenario path or the evaluation path.
+- CollatrEdge realistic config targets packaging profile only (F&B realistic would add 6 more Modbus connections — covered in README).
+- No code tests added (task specification: "No code tests — Verified by acceptance test in 5.13").
+
+**Test count:** 2943 passed (unchanged — documentation-only task).

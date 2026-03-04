@@ -134,7 +134,7 @@
                 "prd/11-success-criteria.md (11.1)"
             ],
             "depends_on": ["5.9", "5.10"],
-            "passes": false
+            "passes": true
         },
         {
             "id": "5.12",
