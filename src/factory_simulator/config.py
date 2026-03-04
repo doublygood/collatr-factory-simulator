@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -1153,6 +1153,127 @@ class ShiftsConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Network topology configs (PRD 3a)
+# ---------------------------------------------------------------------------
+
+
+class ClockDriftConfig(BaseModel):
+    """Per-controller clock drift parameters (PRD 3a.5).
+
+    Formula: drifted_time = sim_time + initial_offset_ms/1000
+             + drift_rate_s_per_day * elapsed_hours / 24
+    """
+
+    initial_offset_ms: float = 0.0
+    drift_rate_s_per_day: float = 0.0
+
+    @field_validator("initial_offset_ms")
+    @classmethod
+    def _offset_non_negative(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError("initial_offset_ms must be non-negative")
+        return v
+
+    @field_validator("drift_rate_s_per_day")
+    @classmethod
+    def _drift_non_negative(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError("drift_rate_s_per_day must be non-negative")
+        return v
+
+
+class ScanCycleConfig(BaseModel):
+    """Per-controller scan cycle parameters (PRD 3a.8).
+
+    Formula: actual_cycle = cycle_ms * (1.0 + uniform(0, jitter_pct))
+    """
+
+    cycle_ms: float = 10.0
+    jitter_pct: float = 0.05
+
+    @field_validator("cycle_ms")
+    @classmethod
+    def _cycle_positive(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("cycle_ms must be positive")
+        return v
+
+    @field_validator("jitter_pct")
+    @classmethod
+    def _jitter_range(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError("jitter_pct must be between 0.0 and 1.0")
+        return v
+
+
+class ConnectionLimitConfig(BaseModel):
+    """Per-controller connection limit parameters (PRD 3a.5)."""
+
+    max_connections: int = 16
+    response_timeout_ms_typical: float = 50.0
+    response_timeout_ms_max: float = 200.0
+
+    @field_validator("max_connections")
+    @classmethod
+    def _conn_positive(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("max_connections must be positive")
+        return v
+
+    @field_validator("response_timeout_ms_typical", "response_timeout_ms_max")
+    @classmethod
+    def _timeout_non_negative(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError("timeout must be non-negative")
+        return v
+
+
+class ConnectionDropConfig(BaseModel):
+    """Per-controller connection drop parameters (PRD 3a.5)."""
+
+    mtbf_hours_min: float = 72.0
+    mtbf_hours_max: float = 168.0
+    reconnection_delay_s_min: float = 1.0
+    reconnection_delay_s_max: float = 3.0
+
+    @field_validator(
+        "mtbf_hours_min",
+        "mtbf_hours_max",
+        "reconnection_delay_s_min",
+        "reconnection_delay_s_max",
+    )
+    @classmethod
+    def _positive(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("value must be positive")
+        return v
+
+    @model_validator(mode="after")
+    def _ranges_valid(self) -> ConnectionDropConfig:
+        if self.mtbf_hours_min > self.mtbf_hours_max:
+            raise ValueError("mtbf_hours_min must be <= mtbf_hours_max")
+        if self.reconnection_delay_s_min > self.reconnection_delay_s_max:
+            raise ValueError(
+                "reconnection_delay_s_min must be <= reconnection_delay_s_max"
+            )
+        return self
+
+
+class NetworkConfig(BaseModel):
+    """Network topology configuration (PRD 3a.4).
+
+    mode="collapsed" (default): single port per protocol, current behaviour.
+    mode="realistic": per-controller ports per PRD 3a.4 table.
+    """
+
+    mode: Literal["collapsed", "realistic"] = "collapsed"
+    clock_drift: dict[str, ClockDriftConfig] = Field(default_factory=dict)
+    scan_cycle: dict[str, ScanCycleConfig] = Field(default_factory=dict)
+    connection_limits: dict[str, ConnectionLimitConfig] = Field(default_factory=dict)
+    connection_drops: dict[str, ConnectionDropConfig] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
 # Top-level config
 # ---------------------------------------------------------------------------
 
@@ -1169,6 +1290,7 @@ class FactoryConfig(BaseModel):
     scenarios: ScenariosConfig = Field(default_factory=ScenariosConfig)
     shifts: ShiftsConfig = Field(default_factory=ShiftsConfig)
     data_quality: DataQualityConfig = Field(default_factory=DataQualityConfig)
+    network: NetworkConfig | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1203,6 +1325,7 @@ def _apply_env_overrides(data: dict[str, Any]) -> dict[str, Any]:
         ("MQTT_BROKER_HOST", ["protocols", "mqtt", "broker_host"], str),
         ("MQTT_BROKER_PORT", ["protocols", "mqtt", "broker_port"], int),
         ("MQTT_TOPIC_PREFIX", ["protocols", "mqtt", "topic_prefix"], str),
+        ("SIM_NETWORK_MODE", ["network", "mode"], str),
     ]
 
     for env_var, path, convert in env_map:

@@ -1,0 +1,480 @@
+"""Network topology manager for multi-controller simulation.
+
+Resolves logical controller endpoints to simulator port bindings in both
+collapsed (single port per protocol) and realistic (per-controller ports)
+modes.
+
+PRD Reference: Section 3a.4
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Literal
+
+from factory_simulator.config import (
+    ClockDriftConfig,
+    ConnectionDropConfig,
+    ConnectionLimitConfig,
+    NetworkConfig,
+    ScanCycleConfig,
+)
+
+# ---------------------------------------------------------------------------
+# Endpoint spec dataclasses
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ModbusEndpointSpec:
+    """Specification for a single Modbus TCP server endpoint."""
+
+    port: int
+    unit_ids: list[int] = field(default_factory=lambda: [1])
+    register_range: tuple[int, int] | None = None  # (start, end) inclusive; None = all
+    byte_order: str = "ABCD"
+    controller_type: str = "generic"
+    controller_name: str = ""
+    clock_drift: ClockDriftConfig = field(default_factory=ClockDriftConfig)
+    scan_cycle: ScanCycleConfig = field(default_factory=ScanCycleConfig)
+    connection_limit: ConnectionLimitConfig = field(
+        default_factory=ConnectionLimitConfig
+    )
+    connection_drop: ConnectionDropConfig = field(default_factory=ConnectionDropConfig)
+
+
+@dataclass(frozen=True)
+class OpcuaEndpointSpec:
+    """Specification for a single OPC-UA server endpoint."""
+
+    port: int
+    node_tree_root: str = ""
+    controller_type: str = "generic"
+    controller_name: str = ""
+    clock_drift: ClockDriftConfig = field(default_factory=ClockDriftConfig)
+    connection_limit: ConnectionLimitConfig = field(
+        default_factory=ConnectionLimitConfig
+    )
+    connection_drop: ConnectionDropConfig = field(default_factory=ConnectionDropConfig)
+
+
+@dataclass(frozen=True)
+class MqttEndpointSpec:
+    """Specification for the MQTT broker endpoint (shared across profiles)."""
+
+    broker_host: str = "mqtt-broker"
+    broker_port: int = 1883
+
+
+# ---------------------------------------------------------------------------
+# Default per-controller-type configurations from PRD 3a.5 / 3a.8
+# ---------------------------------------------------------------------------
+
+# Connection limits (PRD 3a.5)
+_DEFAULT_CONNECTION_LIMITS: dict[str, ConnectionLimitConfig] = {
+    "S7-1500": ConnectionLimitConfig(
+        max_connections=16,
+        response_timeout_ms_typical=50.0,
+        response_timeout_ms_max=200.0,
+    ),
+    "S7-1200": ConnectionLimitConfig(
+        max_connections=3,
+        response_timeout_ms_typical=100.0,
+        response_timeout_ms_max=500.0,
+    ),
+    "CompactLogix": ConnectionLimitConfig(
+        max_connections=8,
+        response_timeout_ms_typical=75.0,
+        response_timeout_ms_max=300.0,
+    ),
+    "Eurotherm": ConnectionLimitConfig(
+        max_connections=2,
+        response_timeout_ms_typical=150.0,
+        response_timeout_ms_max=1000.0,
+    ),
+    "Danfoss": ConnectionLimitConfig(
+        max_connections=2,
+        response_timeout_ms_typical=200.0,
+        response_timeout_ms_max=1000.0,
+    ),
+    "PM5560": ConnectionLimitConfig(
+        max_connections=4,
+        response_timeout_ms_typical=50.0,
+        response_timeout_ms_max=100.0,
+    ),
+}
+
+# Connection drops (PRD 3a.5)
+_DEFAULT_CONNECTION_DROPS: dict[str, ConnectionDropConfig] = {
+    "S7-1500": ConnectionDropConfig(
+        mtbf_hours_min=72.0,
+        mtbf_hours_max=168.0,
+        reconnection_delay_s_min=1.0,
+        reconnection_delay_s_max=3.0,
+    ),
+    "S7-1200": ConnectionDropConfig(
+        mtbf_hours_min=48.0,
+        mtbf_hours_max=168.0,
+        reconnection_delay_s_min=2.0,
+        reconnection_delay_s_max=5.0,
+    ),
+    "CompactLogix": ConnectionDropConfig(
+        mtbf_hours_min=48.0,
+        mtbf_hours_max=168.0,
+        reconnection_delay_s_min=2.0,
+        reconnection_delay_s_max=5.0,
+    ),
+    "Eurotherm": ConnectionDropConfig(
+        mtbf_hours_min=8.0,
+        mtbf_hours_max=24.0,
+        reconnection_delay_s_min=5.0,
+        reconnection_delay_s_max=15.0,
+    ),
+    "Danfoss": ConnectionDropConfig(
+        mtbf_hours_min=24.0,
+        mtbf_hours_max=48.0,
+        reconnection_delay_s_min=3.0,
+        reconnection_delay_s_max=10.0,
+    ),
+    "PM5560": ConnectionDropConfig(
+        mtbf_hours_min=72.0,
+        mtbf_hours_max=168.0,
+        reconnection_delay_s_min=1.0,
+        reconnection_delay_s_max=2.0,
+    ),
+}
+
+# Clock drift (PRD 3a.5)
+_DEFAULT_CLOCK_DRIFT: dict[str, ClockDriftConfig] = {
+    "S7-1500": ClockDriftConfig(initial_offset_ms=200.0, drift_rate_s_per_day=0.3),
+    "S7-1200": ClockDriftConfig(initial_offset_ms=1500.0, drift_rate_s_per_day=1.0),
+    "CompactLogix": ClockDriftConfig(
+        initial_offset_ms=500.0, drift_rate_s_per_day=0.5
+    ),
+    "Eurotherm": ClockDriftConfig(initial_offset_ms=5000.0, drift_rate_s_per_day=5.0),
+    "Danfoss": ClockDriftConfig(initial_offset_ms=3000.0, drift_rate_s_per_day=2.5),
+    "PM5560": ClockDriftConfig(initial_offset_ms=100.0, drift_rate_s_per_day=0.2),
+}
+
+# Scan cycle (PRD 3a.8)
+_DEFAULT_SCAN_CYCLE: dict[str, ScanCycleConfig] = {
+    "S7-1500": ScanCycleConfig(cycle_ms=10.0, jitter_pct=0.05),
+    "S7-1200": ScanCycleConfig(cycle_ms=20.0, jitter_pct=0.08),
+    "CompactLogix": ScanCycleConfig(cycle_ms=15.0, jitter_pct=0.06),
+    "Eurotherm": ScanCycleConfig(cycle_ms=100.0, jitter_pct=0.10),
+    "Danfoss": ScanCycleConfig(cycle_ms=100.0, jitter_pct=0.10),
+    "PM5560": ScanCycleConfig(cycle_ms=50.0, jitter_pct=0.05),
+}
+
+
+# ---------------------------------------------------------------------------
+# Network Topology Manager
+# ---------------------------------------------------------------------------
+
+
+class NetworkTopologyManager:
+    """Resolves controller endpoints based on mode and profile.
+
+    In collapsed mode: single Modbus port, single OPC-UA port, single MQTT
+    broker — current behaviour preserved.
+
+    In realistic mode: per-controller ports per PRD 3a.4 table.
+
+    Parameters
+    ----------
+    config:
+        Network configuration. If *None*, collapsed defaults are used.
+    profile:
+        Active factory profile (``"packaging"`` or ``"food_bev"``).
+    """
+
+    def __init__(
+        self,
+        config: NetworkConfig | None = None,
+        profile: Literal["packaging", "food_bev"] = "packaging",
+    ) -> None:
+        self._config = config or NetworkConfig()
+        self._profile = profile
+
+    @property
+    def mode(self) -> str:
+        return self._config.mode
+
+    @property
+    def profile(self) -> str:
+        return self._profile
+
+    # ---- helper to resolve per-controller overrides -----------------------
+
+    def _get_clock_drift(self, controller_name: str, controller_type: str) -> ClockDriftConfig:
+        if controller_name in self._config.clock_drift:
+            return self._config.clock_drift[controller_name]
+        return _DEFAULT_CLOCK_DRIFT.get(controller_type, ClockDriftConfig())
+
+    def _get_scan_cycle(self, controller_name: str, controller_type: str) -> ScanCycleConfig:
+        if controller_name in self._config.scan_cycle:
+            return self._config.scan_cycle[controller_name]
+        return _DEFAULT_SCAN_CYCLE.get(controller_type, ScanCycleConfig())
+
+    def _get_connection_limit(
+        self, controller_name: str, controller_type: str,
+    ) -> ConnectionLimitConfig:
+        if controller_name in self._config.connection_limits:
+            return self._config.connection_limits[controller_name]
+        return _DEFAULT_CONNECTION_LIMITS.get(
+            controller_type, ConnectionLimitConfig()
+        )
+
+    def _get_connection_drop(
+        self, controller_name: str, controller_type: str,
+    ) -> ConnectionDropConfig:
+        if controller_name in self._config.connection_drops:
+            return self._config.connection_drops[controller_name]
+        return _DEFAULT_CONNECTION_DROPS.get(
+            controller_type, ConnectionDropConfig()
+        )
+
+    # ---- endpoint resolution methods --------------------------------------
+
+    def modbus_endpoints(self) -> list[ModbusEndpointSpec]:
+        """Return Modbus TCP endpoint specs for the active profile and mode."""
+        if self._config.mode == "collapsed":
+            return self._collapsed_modbus()
+        return self._realistic_modbus()
+
+    def opcua_endpoints(self) -> list[OpcuaEndpointSpec]:
+        """Return OPC-UA endpoint specs for the active profile and mode."""
+        if self._config.mode == "collapsed":
+            return self._collapsed_opcua()
+        return self._realistic_opcua()
+
+    def mqtt_endpoint(self) -> MqttEndpointSpec:
+        """Return MQTT broker spec (shared across modes and profiles)."""
+        return MqttEndpointSpec()
+
+    # ---- collapsed mode ---------------------------------------------------
+
+    def _collapsed_modbus(self) -> list[ModbusEndpointSpec]:
+        """Single Modbus server serving all registers."""
+        port = 5020 if self._profile == "packaging" else 5030
+        return [
+            ModbusEndpointSpec(
+                port=port,
+                unit_ids=[1],
+                register_range=None,
+                byte_order="ABCD",
+                controller_type="generic",
+                controller_name="collapsed",
+            )
+        ]
+
+    def _collapsed_opcua(self) -> list[OpcuaEndpointSpec]:
+        """Single OPC-UA server serving full node tree."""
+        return [
+            OpcuaEndpointSpec(
+                port=4840,
+                node_tree_root="",
+                controller_type="generic",
+                controller_name="collapsed",
+            )
+        ]
+
+    # ---- realistic mode: packaging ----------------------------------------
+
+    def _packaging_modbus(self) -> list[ModbusEndpointSpec]:
+        """Packaging profile: 4 Modbus endpoints per PRD 3a.4."""
+        return [
+            # Press PLC + Energy meter share port 5020 (UIDs 1 and 5)
+            ModbusEndpointSpec(
+                port=5020,
+                unit_ids=[1, 5],
+                register_range=None,
+                byte_order="ABCD",
+                controller_type="S7-1500",
+                controller_name="press_plc",
+                clock_drift=self._get_clock_drift("press_plc", "S7-1500"),
+                scan_cycle=self._get_scan_cycle("press_plc", "S7-1500"),
+                connection_limit=self._get_connection_limit("press_plc", "S7-1500"),
+                connection_drop=self._get_connection_drop("press_plc", "S7-1500"),
+            ),
+            # Laminator PLC
+            ModbusEndpointSpec(
+                port=5021,
+                unit_ids=[1],
+                register_range=None,
+                byte_order="ABCD",
+                controller_type="S7-1200",
+                controller_name="laminator_plc",
+                clock_drift=self._get_clock_drift("laminator_plc", "S7-1200"),
+                scan_cycle=self._get_scan_cycle("laminator_plc", "S7-1200"),
+                connection_limit=self._get_connection_limit("laminator_plc", "S7-1200"),
+                connection_drop=self._get_connection_drop("laminator_plc", "S7-1200"),
+            ),
+            # Slitter PLC
+            ModbusEndpointSpec(
+                port=5022,
+                unit_ids=[1],
+                register_range=None,
+                byte_order="ABCD",
+                controller_type="S7-1200",
+                controller_name="slitter_plc",
+                clock_drift=self._get_clock_drift("slitter_plc", "S7-1200"),
+                scan_cycle=self._get_scan_cycle("slitter_plc", "S7-1200"),
+                connection_limit=self._get_connection_limit("slitter_plc", "S7-1200"),
+                connection_drop=self._get_connection_drop("slitter_plc", "S7-1200"),
+            ),
+            # Energy meter is on press port (UID 5) — already included above.
+            # PM5560 props are resolved via the energy_meter controller name
+            # when the server routes by UID.  The press port entry above
+            # carries the S7-1500 controller type (dominant controller on that
+            # port).  Per-UID scan cycle and drift are resolved at a higher
+            # level (task 5.2/5.4).
+        ]
+
+    def _packaging_opcua(self) -> list[OpcuaEndpointSpec]:
+        """Packaging profile: 1 OPC-UA endpoint on port 4840."""
+        return [
+            OpcuaEndpointSpec(
+                port=4840,
+                node_tree_root="PackagingLine",
+                controller_type="S7-1500",
+                controller_name="press_plc",
+                clock_drift=self._get_clock_drift("press_plc", "S7-1500"),
+                connection_limit=self._get_connection_limit("press_plc", "S7-1500"),
+                connection_drop=self._get_connection_drop("press_plc", "S7-1500"),
+            )
+        ]
+
+    # ---- realistic mode: F&B ----------------------------------------------
+
+    def _foodbev_modbus(self) -> list[ModbusEndpointSpec]:
+        """F&B profile: 7 Modbus endpoints per PRD 3a.4."""
+        return [
+            # Mixer PLC (CompactLogix, CDAB)
+            ModbusEndpointSpec(
+                port=5030,
+                unit_ids=[1],
+                register_range=None,
+                byte_order="CDAB",
+                controller_type="CompactLogix",
+                controller_name="mixer_plc",
+                clock_drift=self._get_clock_drift("mixer_plc", "CompactLogix"),
+                scan_cycle=self._get_scan_cycle("mixer_plc", "CompactLogix"),
+                connection_limit=self._get_connection_limit(
+                    "mixer_plc", "CompactLogix"
+                ),
+                connection_drop=self._get_connection_drop(
+                    "mixer_plc", "CompactLogix"
+                ),
+            ),
+            # Oven gateway: UIDs 1,2,3 (zones) + UID 10 (energy meter)
+            ModbusEndpointSpec(
+                port=5031,
+                unit_ids=[1, 2, 3, 10],
+                register_range=None,
+                byte_order="ABCD",
+                controller_type="Eurotherm",
+                controller_name="oven_gateway",
+                clock_drift=self._get_clock_drift("oven_gateway", "Eurotherm"),
+                scan_cycle=self._get_scan_cycle("oven_gateway", "Eurotherm"),
+                connection_limit=self._get_connection_limit(
+                    "oven_gateway", "Eurotherm"
+                ),
+                connection_drop=self._get_connection_drop(
+                    "oven_gateway", "Eurotherm"
+                ),
+            ),
+            # Filler PLC (Modbus side)
+            ModbusEndpointSpec(
+                port=5032,
+                unit_ids=[1],
+                register_range=None,
+                byte_order="ABCD",
+                controller_type="S7-1200",
+                controller_name="filler_plc",
+                clock_drift=self._get_clock_drift("filler_plc", "S7-1200"),
+                scan_cycle=self._get_scan_cycle("filler_plc", "S7-1200"),
+                connection_limit=self._get_connection_limit("filler_plc", "S7-1200"),
+                connection_drop=self._get_connection_drop("filler_plc", "S7-1200"),
+            ),
+            # Sealer PLC
+            ModbusEndpointSpec(
+                port=5033,
+                unit_ids=[1],
+                register_range=None,
+                byte_order="ABCD",
+                controller_type="S7-1200",
+                controller_name="sealer_plc",
+                clock_drift=self._get_clock_drift("sealer_plc", "S7-1200"),
+                scan_cycle=self._get_scan_cycle("sealer_plc", "S7-1200"),
+                connection_limit=self._get_connection_limit("sealer_plc", "S7-1200"),
+                connection_drop=self._get_connection_drop("sealer_plc", "S7-1200"),
+            ),
+            # Chiller (Danfoss)
+            ModbusEndpointSpec(
+                port=5034,
+                unit_ids=[1],
+                register_range=None,
+                byte_order="ABCD",
+                controller_type="Danfoss",
+                controller_name="chiller",
+                clock_drift=self._get_clock_drift("chiller", "Danfoss"),
+                scan_cycle=self._get_scan_cycle("chiller", "Danfoss"),
+                connection_limit=self._get_connection_limit("chiller", "Danfoss"),
+                connection_drop=self._get_connection_drop("chiller", "Danfoss"),
+            ),
+            # CIP controller (S7-1200)
+            ModbusEndpointSpec(
+                port=5035,
+                unit_ids=[1],
+                register_range=None,
+                byte_order="ABCD",
+                controller_type="S7-1200",
+                controller_name="cip_controller",
+                clock_drift=self._get_clock_drift("cip_controller", "S7-1200"),
+                scan_cycle=self._get_scan_cycle("cip_controller", "S7-1200"),
+                connection_limit=self._get_connection_limit(
+                    "cip_controller", "S7-1200"
+                ),
+                connection_drop=self._get_connection_drop(
+                    "cip_controller", "S7-1200"
+                ),
+            ),
+        ]
+
+    def _foodbev_opcua(self) -> list[OpcuaEndpointSpec]:
+        """F&B profile: 2 OPC-UA endpoints per PRD 3a.4."""
+        return [
+            # Filler OPC-UA
+            OpcuaEndpointSpec(
+                port=4841,
+                node_tree_root="FoodBevLine.Filler1",
+                controller_type="S7-1200",
+                controller_name="filler_plc",
+                clock_drift=self._get_clock_drift("filler_plc", "S7-1200"),
+                connection_limit=self._get_connection_limit("filler_plc", "S7-1200"),
+                connection_drop=self._get_connection_drop("filler_plc", "S7-1200"),
+            ),
+            # QC station OPC-UA (Mettler Toledo)
+            OpcuaEndpointSpec(
+                port=4842,
+                node_tree_root="FoodBevLine.QC1",
+                controller_type="S7-1200",
+                controller_name="qc_station",
+                clock_drift=self._get_clock_drift("qc_station", "S7-1200"),
+                connection_limit=self._get_connection_limit("qc_station", "S7-1200"),
+                connection_drop=self._get_connection_drop("qc_station", "S7-1200"),
+            ),
+        ]
+
+    # ---- realistic dispatcher ---------------------------------------------
+
+    def _realistic_modbus(self) -> list[ModbusEndpointSpec]:
+        if self._profile == "packaging":
+            return self._packaging_modbus()
+        return self._foodbev_modbus()
+
+    def _realistic_opcua(self) -> list[OpcuaEndpointSpec]:
+        if self._profile == "packaging":
+            return self._packaging_opcua()
+        return self._foodbev_opcua()

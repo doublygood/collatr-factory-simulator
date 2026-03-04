@@ -1039,3 +1039,12 @@ shifts:
     night:
       speed_bias: 0.90
       waste_rate_bias: 1.10
+
+# ---------------------------------------------------------------------------
+# Network Topology (PRD Section 3a.4)
+# ---------------------------------------------------------------------------
+# mode: "collapsed" = single port per protocol (default, development)
+#        "realistic" = per-controller ports (integration testing)
+
+# network:
+#   mode: "collapsed"
