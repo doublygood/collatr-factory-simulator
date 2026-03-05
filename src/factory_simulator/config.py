@@ -8,6 +8,7 @@ PRD Reference: Section 6 (Configuration)
 
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 from typing import Any, Literal
@@ -1283,18 +1284,11 @@ class ClockDriftConfig(BaseModel):
     initial_offset_ms: float = 0.0
     drift_rate_s_per_day: float = 0.0
 
-    @field_validator("initial_offset_ms")
+    @field_validator("initial_offset_ms", "drift_rate_s_per_day")
     @classmethod
-    def _offset_non_negative(cls, v: float) -> float:
-        if v < 0:
-            raise ValueError("initial_offset_ms must be non-negative")
-        return v
-
-    @field_validator("drift_rate_s_per_day")
-    @classmethod
-    def _drift_non_negative(cls, v: float) -> float:
-        if v < 0:
-            raise ValueError("drift_rate_s_per_day must be non-negative")
+    def _must_be_finite(cls, v: float) -> float:
+        if not math.isfinite(v):
+            raise ValueError("value must be finite (not NaN or Inf)")
         return v
 
 

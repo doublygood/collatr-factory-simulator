@@ -20,7 +20,7 @@
             "description": "Remove non-negative validators on initial_offset_ms and drift_rate_s_per_day in ClockDriftConfig. Negative values are valid (clock behind, clock losing time). Optionally guard against NaN/Inf. Test: negative offset and drift rate accepted without error.",
             "review_ref": "Y10 (review-architecture.md §4.1)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6c.3",

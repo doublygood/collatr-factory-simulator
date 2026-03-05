@@ -40,13 +40,23 @@ class TestClockDriftConfig:
         assert cfg.initial_offset_ms == 5000.0
         assert cfg.drift_rate_s_per_day == 5.0
 
-    def test_rejects_negative_offset(self) -> None:
-        with pytest.raises(ValidationError, match="non-negative"):
-            ClockDriftConfig(initial_offset_ms=-100.0)
+    def test_accepts_negative_offset(self) -> None:
+        """Negative offset is valid (clock behind)."""
+        cfg = ClockDriftConfig(initial_offset_ms=-100.0)
+        assert cfg.initial_offset_ms == -100.0
 
-    def test_rejects_negative_drift_rate(self) -> None:
-        with pytest.raises(ValidationError, match="non-negative"):
-            ClockDriftConfig(drift_rate_s_per_day=-0.5)
+    def test_accepts_negative_drift_rate(self) -> None:
+        """Negative drift rate is valid (clock losing time)."""
+        cfg = ClockDriftConfig(drift_rate_s_per_day=-0.5)
+        assert cfg.drift_rate_s_per_day == -0.5
+
+    def test_rejects_nan_offset(self) -> None:
+        with pytest.raises(ValidationError, match="finite"):
+            ClockDriftConfig(initial_offset_ms=float("nan"))
+
+    def test_rejects_inf_drift_rate(self) -> None:
+        with pytest.raises(ValidationError, match="finite"):
+            ClockDriftConfig(drift_rate_s_per_day=float("inf"))
 
 
 class TestScanCycleConfig:
