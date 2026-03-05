@@ -1,0 +1,36 @@
+{
+    "phase": "6e",
+    "name": "Protocol Polish",
+    "tasks": [
+        {
+            "id": "6e.1",
+            "name": "OPC-UA AccessLevel=0 for Inactive Profile Nodes",
+            "group": "Protocol Correctness",
+            "file": "src/factory_simulator/protocols/opcua_server.py",
+            "description": "In collapsed mode, create OPC-UA nodes for the inactive profile with AccessLevel=0 and StatusCode BadNotReadable (PRD 3.2.1). Add inactive_config parameter to OpcuaServer. In _build_node_tree(), after active nodes, create inactive profile nodes with AccessLevel=0, BadNotReadable status, EURange/EngineeringUnits/MinimumSamplingInterval. Do NOT add to sync loop. In realistic mode skip (no inactive concept per-server). Wire through CLI: load other profile config, pass to OpcuaServer. Test: inactive nodes exist with AccessLevel=0, BadNotReadable status, not synced.",
+            "review_ref": "Y25 (review-protocol-fidelity.md §3.9)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6e.2",
+            "name": "Profile-Specific LWT Topic",
+            "group": "Protocol Correctness",
+            "file": "src/factory_simulator/protocols/mqtt_publisher.py",
+            "description": "Make LWT topic profile-specific. Change MqttProtocolConfig.lwt_topic default to empty string. In MQTT publisher startup, auto-generate from topic_prefix/line_id/status when empty. Explicit lwt_topic in config used as-is for backward compat. Update both YAML configs to remove explicit lwt_topic or set profile-specific paths. Test: auto-generated LWT includes line_id, explicit config preserved, profiles produce different topics.",
+            "review_ref": "Y26 (review-protocol-fidelity.md §4.5)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6e.3",
+            "name": "Validate All Fixes — Full Suite",
+            "group": "Validation",
+            "file": null,
+            "description": "Run ruff + mypy + pytest full suite. Run batch sim with both profiles (packaging + F&B). Verify no regressions. Fix any failures.",
+            "review_ref": "All",
+            "depends_on": ["6e.1", "6e.2"],
+            "passes": false
+        }
+    ]
+}

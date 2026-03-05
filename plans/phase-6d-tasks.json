@@ -124,32 +124,12 @@
         },
         {
             "id": "6d.13",
-            "name": "OPC-UA AccessLevel=0 for Inactive Profile Nodes",
-            "group": "Protocol Correctness",
-            "file": "src/factory_simulator/protocols/opcua_server.py",
-            "description": "In collapsed mode, create OPC-UA nodes for the inactive profile with AccessLevel=0 and StatusCode BadNotReadable (PRD 3.2.1). Add inactive_config parameter to OpcuaServer. In _build_node_tree(), after active nodes, create inactive profile nodes with AccessLevel=0, BadNotReadable status, EURange/EngineeringUnits/MinimumSamplingInterval. Do NOT add to sync loop. In realistic mode skip (no inactive concept per-server). Test: inactive nodes exist with AccessLevel=0, BadNotReadable status, not synced.",
-            "review_ref": "Y25 (review-protocol-fidelity.md §3.9)",
-            "depends_on": [],
-            "passes": false
-        },
-        {
-            "id": "6d.14",
-            "name": "Profile-Specific LWT Topic",
-            "group": "Protocol Correctness",
-            "file": "src/factory_simulator/protocols/mqtt_publisher.py",
-            "description": "Make LWT topic profile-specific. Change MqttProtocolConfig.lwt_topic default to empty string. In MQTT publisher startup, auto-generate from topic_prefix/line_id/status when empty. Explicit lwt_topic in config used as-is for backward compat. Update both YAML configs. Test: auto-generated LWT includes line_id, explicit config preserved, profiles produce different topics.",
-            "review_ref": "Y26 (review-protocol-fidelity.md §4.5)",
-            "depends_on": [],
-            "passes": false
-        },
-        {
-            "id": "6d.15",
             "name": "Validate All Fixes — Full Suite",
             "group": "Validation",
             "file": null,
             "description": "Run ruff + mypy + pytest full suite. Run batch sim with both profiles (packaging + F&B). Verify no regressions. Fix any failures.",
             "review_ref": "All",
-            "depends_on": ["6d.1", "6d.2", "6d.3", "6d.4", "6d.5", "6d.6", "6d.7", "6d.8", "6d.9", "6d.10", "6d.11", "6d.12", "6d.13", "6d.14"],
+            "depends_on": ["6d.1", "6d.2", "6d.3", "6d.4", "6d.5", "6d.6", "6d.7", "6d.8", "6d.9", "6d.10", "6d.11", "6d.12"],
             "passes": false
         }
     ]

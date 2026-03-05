@@ -1,6 +1,6 @@
 # Phase 6d: Maintenance & CI
 
-**Scope:** YELLOW issues Y16-Y27 from the three-reviewer code review. Y24 (Dockerfile editable install) was already fixed in Phase 6a — skipped.
+**Scope:** YELLOW issues Y16-Y24, Y27 from the three-reviewer code review. Y24 (Dockerfile editable install) was already fixed in Phase 6a — skipped. Y25 (inactive profile nodes) and Y26 (LWT topic) moved to Phase 6e (protocol polish).
 **Depends on:** Phase 6c complete.
 
 ---
@@ -470,96 +470,9 @@ Update `.github/workflows/ci.yml`:
 
 ---
 
-## Task 6d.13 — OPC-UA AccessLevel=0 for Inactive Profile Nodes
+## Task 6d.13 — Validate All Fixes — Full Suite
 
-**Review ref:** Y25 (review-protocol-fidelity.md §3.9)
-
-**Problem:** PRD Section 3.2.1 states: "Nodes for the inactive profile report StatusCode.BadNotReadable and have AccessLevel set to 0." Currently, in collapsed mode, only the active profile's nodes are created. The inactive profile's nodes don't exist in the address space at all, so an OPC-UA client browsing the server won't discover them.
-
-**Scope:** This only applies to **collapsed mode** (single OPC-UA server serving all signals). In realistic mode, each OPC-UA server is scoped to its own equipment subtree and there is no concept of an inactive profile on that server.
-
-**Fix:**
-
-1. The `OpcuaServer` needs to know what the "other" profile's signals look like. Add an optional `inactive_signals` parameter to `OpcuaServer.__init__()`:
-   ```python
-   inactive_signals: dict[str, SignalConfig] | None = None
-   ```
-   This is a flat dict of `signal_id → SignalConfig` for signals that should be created as inactive nodes.
-
-2. In `_build_node_tree()`, after building all active nodes, iterate through `inactive_signals` and create variable nodes for each:
-   - Same folder hierarchy creation pattern.
-   - Set `AccessLevel` to 0 (no read, no write): `await var_node.set_read_only()` then override with `await var_node.write_attribute(ua.AttributeIds.AccessLevel, ua.DataValue(ua.Variant(0, ua.VariantType.Byte)))`.
-   - Set initial value to 0 (or appropriate default).
-   - Set StatusCode to `ua.StatusCode(ua.status_codes.StatusCodes.BadNotReadable)`.
-   - Add EURange, EngineeringUnits, MinimumSamplingInterval as for active nodes.
-   - Do NOT add these nodes to `self._nodes` or `self._node_to_signal` — they should not be synced during updates.
-
-3. In `cli.py` (or `data_engine.py`), when creating OPC-UA servers in collapsed mode:
-   - Load the other profile's config to get its signal definitions.
-   - Extract the signals with `opcua_node` set.
-   - Pass them as `inactive_signals` to the OPC-UA server.
-
-   **Alternative (simpler):** Rather than loading the other profile config at runtime, hardcode a small set of "marker" nodes for the inactive profile. For packaging active: create `FoodBevLine.*` marker nodes. For F&B active: create `PackagingLine.*` marker nodes. Use a minimal static definition rather than loading the full config.
-
-   **Simplest approach:** Add a `inactive_config: FactoryConfig | None` parameter to `OpcuaServer`. In collapsed mode, the CLI loads both YAML configs and passes the inactive one. The server iterates the inactive config's equipment/signals and creates AccessLevel=0 nodes.
-
-4. **In realistic mode:** Skip this entirely — `inactive_signals` is `None` and no inactive nodes are created.
-
-**Tests:**
-- `test_inactive_profile_nodes_exist` — in collapsed mode with packaging active, verify `FoodBevLine.*` nodes exist in the address space.
-- `test_inactive_profile_access_level_zero` — read AccessLevel attribute of an inactive node, verify it's 0.
-- `test_inactive_profile_status_bad` — read an inactive node's value, verify StatusCode is BadNotReadable.
-- `test_inactive_nodes_not_synced` — verify inactive nodes are not in the sync loop (value doesn't change after ticks).
-- `test_realistic_mode_no_inactive_nodes` — in realistic mode, verify no inactive nodes are created.
-
-**Files:** `src/factory_simulator/protocols/opcua_server.py`, `src/factory_simulator/cli.py`, `tests/unit/test_protocols/test_opcua.py`
-
----
-
-## Task 6d.14 — Profile-Specific LWT Topic
-
-**Review ref:** Y26 (review-protocol-fidelity.md §4.5)
-
-**Problem:** Both profiles use `lwt_topic: "collatr/factory/status"`. If both run simultaneously (future dual-profile mode), their LWT messages would conflict on the same topic.
-
-**Fix:**
-
-1. Change the default `lwt_topic` in `MqttProtocolConfig` to include the `line_id`:
-   ```python
-   lwt_topic: str = ""  # Empty means auto-generated from topic_prefix + line_id
-   ```
-
-2. In the MQTT publisher startup (or `build_topic_map()`), if `lwt_topic` is empty, generate it:
-   ```python
-   lwt_topic = f"{self._mqtt_cfg.topic_prefix}/{self._mqtt_cfg.line_id}/status"
-   ```
-   This produces `collatr/factory/packaging1/status` or `collatr/factory/foodbev1/status`.
-
-3. If `lwt_topic` is explicitly set in config, use it as-is (backward compat).
-
-4. Update both YAML config files:
-   - Remove the explicit `lwt_topic` line, or change it to the profile-specific path.
-
-**Alternative (simpler):** Just update the YAML config values directly:
-- `factory.yaml`: `lwt_topic: "collatr/factory/packaging1/status"`
-- `factory-foodbev.yaml`: `lwt_topic: "collatr/factory/foodbev1/status"`
-
-And update the default in the Pydantic model to match the packaging default. This is simpler but less DRY.
-
-**Go with the auto-generation approach** — it's more robust and avoids config/code drift.
-
-**Tests:**
-- `test_lwt_topic_auto_generated` — when lwt_topic is empty, verify LWT topic includes line_id.
-- `test_lwt_topic_explicit` — when lwt_topic is set explicitly, verify it's used as-is.
-- `test_lwt_topic_differs_between_profiles` — packaging and F&B configs produce different LWT topics.
-
-**Files:** `src/factory_simulator/config.py`, `src/factory_simulator/protocols/mqtt_publisher.py`, `config/factory.yaml`, `config/factory-foodbev.yaml`, `tests/unit/test_protocols/test_mqtt.py`
-
----
-
-## Task 6d.15 — Validate All Fixes — Full Suite
-
-**Depends on:** Tasks 6d.1-6d.14
+**Depends on:** Tasks 6d.1-6d.12
 
 **Steps:**
 1. Run `ruff check src tests` — must be clean.
@@ -578,21 +491,19 @@ And update the default in the Pydantic model to match the packaging default. Thi
 ## Dependencies
 
 ```
-6d.1 (shared epoch constant)     → independent
-6d.2 (_format_time perf)         → depends on 6d.1
-6d.3 (health port)               → independent
-6d.4 (server task verify)        → independent
-6d.5 (narrow suppress)           → independent
-6d.6 (dead config cleanup)       → independent
-6d.7 (test: coder)               → independent
-6d.8 (test: energy)              → independent
-6d.9 (test: laminator)           → independent
-6d.10 (test: slitter)            → independent
-6d.11 (test: vibration)          → independent
-6d.12 (CI matrix)                → independent
-6d.13 (inactive profile nodes)   → independent
-6d.14 (LWT topic)                → independent
-6d.15 (validation)               → depends on ALL of 6d.1-6d.14
+6d.1 (shared epoch constant)  → independent
+6d.2 (_format_time perf)      → depends on 6d.1
+6d.3 (health port)            → independent
+6d.4 (server task verify)     → independent
+6d.5 (narrow suppress)        → independent
+6d.6 (dead config cleanup)    → independent
+6d.7 (test: coder)            → independent
+6d.8 (test: energy)           → independent
+6d.9 (test: laminator)        → independent
+6d.10 (test: slitter)         → independent
+6d.11 (test: vibration)       → independent
+6d.12 (CI matrix)             → independent
+6d.13 (validation)            → depends on ALL of 6d.1-6d.12
 ```
 
 Only 6d.2 depends on 6d.1. All others are independent.
@@ -607,7 +518,5 @@ Only 6d.2 depends on 6d.1. All others are independent.
 - 6d.6: ~15 min (remove 2 fields + config cleanup + tests)
 - 6d.7-6d.11: ~30 min each (5 generator test files × 30 min = 2.5 hours)
 - 6d.12: ~20 min (CI YAML updates)
-- 6d.13: ~60 min (OPC-UA inactive profile nodes — significant OPC-UA work)
-- 6d.14: ~20 min (LWT topic auto-generation)
-- 6d.15: ~15 min (run suite)
-- **Total: ~7-8 hours**
+- 6d.13: ~15 min (run suite)
+- **Total: ~5-6 hours**
