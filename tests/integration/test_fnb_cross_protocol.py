@@ -739,8 +739,8 @@ class TestFnbGroundTruthScenarioEvents:
         )
 
         start_events = [r for r in records if r.get("event") == "scenario_start"]
-        assert any(r.get("scenario") == "batch_cycle" for r in start_events), (
-            f"No batch_cycle scenario_start event found: {start_events}"
+        assert any(r.get("scenario") == "BatchCycle" for r in start_events), (
+            f"No BatchCycle scenario_start event found: {start_events}"
         )
 
     async def test_ground_truth_events_have_required_fields(

@@ -130,26 +130,9 @@ class CipCycle(Scenario):
         # Kick the CIP generator into the first active phase
         cip.force_state("Pre_rinse")
 
-        # Ground truth: CIP cycle start (PRD 4.7)
+        # Ground truth: state changes on activation
         gt = engine.ground_truth
         if gt is not None:
-            gt.log_scenario_start(
-                sim_time,
-                "cip_cycle",
-                [
-                    "cip.state",
-                    "cip.wash_temp",
-                    "cip.flow_rate",
-                    "cip.conductivity",
-                    "cip.cycle_time_elapsed",
-                ],
-                {
-                    "max_duration_s": round(self._max_duration, 1),
-                    "cip_phase_sequence": (
-                        "Pre_rinse→Caustic→Intermediate→Acid→Final_rinse"
-                    ),
-                },
-            )
             gt.log_state_change(sim_time, "cip.state", "Idle", "Pre_rinse")
             if self._mixer is not None:
                 gt.log_state_change(
@@ -207,7 +190,7 @@ class CipCycle(Scenario):
         if filler is not None:
             filler.state_machine.force_state("Off")
 
-        # Ground truth: CIP cycle end
+        # Ground truth: state changes on completion
         gt = engine.ground_truth
         if gt is not None:
             if cip is not None:
@@ -216,7 +199,6 @@ class CipCycle(Scenario):
                 gt.log_state_change(sim_time, "mixer.state", "Cip", "Off")
             if filler is not None:
                 gt.log_state_change(sim_time, "filler.state", "Off", "Off")
-            gt.log_scenario_end(sim_time, "cip_cycle")
 
     # -- Helpers ---------------------------------------------------------------
 

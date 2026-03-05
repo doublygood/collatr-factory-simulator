@@ -171,28 +171,6 @@ class MicroStop(Scenario):
         )
         self._ramp_up_started = False
 
-        # Ground truth: micro-stop start
-        gt = engine.ground_truth
-        if gt is not None:
-            gt.log_scenario_start(
-                sim_time,
-                "MicroStop",
-                [
-                    "press.line_speed",
-                    "press.web_tension",
-                    "press.waste_count",
-                    "press.main_drive_current",
-                ],
-                {
-                    "hold_s": self._hold_s,
-                    "drop_pct": self._drop_pct,
-                    "ramp_down_s": self._ramp_down_s,
-                    "ramp_up_s": self._ramp_up_s,
-                    "saved_target_speed": self._saved_target,
-                    "low_speed": self._low_speed,
-                },
-            )
-
     def _on_tick(self, sim_time: float, dt: float, engine: DataEngine) -> None:
         """Manage HOLD→RAMP_UP transition and scenario completion."""
         press = self._press
@@ -226,11 +204,6 @@ class MicroStop(Scenario):
                     end=self._saved_target,
                     duration=max(self._ramp_up_s, 0.1),
                 )
-
-        # Ground truth: micro-stop end
-        gt = engine.ground_truth
-        if gt is not None:
-            gt.log_scenario_end(sim_time, "MicroStop")
 
     # -- Helpers ---------------------------------------------------------------
 

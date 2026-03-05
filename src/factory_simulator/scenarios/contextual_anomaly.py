@@ -306,13 +306,9 @@ class ContextualAnomaly(Scenario):
             store.set(signal_id, self._injected_value, sim_time)
 
     def _on_complete(self, sim_time: float, engine: DataEngine) -> None:
-        """Log ground truth end event and reset injection state."""
+        """Reset injection state."""
         self._injecting = False
         self._waiting = False
-
-        gt = engine.ground_truth
-        if gt is not None:
-            gt.log_scenario_end(sim_time, "ContextualAnomaly")
 
     # -- Helpers ---------------------------------------------------------------
 

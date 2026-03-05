@@ -10,12 +10,15 @@ Verifies:
 - Cross-shift continuation works.
 - SeedSequence.spawn() produces deterministic child RNGs.
 - sim_duration_s parameter is respected.
+- ScenarioEngine is the single source of truth: each scenario produces exactly
+  one scenario_start and one scenario_end GT event (task 6a.7).
 
 PRD Reference: Section 4.7, 5.13 (Scenario Scheduling), 5.14 (F&B Scenarios)
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import ClassVar, cast
 
@@ -25,6 +28,7 @@ from scipy.stats import expon, kstest
 from factory_simulator.clock import SimulationClock
 from factory_simulator.config import ScenariosConfig, ShiftsConfig, load_config
 from factory_simulator.engine.data_engine import DataEngine
+from factory_simulator.engine.ground_truth import GroundTruthLogger
 from factory_simulator.engine.scenario_engine import (
     _AFFECTED_SIGNALS,
     _PRIORITY_ORDER,
@@ -951,4 +955,184 @@ class TestScenarioPriority:
         assert active_count == 1, (
             f"Expected exactly 1 ACTIVE state_changing scenario after tick 0, "
             f"got {active_count}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# No-duplicate GT event logging (Task 6a.7)
+# ---------------------------------------------------------------------------
+
+
+def _make_engine_with_gt(
+    tmp_path: Path, seed: int = 42,
+) -> tuple[DataEngine, GroundTruthLogger, Path]:
+    """Create a DataEngine wired to a GroundTruthLogger writing to tmp_path.
+
+    All auto-scheduled scenarios are disabled so the test controls which
+    scenarios run.
+    """
+    config = load_config(_CONFIG_PATH, apply_env=False)
+    config.simulation.random_seed = seed
+    config.simulation.tick_interval_ms = 100
+    config.simulation.time_scale = 1.0
+    config.scenarios.job_changeover.enabled = False
+    config.scenarios.unplanned_stop.enabled = False
+    config.scenarios.shift_change.enabled = False
+    config.scenarios.web_break.enabled = False
+    config.scenarios.dryer_drift.enabled = False
+    config.scenarios.ink_viscosity_excursion.enabled = False
+    config.scenarios.registration_drift.enabled = False
+    config.scenarios.cold_start_spike.enabled = False
+    config.scenarios.coder_depletion.enabled = False
+    config.scenarios.material_splice.enabled = False
+    config.scenarios.bearing_wear.enabled = False
+    if config.scenarios.micro_stop is not None:
+        config.scenarios.micro_stop.enabled = False
+    if config.scenarios.intermittent_fault is not None:
+        config.scenarios.intermittent_fault.enabled = False
+
+    from factory_simulator.store import SignalStore
+    store = SignalStore()
+    clock = SimulationClock.from_config(config.simulation)
+
+    log_path = tmp_path / "gt.jsonl"
+    gt = GroundTruthLogger(log_path)
+    gt.open()
+    gt.write_header(config)
+
+    engine = DataEngine(config, store, clock, ground_truth=gt)
+    return engine, gt, log_path
+
+
+def _read_events(log_path: Path) -> list[dict]:
+    """Parse all JSONL lines from the ground truth log."""
+    lines = log_path.read_text().strip().splitlines()
+    return [json.loads(line) for line in lines if line.strip()]
+
+
+class TestNoDoubleLogging:
+    """Task 6a.7: ScenarioEngine is the single source of truth.
+
+    Each scenario instance must produce exactly one scenario_start and one
+    scenario_end GT event — no duplicates from individual scenario code.
+    """
+
+    def test_micro_stop_exactly_one_start_and_end(self, tmp_path: Path) -> None:
+        """MicroStop scenario produces exactly 1 scenario_start + 1 scenario_end."""
+        from factory_simulator.scenarios.micro_stop import MicroStop
+
+        engine, gt, log_path = _make_engine_with_gt(tmp_path)
+        try:
+            # Short params: total duration = 0.5 + 1.0 + 0.5 = 2.0 s
+            rng = np.random.default_rng(42)
+            sc = MicroStop(
+                start_time=0.0,
+                rng=rng,
+                params={
+                    "duration_seconds": [1.0, 1.0],
+                    "speed_drop_percent": [50.0, 50.0],
+                    "ramp_down_seconds": [0.5, 0.5],
+                    "ramp_up_seconds": [0.5, 0.5],
+                },
+            )
+            engine.scenario_engine.add_scenario(sc)
+
+            # Run 30 ticks (3 s) — scenario total is 2 s
+            for _ in range(30):
+                engine.tick()
+        finally:
+            gt.close()
+
+        events = _read_events(log_path)
+        starts = [e for e in events if e.get("event") == "scenario_start"
+                  and e.get("scenario") == "MicroStop"]
+        ends = [e for e in events if e.get("event") == "scenario_end"
+                and e.get("scenario") == "MicroStop"]
+
+        assert len(starts) == 1, (
+            f"Expected 1 scenario_start for MicroStop, got {len(starts)}"
+        )
+        assert len(ends) == 1, (
+            f"Expected 1 scenario_end for MicroStop, got {len(ends)}"
+        )
+
+    def test_bearing_wear_exactly_one_start_and_end(self, tmp_path: Path) -> None:
+        """BearingWear scenario produces exactly 1 scenario_start + 1 scenario_end.
+
+        Uses a very short duration so the scenario completes quickly.
+        """
+        from factory_simulator.scenarios.bearing_wear import BearingWear
+
+        engine, gt, log_path = _make_engine_with_gt(tmp_path)
+        try:
+            rng = np.random.default_rng(42)
+            sc = BearingWear(
+                start_time=0.0,
+                rng=rng,
+                params={
+                    "duration_hours": 0.01,               # ~36 s (scalar)
+                    "base_rate": [0.001, 0.001],
+                    "acceleration_k": [0.005, 0.005],
+                    "warning_threshold": 15.0,
+                    "alarm_threshold": 25.0,
+                    "culminate_in_failure": False,
+                    "failure_vibration": [40.0, 40.0],
+                    "current_increase_percent": [1.0, 1.0],
+                },
+            )
+            engine.scenario_engine.add_scenario(sc)
+
+            # Run 400 ticks (40 s) — well past the 36 s duration
+            for _ in range(400):
+                engine.tick()
+        finally:
+            gt.close()
+
+        events = _read_events(log_path)
+        starts = [e for e in events if e.get("event") == "scenario_start"
+                  and e.get("scenario") == "BearingWear"]
+        ends = [e for e in events if e.get("event") == "scenario_end"
+                and e.get("scenario") == "BearingWear"]
+
+        assert len(starts) == 1, (
+            f"Expected 1 scenario_start for BearingWear, got {len(starts)}"
+        )
+        assert len(ends) == 1, (
+            f"Expected 1 scenario_end for BearingWear, got {len(ends)}"
+        )
+
+    def test_deferred_scenario_start_logs_exactly_once(self, tmp_path: Path) -> None:
+        """A scenario that activates after start_time=0 still produces exactly
+        1 start and 1 end event."""
+        from factory_simulator.scenarios.micro_stop import MicroStop
+
+        engine, gt, log_path = _make_engine_with_gt(tmp_path)
+        try:
+            rng = np.random.default_rng(7)
+            sc = MicroStop(
+                start_time=0.5,  # activates after 5 ticks
+                rng=rng,
+                params={
+                    "duration_seconds": [1.0, 1.0],
+                    "speed_drop_percent": [50.0, 50.0],
+                    "ramp_down_seconds": [0.5, 0.5],
+                    "ramp_up_seconds": [0.5, 0.5],
+                },
+            )
+            engine.scenario_engine.add_scenario(sc)
+            for _ in range(30):
+                engine.tick()
+        finally:
+            gt.close()
+
+        events = _read_events(log_path)
+        starts = [e for e in events if e.get("event") == "scenario_start"
+                  and e.get("scenario") == "MicroStop"]
+        ends = [e for e in events if e.get("event") == "scenario_end"
+                and e.get("scenario") == "MicroStop"]
+        assert len(starts) == 1, (
+            f"Expected 1 scenario_start for deferred MicroStop, got {len(starts)}"
+        )
+        assert len(ends) == 1, (
+            f"Expected 1 scenario_end for deferred MicroStop, got {len(ends)}"
         )

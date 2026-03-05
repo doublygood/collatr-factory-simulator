@@ -70,7 +70,7 @@
             "description": "Remove duplicate log_scenario_start/log_scenario_end calls from individual scenarios (bearing_wear, micro_stop, contextual_anomaly, intermittent_fault, batch_cycle, cip_cycle, cold_chain_break). ScenarioEngine is the single source of truth for start/end GT events. Keep scenario-specific detail logging (phase transitions, parameter changes). Test: deterministic sim produces exactly one start + one end per scenario instance.",
             "review_ref": "Y2 (review-signal-integrity.md)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6a.8",

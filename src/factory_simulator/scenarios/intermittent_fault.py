@@ -290,20 +290,6 @@ class IntermittentFault(Scenario):
         if self._coder is not None and self._coder._ink_pressure is not None:
             self._saved_ink_pressure_target = self._coder._ink_pressure._target
 
-        gt = engine.ground_truth
-        if gt is not None:
-            gt.log_scenario_start(
-                sim_time,
-                "IntermittentFault",
-                list(self._affected_signals),
-                {
-                    "subtype": self._subtype,
-                    "phase1_duration_s": self._phase1_duration_s,
-                    "phase2_duration_s": self._phase2_duration_s,
-                    "phase3_transition": self._phase3_transition,
-                },
-            )
-
     def _on_tick(self, sim_time: float, dt: float, engine: DataEngine) -> None:
         """Manage phase transitions and spike lifecycle each tick."""
         # Once Phase 3 is active the scenario stays permanently spiking.
@@ -352,10 +338,6 @@ class IntermittentFault(Scenario):
 
         if not self._phase3_active:
             self._restore_generator_state()
-
-        gt = engine.ground_truth
-        if gt is not None:
-            gt.log_scenario_end(sim_time, "IntermittentFault")
 
     def post_gen_inject(
         self,

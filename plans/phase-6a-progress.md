@@ -9,7 +9,7 @@
 - [x] 6a.4: OPC-UA EngineeringUnits Property (R5)
 - [x] 6a.5: Fix Oven Gateway UID Routing in Realistic Mode (R6)
 - [x] 6a.6: Fix Severity Weight Key Mismatch (Y1)
-- [ ] 6a.7: Fix Double-Logging of Ground Truth Events (Y2)
+- [x] 6a.7: Fix Double-Logging of Ground Truth Events (Y2)
 - [ ] 6a.8: Handle Open Scenarios in Evaluator (Y3)
 - [ ] 6a.9: Validate All Fixes — Full Suite + Integration Check
 
@@ -89,6 +89,20 @@ Tasks 6a.1-6a.8 are all independent (no dependencies between them). Task 6a.9 de
 - Collapsed mode preserves existing behaviour: secondary slaves remain at UIDs 11/12/13 (tested by `test_modbus_fnb_integration.py`). No behaviour change for existing tests.
 - In realistic mode, when no `secondary_uid_remap` is set (empty dict), all endpoint UIDs map to primary context as before — backward compatible.
 - 2998 tests passed after the change.
+
+## Task 6a.7 — Fix Double-Logging of Ground Truth Events
+
+**What was fixed:**
+- Removed duplicate `log_scenario_start()` calls from `_on_activate()` in: `bearing_wear.py`, `micro_stop.py`, `intermittent_fault.py`, `batch_cycle.py`, `cip_cycle.py`, `cold_chain_break.py`
+- Removed duplicate `log_scenario_end()` calls from `_on_complete()` in all 7 scenarios: above 6 plus `contextual_anomaly.py`
+- Preserved all scenario-specific detail logging: `log_state_change()` in batch_cycle/cip_cycle/cold_chain_break, `log_signal_anomaly()` in cold_chain_break, phase transition logging in intermittent_fault, `log_contextual_anomaly()` in contextual_anomaly
+- Added `TestNoDoubleLogging` class (3 tests) to `test_scenario_engine.py`: MicroStop, BearingWear, and deferred-start scenario each produce exactly 1 start + 1 end event
+- Fixed one integration test: `test_fnb_cross_protocol.py` was asserting `"batch_cycle"` (snake_case), updated to `"BatchCycle"` (PascalCase, from `type().__name__`)
+
+**Decisions:**
+- ScenarioEngine logs `type(scenario).__name__` (PascalCase) — this is canonical; scenarios that previously used snake_case strings (batch_cycle, cip_cycle, cold_chain_break) now produce PascalCase events
+- All `log_state_change()` and `log_signal_anomaly()` calls preserved (detail logging, not start/end duplicates)
+- 2999 tests passed after the change
 
 ## Task 6a.6 — Fix Severity Weight Key Mismatch
 

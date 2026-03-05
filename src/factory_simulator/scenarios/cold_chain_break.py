@@ -111,23 +111,9 @@ class ColdChainBreak(Scenario):
         # Lock compressor off — overrides bang-bang control
         chiller.compressor_forced_off = True
 
-        # Ground truth: refrigeration failure start (PRD 4.7)
+        # Ground truth: state changes on activation
         gt = engine.ground_truth
         if gt is not None:
-            gt.log_scenario_start(
-                sim_time,
-                "cold_chain_break",
-                [
-                    "chiller.compressor_state",
-                    "chiller.room_temp",
-                    "chiller.suction_pressure",
-                    "chiller.discharge_pressure",
-                ],
-                {
-                    "duration_s": round(self._duration, 1),
-                    "alarm_threshold_c": _ALARM_THRESHOLD_C,
-                },
-            )
             gt.log_state_change(
                 sim_time,
                 "chiller.compressor_state",
@@ -161,7 +147,7 @@ class ColdChainBreak(Scenario):
         if chiller is not None:
             chiller.compressor_forced_off = self._saved_forced_off
 
-        # Ground truth: repair complete
+        # Ground truth: state change on completion
         gt = engine.ground_truth
         if gt is not None:
             gt.log_state_change(
@@ -170,7 +156,6 @@ class ColdChainBreak(Scenario):
                 "0",
                 "1",
             )
-            gt.log_scenario_end(sim_time, "cold_chain_break")
 
     # -- Helpers ---------------------------------------------------------------
 

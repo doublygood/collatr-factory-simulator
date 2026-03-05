@@ -143,29 +143,9 @@ class BatchCycle(Scenario):
         # Drive mixer into Loading state
         mixer.state_machine.force_state("Loading")
 
-        # Ground truth: batch starts (PRD 4.7)
+        # Ground truth: state change on activation
         gt = engine.ground_truth
         if gt is not None:
-            gt.log_scenario_start(
-                sim_time,
-                "batch_cycle",
-                [
-                    "mixer.state",
-                    "mixer.speed",
-                    "mixer.torque",
-                    "mixer.batch_temp",
-                    "mixer.batch_weight",
-                    "mixer.batch_id",
-                    "mixer.mix_time_elapsed",
-                    "mixer.lid_closed",
-                ],
-                {
-                    "loading_duration_s": round(self._loading_duration, 1),
-                    "mixing_duration_s": round(self._mixing_duration, 1),
-                    "holding_duration_s": round(self._holding_duration, 1),
-                    "discharging_duration_s": round(self._discharging_duration, 1),
-                },
-            )
             gt.log_state_change(sim_time, "mixer.state", "Off", "Loading")
 
     def _on_tick(
@@ -207,7 +187,6 @@ class BatchCycle(Scenario):
             gt = engine.ground_truth
             if gt is not None:
                 gt.log_state_change(sim_time, "mixer.state", "Discharging", "Off")
-                gt.log_scenario_end(sim_time, "batch_cycle")
 
     # -- Helpers ---------------------------------------------------------------
 

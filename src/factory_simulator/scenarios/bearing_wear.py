@@ -189,28 +189,6 @@ class BearingWear(Scenario):
         if self._press is not None:
             self._saved_current_base = self._press._main_drive_current._base
 
-        # Ground truth: bearing wear start (PRD 4.7)
-        affected_signals = [
-            "vibration.main_drive_x",
-            "vibration.main_drive_y",
-            "vibration.main_drive_z",
-            "press.main_drive_current",
-        ]
-        gt = engine.ground_truth
-        if gt is not None:
-            gt.log_scenario_start(
-                sim_time,
-                "BearingWear",
-                affected_signals,
-                {
-                    "base_rate": self._base_rate,
-                    "k": self._k,
-                    "warning_threshold": self._warning_threshold,
-                    "alarm_threshold": self._alarm_threshold,
-                    "culminate_in_failure": self._culminate_in_failure,
-                },
-            )
-
     def _on_tick(
         self, sim_time: float, dt: float, engine: DataEngine,
     ) -> None:
@@ -271,11 +249,6 @@ class BearingWear(Scenario):
         press = self._press
         if press is not None:
             press._main_drive_current._base = self._saved_current_base
-
-        # Ground truth: scenario end
-        gt = engine.ground_truth
-        if gt is not None:
-            gt.log_scenario_end(sim_time, "BearingWear")
 
     # -- Helpers ---------------------------------------------------------------
 
