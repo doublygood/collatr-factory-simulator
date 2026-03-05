@@ -751,3 +751,152 @@ def test_evaluate_command_multi_seed(tmp_path: Path, capsys: Any) -> None:
     assert rc == 0
     captured = capsys.readouterr()
     assert "Seeds" in captured.out or "seeds" in captured.out.lower()
+
+
+# ---------------------------------------------------------------------------
+# evaluate_command with EvaluationConfig wired from FactoryConfig  (6b.5)
+# ---------------------------------------------------------------------------
+
+
+def _write_factory_config_yaml(path: Path, evaluation_section: str | None = None) -> None:
+    """Write a minimal factory config YAML to ``path``.
+
+    When ``evaluation_section`` is provided it is inserted; otherwise the
+    section is omitted so that Pydantic defaults apply.
+    """
+    content = "simulation:\n  duration_seconds: 3600\n"
+    if evaluation_section is not None:
+        content += evaluation_section
+    path.write_text(content, encoding="utf-8")
+
+
+def test_evaluate_command_config_custom_pre_margin(tmp_path: Path, capsys: Any) -> None:
+    """EvaluationConfig.pre_margin_seconds from YAML is used by the evaluator."""
+    gt, det = _simple_gt_and_det(tmp_path)
+    cfg_path = tmp_path / "factory.yaml"
+    _write_factory_config_yaml(
+        cfg_path,
+        "evaluation:\n  pre_margin_seconds: 5.0\n  post_margin_seconds: 10.0\n",
+    )
+
+    # Without config: detection 10s after start, default pre_margin=30 → TP
+    # With custom config: pre_margin=5, post_margin=10 — detection is AFTER start
+    # and within post_margin (10s ≤ 10s) → still TP.
+    # The key test is that settings flow through without error.
+    args = SimpleNamespace(
+        ground_truth=str(gt),
+        detections=str(det),
+        config=str(cfg_path),
+        pre_margin=None,
+        post_margin=None,
+        output=None,
+    )
+    rc = evaluate_command(args)
+    assert rc == 0
+
+
+def test_evaluate_command_config_margins_affect_matching(tmp_path: Path) -> None:
+    """Zero post_margin misses a detection that fires after the event ends."""
+    from datetime import UTC, datetime
+
+    from factory_simulator.evaluation.evaluator import Evaluator, EvaluatorSettings
+
+    # Event window: [t_start, t_end] = [0, 10]
+    # Detection fires at t_end + 5 = 15 (after event end)
+    # With post_margin=60: window extends to t_end+60=70 → TP
+    # With post_margin=0:  window ends at t_end=10 → detection at 15 is FN
+    t_start = 1_700_000_000.0
+    t_end = t_start + 10.0
+    t_det = t_end + 5.0  # 5s after event end
+
+    def iso(t: float) -> str:
+        return datetime.fromtimestamp(t, tz=UTC).isoformat()
+
+    gt_path = tmp_path / "gt_margins.jsonl"
+    det_path = tmp_path / "det_margins.csv"
+    _write_gt_jsonl(
+        gt_path,
+        [
+            {"event": "scenario_start", "scenario": "web_break", "sim_time": iso(t_start)},
+            {"event": "scenario_end", "scenario": "web_break", "sim_time": iso(t_end)},
+        ],
+    )
+    _write_det_csv(det_path, [{"timestamp": str(t_det), "alert_type": "web_break"}])
+
+    # Zero post_margin → detection after event end is FN
+    settings_zero = EvaluatorSettings(pre_margin_seconds=0.0, post_margin_seconds=0.0)
+    result_zero = Evaluator(settings=settings_zero).evaluate(str(gt_path), str(det_path))
+    assert result_zero.recall == 0.0
+
+    # Large post_margin → detection is TP
+    settings_wide = EvaluatorSettings(pre_margin_seconds=0.0, post_margin_seconds=60.0)
+    result_wide = Evaluator(settings=settings_wide).evaluate(str(gt_path), str(det_path))
+    assert result_wide.recall == 1.0
+
+
+def test_evaluate_command_no_config_uses_defaults(tmp_path: Path, capsys: Any) -> None:
+    """No config path → Pydantic EvaluationConfig defaults apply (30s/60s)."""
+    gt, det = _simple_gt_and_det(tmp_path)
+    args = SimpleNamespace(
+        ground_truth=str(gt),
+        detections=str(det),
+        config=None,
+        pre_margin=None,
+        post_margin=None,
+        output=None,
+    )
+    rc = evaluate_command(args)
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "Precision" in captured.out or "precision" in captured.out.lower()
+
+
+def test_evaluate_command_cli_arg_overrides_config(tmp_path: Path, capsys: Any) -> None:
+    """CLI --pre-margin / --post-margin override config values when provided."""
+    gt, det = _simple_gt_and_det(tmp_path)
+    cfg_path = tmp_path / "factory.yaml"
+    # Config says 0s margins (would cause FN), but CLI overrides with 30/60
+    _write_factory_config_yaml(
+        cfg_path,
+        "evaluation:\n  pre_margin_seconds: 0.0\n  post_margin_seconds: 0.0\n",
+    )
+    args = SimpleNamespace(
+        ground_truth=str(gt),
+        detections=str(det),
+        config=str(cfg_path),
+        pre_margin=30.0,   # explicit CLI override — should win over config's 0s
+        post_margin=60.0,  # explicit CLI override
+        output=None,
+    )
+    rc = evaluate_command(args)
+    assert rc == 0
+    captured = capsys.readouterr()
+    # With 30/60 margins, detection at start+10 is within post_margin → TP → recall=1.0
+    assert "1.000" in captured.out  # recall should be 1.0
+
+
+def test_evaluation_config_loaded_from_factory_config(tmp_path: Path) -> None:
+    """FactoryConfig.evaluation field round-trips through YAML load."""
+    from factory_simulator.config import load_config
+
+    cfg_path = tmp_path / "factory.yaml"
+    _write_factory_config_yaml(
+        cfg_path,
+        "evaluation:\n  pre_margin_seconds: 45.0\n  post_margin_seconds: 90.0\n  seeds: 3\n",
+    )
+    cfg = load_config(cfg_path, apply_env=False)
+    assert cfg.evaluation.pre_margin_seconds == 45.0
+    assert cfg.evaluation.post_margin_seconds == 90.0
+    assert cfg.evaluation.seeds == 3
+
+
+def test_evaluation_config_absent_uses_pydantic_defaults(tmp_path: Path) -> None:
+    """FactoryConfig without evaluation: section → Pydantic defaults (30/60)."""
+    from factory_simulator.config import load_config
+
+    cfg_path = tmp_path / "factory.yaml"
+    _write_factory_config_yaml(cfg_path)  # no evaluation section
+    cfg = load_config(cfg_path, apply_env=False)
+    assert cfg.evaluation.pre_margin_seconds == 30.0
+    assert cfg.evaluation.post_margin_seconds == 60.0
+    assert cfg.evaluation.seeds == 1

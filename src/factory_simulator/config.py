@@ -1395,6 +1395,7 @@ class FactoryConfig(BaseModel):
     shifts: ShiftsConfig = Field(default_factory=ShiftsConfig)
     data_quality: DataQualityConfig = Field(default_factory=DataQualityConfig)
     batch_output: BatchOutputConfig = Field(default_factory=BatchOutputConfig)
+    evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     network: NetworkConfig | None = None
 
 

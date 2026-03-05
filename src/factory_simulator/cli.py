@@ -254,20 +254,30 @@ def _add_evaluate_subcommand(subparsers: Any) -> None:
         ),
     )
     p.add_argument(
+        "--config",
+        metavar="FILE",
+        default=None,
+        help=(
+            "Factory config YAML to read evaluation settings from "
+            "(pre/post margins, severity weights, latency targets). "
+            "When absent, built-in defaults apply."
+        ),
+    )
+    p.add_argument(
         "--pre-margin",
         type=float,
-        default=30.0,
+        default=None,
         metavar="SECONDS",
         dest="pre_margin",
-        help="Pre-event tolerance window in seconds (default: 30)",
+        help="Pre-event tolerance window in seconds (overrides config; default: 30)",
     )
     p.add_argument(
         "--post-margin",
         type=float,
-        default=60.0,
+        default=None,
         metavar="SECONDS",
         dest="post_margin",
-        help="Post-event tolerance window in seconds (default: 60)",
+        help="Post-event tolerance window in seconds (overrides config; default: 60)",
     )
     p.add_argument(
         "--output",

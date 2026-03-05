@@ -249,12 +249,15 @@ class TestBuildParser:
         assert args.output == "report.txt"
 
     def test_evaluate_default_margins(self) -> None:
+        # --pre-margin / --post-margin default to None so that evaluate_command
+        # can detect whether the user explicitly provided them (CLI beats config).
+        # When None, evaluate_command falls back to EvaluationConfig defaults (30/60).
         parser = build_parser()
         args = parser.parse_args(
             ["evaluate", "--ground-truth", "g.jsonl", "--detections", "d.csv"]
         )
-        assert args.pre_margin == pytest.approx(30.0)
-        assert args.post_margin == pytest.approx(60.0)
+        assert args.pre_margin is None
+        assert args.post_margin is None
 
 
 # ---------------------------------------------------------------------------

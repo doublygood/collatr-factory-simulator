@@ -1041,6 +1041,41 @@ shifts:
       waste_rate_bias: 1.10
 
 # ---------------------------------------------------------------------------
+# Evaluation Framework (PRD Section 12.4)
+# ---------------------------------------------------------------------------
+
+evaluation:
+  pre_margin_seconds: 30.0
+  post_margin_seconds: 60.0
+  seeds: 1
+  severity_weights:
+    web_break: 10.0
+    unplanned_stop: 5.0
+    seal_integrity_failure: 8.0
+    cold_chain_break: 10.0
+    bearing_wear: 8.0
+    dryer_drift: 3.0
+    oven_excursion: 3.0
+    fill_weight_drift: 3.0
+    ink_viscosity_excursion: 2.0
+    registration_drift: 2.0
+    contextual_anomaly: 5.0
+    intermittent_fault: 4.0
+    micro_stop: 1.0
+    sensor_disconnect: 2.0
+    stuck_sensor: 3.0
+  latency_targets:
+    web_break: 2.0
+    unplanned_stop: 10.0
+    seal_integrity_failure: 60.0
+    cold_chain_break: 300.0
+    bearing_wear: 86400.0
+    dryer_drift: 900.0
+    fill_weight_drift: 600.0
+    contextual_anomaly: 300.0
+    intermittent_fault: 172800.0
+
+# ---------------------------------------------------------------------------
 # Network Topology (PRD Section 3a.4)
 # ---------------------------------------------------------------------------
 # mode: "collapsed" = single port per protocol (default, development)

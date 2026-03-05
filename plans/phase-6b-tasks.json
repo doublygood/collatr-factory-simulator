@@ -50,7 +50,7 @@
             "description": "Add evaluation field to FactoryConfig. Add evaluation section to both YAML configs. Wire config.evaluation into evaluator (pre/post margins, severity weights, latency targets, seeds). Maintain backward compat (defaults when section absent). Test: custom evaluation config overrides defaults in evaluator.",
             "review_ref": "Y8 (review-architecture.md §4.2)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6b.6",

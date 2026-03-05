@@ -7,7 +7,7 @@
 - [x] 6b.2: CsvWriter Idempotent Close (Y5)
 - [x] 6b.3: SIGTERM Handler for Graceful Docker Shutdown (Y6)
 - [x] 6b.4: Profile-Aware 0x06 Device Busy Exception (Y7)
-- [ ] 6b.5: Wire EvaluationConfig into FactoryConfig (Y8)
+- [x] 6b.5: Wire EvaluationConfig into FactoryConfig (Y8)
 - [ ] 6b.6: Validate All Fixes — Full Suite
 
 ## Notes
@@ -99,3 +99,38 @@ Tasks 6b.1-6b.5 are all independent (no dependencies between them). Task 6b.6 de
 - Default `state_signal_id = "press.machine_state"` keeps all existing packaging tests passing without modification.
 - Sealer has no state signal in the F&B config; its endpoint gets `None` so 0x06 is disabled there.
 - Collapsed F&B detection uses `"filler" in config.equipment` — filler is always present in the F&B profile and not in packaging.
+
+---
+
+## Task 6b.5: Wire EvaluationConfig into FactoryConfig (DONE)
+
+**Files changed:**
+- `src/factory_simulator/config.py`
+- `src/factory_simulator/cli.py`
+- `src/factory_simulator/evaluation/cli.py`
+- `config/factory.yaml`
+- `config/factory-foodbev.yaml`
+- `tests/unit/test_evaluation_cli.py`
+- `tests/unit/test_cli.py`
+- `src/factory_simulator/models/ramp.py` (pre-existing Hypothesis bug fixed as a side-effect)
+
+**What was done:**
+1. Added `evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)` to `FactoryConfig`. EvaluationConfig was already fully defined (line ~1160) but orphaned — never referenced from FactoryConfig.
+2. Added `evaluation:` section to both `config/factory.yaml` and `config/factory-foodbev.yaml` with all fields matching Pydantic defaults (pre_margin_seconds=30, post_margin_seconds=60, seeds=1, severity_weights, latency_targets).
+3. Modified `evaluate_command` in `evaluation/cli.py` to:
+   - Accept optional `config` attribute (factory config path)
+   - Load `FactoryConfig.evaluation` if provided; fall back to `EvaluationConfig()` defaults when absent
+   - Build `EvaluatorSettings` from `eval_cfg` (margins + severity_weights)
+   - Use `eval_cfg.latency_targets` for report formatting (replaces hardcoded `DEFAULT_LATENCY_TARGETS`)
+   - CLI `--pre-margin`/`--post-margin` override config values when explicitly set (non-None)
+4. Added `--config` argument to `_add_evaluate_subcommand` in `cli.py`. Changed `--pre-margin`/`--post-margin` defaults from `30.0`/`60.0` to `None` so we can detect when the user explicitly provides them vs when the config should supply the value.
+5. Removed unused `DEFAULT_LATENCY_TARGETS` import from `evaluation/cli.py`.
+6. Added 7 new tests in `test_evaluation_cli.py` covering: custom config margins, config without evaluation section uses defaults, CLI args override config, FactoryConfig round-trip via YAML, Pydantic defaults when section absent.
+7. Updated `test_cli.py::test_evaluate_default_margins` to expect `None` (not 30.0/60.0) since defaults changed.
+8. **Bonus fix**: `RampModel` had a pre-existing Hypothesis-found bug where tick-based elapsed accumulation (110 × 0.1 = 10.999...977 < duration 10.999...986) prevented the "complete" branch from firing. Added `_COMPLETION_EPSILON = 1e-9` guard in the completion check.
+
+**Decisions:**
+- CLI `--pre-margin`/`--post-margin` default to `None` (not 30.0/60.0) so `evaluate_command` can distinguish "user set this" from "use config default".
+- Backward compat: existing tests that use `SimpleNamespace(pre_margin=30.0, ...)` still work — `args.pre_margin is not None` → uses 30.0.
+- `DEFAULT_LATENCY_TARGETS` left in `metrics.py` for any code that still needs it directly; just removed the unused import from `evaluation/cli.py`.
+- RampModel epsilon `1e-9` (1 nanosecond) is well below any realistic tick size but large enough to absorb IEEE 754 accumulation errors over 100+ ticks.

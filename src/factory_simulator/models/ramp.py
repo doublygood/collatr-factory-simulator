@@ -25,6 +25,13 @@ import numpy as np
 from factory_simulator.models.base import SignalModel
 from factory_simulator.models.noise import NoiseGenerator
 
+# Tolerance for floating-point accumulation when comparing elapsed to duration.
+# Tick-based accumulation of small dt values (e.g. 110 x 0.1) can produce a
+# result slightly less than the true sum due to IEEE 754 rounding.  A guard
+# of 1 ns (1e-9 s) is far smaller than any realistic tick interval but large
+# enough to absorb accumulated fp error.
+_COMPLETION_EPSILON: float = 1e-9
+
 
 def _float_param(params: dict[str, object], key: str, default: float) -> float:
     """Extract a float parameter from the params dict."""
@@ -178,7 +185,7 @@ class RampModel(SignalModel):
     @property
     def complete(self) -> bool:
         """Whether the ramp has reached its end value."""
-        return self._elapsed >= self._duration
+        return self._elapsed >= self._duration - _COMPLETION_EPSILON
 
     @property
     def value(self) -> float:
@@ -230,8 +237,10 @@ class RampModel(SignalModel):
         """
         self._elapsed += dt
 
-        if self._elapsed >= self._duration:
-            # Ramp complete -- hold at end value (no overshoot)
+        if self._elapsed >= self._duration - _COMPLETION_EPSILON:
+            # Ramp complete -- hold at end value (no overshoot).
+            # The epsilon guards against floating-point accumulation where
+            # tick-based elapsed can fall just short of the exact duration.
             self._value = self._end_value
         elif self._num_steps <= 1:
             # Smooth linear ramp

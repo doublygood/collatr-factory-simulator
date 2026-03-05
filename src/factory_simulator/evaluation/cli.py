@@ -21,7 +21,7 @@ from typing import Any
 import yaml
 
 from factory_simulator.evaluation.evaluator import Evaluator, EvaluatorSettings
-from factory_simulator.evaluation.metrics import DEFAULT_LATENCY_TARGETS, EvaluationResult
+from factory_simulator.evaluation.metrics import EvaluationResult
 
 # ---------------------------------------------------------------------------
 # Run Manifest  (PRD 12.2)
@@ -610,17 +610,44 @@ def evaluate_command(args: Any) -> int:
     Expected attrs on ``args`` (argparse.Namespace or any object):
     - ``ground_truth`` : path or comma-separated paths
     - ``detections``   : path or comma-separated paths
-    - ``pre_margin``   : float seconds (default 30.0)
-    - ``post_margin``  : float seconds (default 60.0)
+    - ``config``       : optional factory config YAML path (provides evaluation defaults)
+    - ``pre_margin``   : float seconds or None (overrides config; fallback: 30.0)
+    - ``post_margin``  : float seconds or None (overrides config; fallback: 60.0)
     - ``output``       : optional path to write the text report
+
+    When a ``config`` is supplied, evaluation settings (margins, severity weights,
+    latency targets) are read from ``config.evaluation``.  CLI args ``--pre-margin``
+    and ``--post-margin`` take precedence over config values when explicitly provided.
     """
     import sys
 
-    pre_margin: float = float(getattr(args, "pre_margin", 30.0))
-    post_margin: float = float(getattr(args, "post_margin", 60.0))
+    from factory_simulator.config import EvaluationConfig
+
+    # Load evaluation config from factory config file if provided.
+    config_path = getattr(args, "config", None)
+    eval_cfg: EvaluationConfig
+    if config_path:
+        from factory_simulator.config import load_config
+
+        factory_cfg = load_config(config_path)
+        eval_cfg = factory_cfg.evaluation
+    else:
+        eval_cfg = EvaluationConfig()
+
+    # CLI args override config values when explicitly set (not None).
+    pre_margin_arg = getattr(args, "pre_margin", None)
+    post_margin_arg = getattr(args, "post_margin", None)
+    pre_margin: float = (
+        float(pre_margin_arg) if pre_margin_arg is not None else eval_cfg.pre_margin_seconds
+    )
+    post_margin: float = (
+        float(post_margin_arg) if post_margin_arg is not None else eval_cfg.post_margin_seconds
+    )
+
     settings = EvaluatorSettings(
         pre_margin_seconds=pre_margin,
         post_margin_seconds=post_margin,
+        severity_weights=dict(eval_cfg.severity_weights),
     )
 
     ground_truth = getattr(args, "ground_truth", None)
@@ -646,11 +673,12 @@ def evaluate_command(args: Any) -> int:
         return 1
 
     output = getattr(args, "output", None)
+    latency_targets = dict(eval_cfg.latency_targets)
 
     if len(gt_paths) == 1:
         ev = Evaluator(settings=settings)
         result = ev.evaluate(gt_paths[0], det_paths[0])
-        report = format_evaluation_report(result, latency_targets=DEFAULT_LATENCY_TARGETS)
+        report = format_evaluation_report(result, latency_targets=latency_targets)
         print(report)
         if output:
             Path(str(output)).write_text(report, encoding="utf-8")
