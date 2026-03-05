@@ -635,7 +635,7 @@ class MqttPublisher:
     async def start(self) -> None:
         """Connect to broker and start the publish loop.
 
-        Retries the initial ``connect()`` call up to 3 times with
+        Retries the initial ``connect()`` call up to 4 times with
         exponential backoff (delays: 1 s, 2 s, 4 s) to tolerate Docker
         Compose startup ordering where the Mosquitto sidecar may not be
         ready when the simulator starts.
@@ -646,10 +646,10 @@ class MqttPublisher:
         Raises
         ------
         Exception
-            If all 3 connection attempts fail, the last exception is re-raised.
+            If all 4 connection attempts fail, the last exception is re-raised.
         """
-        _max_attempts = 3
         _delays = (1.0, 2.0, 4.0)
+        _max_attempts = len(_delays) + 1  # 4 attempts total
         last_exc: Exception | None = None
 
         for attempt in range(_max_attempts):
@@ -658,7 +658,7 @@ class MqttPublisher:
                 break
             except Exception as exc:
                 last_exc = exc
-                if attempt < _max_attempts - 1:
+                if attempt < len(_delays):
                     delay = _delays[attempt]
                     logger.warning(
                         "MQTT connect attempt %d/%d failed (%s); retrying in %.0f s",

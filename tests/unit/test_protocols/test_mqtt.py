@@ -569,19 +569,19 @@ async def test_start_retries_on_first_failure(config, store, mock_client):
 
 @pytest.mark.asyncio
 async def test_start_raises_after_all_retries_exhausted(config, store, mock_client):
-    """start() raises ConnectionRefusedError when all 3 attempts fail."""
+    """start() raises ConnectionRefusedError when all 4 attempts fail."""
     mock_client.connect.side_effect = ConnectionRefusedError("broker unavailable")
     pub = MqttPublisher(config, store, client=mock_client)
     with patch.object(asyncio, "sleep", AsyncMock()), pytest.raises(ConnectionRefusedError):
         await pub.start()
-    assert mock_client.connect.call_count == 3
+    assert mock_client.connect.call_count == 4
     # loop_start must NOT be called if connect never succeeded
     mock_client.loop_start.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_start_succeeds_on_third_attempt(config, store, mock_client):
-    """start() retries up to 3 times; succeeds on the third attempt."""
+    """start() retries up to 4 times; succeeds on the third attempt."""
     mock_client.connect.side_effect = [
         ConnectionRefusedError("refused"),
         ConnectionRefusedError("refused"),
@@ -591,6 +591,29 @@ async def test_start_succeeds_on_third_attempt(config, store, mock_client):
     with patch.object(asyncio, "sleep", AsyncMock()):
         await pub.start()
     assert mock_client.connect.call_count == 3
+    mock_client.loop_start.assert_called_once()
+    await pub.stop()
+
+
+@pytest.mark.asyncio
+async def test_start_succeeds_on_fourth_attempt(config, store, mock_client):
+    """start() uses all 3 delay values; succeeds on the 4th attempt."""
+    mock_client.connect.side_effect = [
+        ConnectionRefusedError("refused"),
+        ConnectionRefusedError("refused"),
+        ConnectionRefusedError("refused"),
+        None,
+    ]
+    pub = MqttPublisher(config, store, client=mock_client)
+    sleep_mock = AsyncMock()
+    with patch.object(asyncio, "sleep", sleep_mock):
+        await pub.start()
+    assert mock_client.connect.call_count == 4
+    # All 3 delays should have been used: 1.0, 2.0, 4.0
+    assert sleep_mock.call_count == 3
+    sleep_mock.assert_any_call(1.0)
+    sleep_mock.assert_any_call(2.0)
+    sleep_mock.assert_any_call(4.0)
     mock_client.loop_start.assert_called_once()
     await pub.stop()
 

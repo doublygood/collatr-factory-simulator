@@ -1,9 +1,9 @@
 # Phase 7: Polish — Progress
 
-## Status: NOT STARTED
+## Status: IN PROGRESS
 
 ## Tasks
-- [ ] 7.1: Fix MQTT Retry Delays Tuple (CQ-Y1)
+- [x] 7.1: Fix MQTT Retry Delays Tuple (CQ-Y1)
 - [ ] 7.2: Extract SIGTERM Handler Context Manager (CQ-Y2)
 - [ ] 7.3: Extract OPC-UA Node Creation Helper (CQ-Y3)
 - [ ] 7.4: Guard Overlapping OPC-UA Node Paths + Test (CQ-Y4) — depends on 7.3
@@ -16,6 +16,10 @@
 - [ ] 7.11: Improve _compute_block_size Documentation (G-Proto13)
 - [ ] 7.12: Explicit line_id + ShiftChange HH:MM Validator (G-Proto14 + G-Arch-ShiftChange)
 - [ ] 7.13: CI fail-fast: false + Validate All Fixes
+
+## Task 7.1 Notes
+
+Restructured MQTT retry loop to use all 3 delay values (1s, 2s, 4s) for 4 total connection attempts, up from 3. Changed `_max_attempts` to derive from `len(_delays) + 1` and sleep condition to `attempt < len(_delays)`. Updated existing exhausted-retry test to expect 4 attempts. Added `test_start_succeeds_on_fourth_attempt` verifying all 3 delays are used. 3167 tests pass, ruff + mypy clean.
 
 ## Notes
 
