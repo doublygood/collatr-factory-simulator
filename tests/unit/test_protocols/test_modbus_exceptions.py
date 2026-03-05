@@ -60,7 +60,7 @@ def _make_context(
     co = ModbusSequentialDataBlock(0, [False] * 8)  # type: ignore[no-untyped-call]
     di = ModbusSequentialDataBlock(0, [False] * 8)  # type: ignore[no-untyped-call]
     return FactoryDeviceContext(
-        float32_addresses=set(),
+        dual_register_addresses=set(),
         exception_injector=injector,
         transition_active_fn=(lambda: transition_active) if injector else None,
         unit_id=unit_id,
@@ -286,7 +286,7 @@ class TestFactoryDeviceContextExceptions:
         ctx = _make_context(injector=inj)
         # FC16 write should not be affected by exception injector
         result = ctx.setValues(16, 0, [42])
-        # Should succeed (no FC06 rejection since address 0 not in float32_addresses)
+        # Should succeed (no FC06 rejection since address 0 not in dual_register_addresses)
         assert result is None
 
     def test_coil_read_not_injected(self) -> None:

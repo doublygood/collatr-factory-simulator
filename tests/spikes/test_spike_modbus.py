@@ -55,11 +55,11 @@ class FC06ProtectedDeviceContext(ModbusDeviceContext):
 
     def __init__(
         self,
-        float32_addresses: set[int] | None = None,
+        dual_register_addresses: set[int] | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)  # type: ignore[arg-type]
-        self._float32_addresses = float32_addresses or set()
+        self._dual_register_addresses = dual_register_addresses or set()
 
     def setValues(  # type: ignore[override]
         self,
@@ -67,8 +67,8 @@ class FC06ProtectedDeviceContext(ModbusDeviceContext):
         address: int,
         values: list[int] | list[bool],
     ) -> None | ExcCodes:
-        """Reject FC06 on float32 register pairs."""
-        if func_code == 6 and address in self._float32_addresses:
+        """Reject FC06 on dual-register (float32/uint32) pairs."""
+        if func_code == 6 and address in self._dual_register_addresses:
             return ExcCodes.ILLEGAL_FUNCTION
         return super().setValues(func_code, address, values)
 
@@ -138,7 +138,7 @@ def _make_server(
         hr_values[2] = lo
         hr_block = ModbusSequentialDataBlock(0, hr_values)
         device = RegisterLimitDeviceContext(
-            float32_addresses=FLOAT32_ADDRESSES,
+            dual_register_addresses=FLOAT32_ADDRESSES,
             hr=hr_block,
         )
         context = ModbusServerContext(devices=device, single=True)

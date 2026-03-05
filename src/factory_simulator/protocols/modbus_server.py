@@ -337,7 +337,7 @@ class FactoryDeviceContext(ModbusDeviceContext):
 
     def __init__(
         self,
-        float32_addresses: set[int] | None = None,
+        dual_register_addresses: set[int] | None = None,
         exception_injector: ModbusExceptionInjector | None = None,
         transition_active_fn: Callable[[], bool] | None = None,
         unit_id: int = 1,
@@ -346,7 +346,7 @@ class FactoryDeviceContext(ModbusDeviceContext):
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)  # type: ignore[arg-type]
-        self._float32_addresses = float32_addresses or set()
+        self._dual_register_addresses = dual_register_addresses or set()
         self._exception_injector = exception_injector
         self._transition_active_fn = transition_active_fn
         self._unit_id = unit_id
@@ -361,8 +361,8 @@ class FactoryDeviceContext(ModbusDeviceContext):
         address: int,
         values: list[int] | list[bool],
     ) -> None | ExcCodes:
-        """Reject FC06 on float32 register pairs."""
-        if func_code == 6 and address in self._float32_addresses:
+        """Reject FC06 on dual-register (float32/uint32) pairs."""
+        if func_code == 6 and address in self._dual_register_addresses:
             return ExcCodes.ILLEGAL_FUNCTION
         return super().setValues(func_code, address, values)
 
@@ -451,7 +451,7 @@ class RegisterMap:
     ir_entries: list[InputRegisterEntry] = field(default_factory=list)
     coil_defs: list[CoilDefinition] = field(default_factory=list)
     di_defs: list[DiscreteInputDefinition] = field(default_factory=list)
-    float32_hr_addresses: set[int] = field(default_factory=set)
+    dual_register_hr_addresses: set[int] = field(default_factory=set)
     secondary_slaves: list[SecondarySlaveRegisterMap] = field(default_factory=list)
 
 
@@ -505,8 +505,8 @@ def build_register_map(
                 # Track float32 and uint32 addresses for FC06 rejection
                 # (both span two registers; FC06 must not write to either word)
                 if data_type in ("float32", "uint32"):
-                    rmap.float32_hr_addresses.add(sig_cfg.modbus_hr[0])
-                    rmap.float32_hr_addresses.add(sig_cfg.modbus_hr[0] + 1)
+                    rmap.dual_register_hr_addresses.add(sig_cfg.modbus_hr[0])
+                    rmap.dual_register_hr_addresses.add(sig_cfg.modbus_hr[0] + 1)
 
             # Input registers — skip signals that belong *exclusively* to a
             # secondary slave (modbus_slave_id set, but no modbus_slave_ir
@@ -796,7 +796,7 @@ class ModbusServer:
 
         # Custom device context with FC06 rejection, register limit, and injection
         self._device_context = FactoryDeviceContext(
-            float32_addresses=self._rmap.float32_hr_addresses,
+            dual_register_addresses=self._rmap.dual_register_hr_addresses,
             exception_injector=self._exception_injector,
             transition_active_fn=self._is_transition_active,
             unit_id=self._modbus_cfg.unit_id,
@@ -825,7 +825,7 @@ class ModbusServer:
             _stub_co = ModbusSequentialDataBlock(0, [False] * 8)  # type: ignore[no-untyped-call]
             _stub_di = ModbusSequentialDataBlock(0, [False] * 8)  # type: ignore[no-untyped-call]
             self._secondary_contexts[slave_map.slave_id] = FactoryDeviceContext(
-                float32_addresses=set(),
+                dual_register_addresses=set(),
                 hr=_stub_hr,
                 ir=ir_block,
                 co=_stub_co,

@@ -90,7 +90,7 @@
             "description": "float32_hr_addresses also contains uint32 addresses. Rename to dual_register_hr_addresses across RegisterMap, all .add() calls, and parameter pass-through. Search entire codebase for old name.",
             "review_ref": "G-Proto8 (review-protocol-fidelity.md #8), CQ-G9",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "7.10",

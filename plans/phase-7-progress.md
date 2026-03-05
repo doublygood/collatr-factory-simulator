@@ -11,7 +11,7 @@
 - [x] 7.6: Elevate OPC-UA Error Log Levels (G-Arch23)
 - [x] 7.7: Return Defensive Copy from store.get_all() (G-Arch24)
 - [x] 7.8: Add I/O Error Handling in Ground Truth _write_line (G-Arch26)
-- [ ] 7.9: Rename float32_hr_addresses to dual_register_hr_addresses (G-Proto8)
+- [x] 7.9: Rename float32_hr_addresses to dual_register_hr_addresses (G-Proto8)
 - [ ] 7.10: Derive Modbus Update Interval from Config (G-Proto10)
 - [ ] 7.11: Improve _compute_block_size Documentation (G-Proto13)
 - [ ] 7.12: Explicit line_id + ShiftChange HH:MM Validator (G-Proto14 + G-Arch-ShiftChange)
@@ -53,6 +53,10 @@ Changed `store.get_all()` to return `types.MappingProxyType` wrapping the intern
 ## Task 7.8 Notes
 
 Wrapped the body of `_write_line` in `ground_truth.py` with `try/except OSError`. On I/O failure (disk full, permission error, etc.), the logger logs a warning ("Ground truth write failed — disabling logger") and sets `self._fh = None`, which causes all subsequent `_write_line` calls to return early via the existing `if self._fh is None: return` guard. This degrades gracefully — the simulation continues running but stops writing ground truth events. Added `test_write_line_io_error_disables_logger` which mocks `_fh.write` to raise `OSError`, verifies the warning is logged, confirms `_fh` is set to `None`, and verifies subsequent calls are no-ops. 3172 tests pass, ruff + mypy clean.
+
+## Task 7.9 Notes
+
+Renamed `float32_hr_addresses` to `dual_register_hr_addresses` in `RegisterMap` dataclass and all `.add()` calls in `build_register_map()`. Renamed `float32_addresses` parameter/attribute in `FactoryDeviceContext` to `dual_register_addresses` — this is the constructor param, internal `_dual_register_addresses` attr, and all pass-through sites (main context at line 799, secondary contexts at line 828). Updated `setValues` docstring to "Reject FC06 on dual-register (float32/uint32) pairs." Updated all test references in `test_modbus.py` (field access, param name, test name/docstring), `test_modbus_exceptions.py` (param name, comment), and `tests/spikes/test_spike_modbus.py` (standalone copy of the class). The set correctly tracks both words of float32 AND uint32 register pairs — the old name was misleading since it only mentioned float32. 3172 tests pass, ruff + mypy clean.
 
 ## Notes
 

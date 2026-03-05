@@ -198,13 +198,13 @@ class TestBuildRegisterMap:
         rmap = build_register_map(config)
         assert len(rmap.di_defs) == 3
 
-    def test_float32_addresses_tracked(self) -> None:
-        """Float32 HR addresses should be tracked for FC06 rejection."""
+    def test_dual_register_addresses_tracked(self) -> None:
+        """Dual-register (float32/uint32) HR addresses should be tracked for FC06 rejection."""
         config = load_config(_CONFIG_PATH, apply_env=False)
         rmap = build_register_map(config)
         # press.line_speed is float32 at HR 100-101
-        assert 100 in rmap.float32_hr_addresses
-        assert 101 in rmap.float32_hr_addresses
+        assert 100 in rmap.dual_register_hr_addresses
+        assert 101 in rmap.dual_register_hr_addresses
 
     def test_writable_setpoints(self) -> None:
         """Dryer setpoint registers should be marked writable."""
@@ -582,7 +582,7 @@ class TestFactoryDeviceContext:
         float32_addrs = {100, 101, 102, 103}
 
         return FactoryDeviceContext(
-            float32_addresses=float32_addrs,
+            dual_register_addresses=float32_addrs,
             hr=hr_block,
             ir=ir_block,
         )
