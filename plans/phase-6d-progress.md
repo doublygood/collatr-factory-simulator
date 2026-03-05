@@ -10,7 +10,7 @@
 - [x] 6d.5: Narrow Exception Suppression During Shutdown (Y27)
 - [x] 6d.6: Dead Config Cleanup — sparkplug_b, retain (Y22+Y23)
 - [x] 6d.7: Generator Tests: Coder (Y19)
-- [ ] 6d.8: Generator Tests: Energy (Y19)
+- [x] 6d.8: Generator Tests: Energy (Y19)
 - [ ] 6d.9: Generator Tests: Laminator (Y19)
 - [ ] 6d.10: Generator Tests: Slitter (Y19)
 - [ ] 6d.11: Generator Tests: Vibration (Y19)
@@ -135,3 +135,17 @@ Created `tests/unit/test_generators/test_coder.py` with 20 tests covering the Co
 Key design note: pump speed uses CorrelatedFollowerModel (base=100 + gain*parent), so when Off it stays near base, not 0. Supply voltage raw=0 when Off is clamped to min_clamp=22.
 
 Full suite: 3090 passed.
+
+## Task 6d.8 — Generator Tests: Energy
+
+Created `tests/unit/test_generators/test_energy.py` with 14 tests covering the EnergyGenerator's 2 signals (line_power, cumulative_kwh):
+
+- **TestSignalIds**: signal count (2) and signal names
+- **TestPowerCorrelation**: higher press speed → higher power, positive power at zero speed (base load), power near base at idle
+- **TestCumulativeKwh**: kWh increases with speed, monotonically non-decreasing, more accumulation at higher power
+- **TestIdleBehaviour**: base load power at idle, kWh still accumulates at idle
+- **TestAllSignals**: 2 signals per tick, all quality "good"
+- **TestCustomSpeedSignal**: coupling_speed_signal config extra routes to different speed signal (e.g. filler.line_speed)
+- **TestDeterminism**: same seed → identical output
+
+Full suite: 3104 passed.

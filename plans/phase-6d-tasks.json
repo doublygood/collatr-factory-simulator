@@ -80,7 +80,7 @@
             "description": "Create dedicated test file for EnergyGenerator (2 signals: line_power, cumulative_kwh). Tests: power correlates with press speed, cumulative increases during Running, low power when Idle, determinism, signal count (2).",
             "review_ref": "Y19 (review-architecture.md §5.1)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6d.9",
