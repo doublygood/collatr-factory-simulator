@@ -62,15 +62,29 @@ Initial full-suite run showed 1 failure at 99%, likely timing-sensitive. On clea
 
 ---
 
-## 5. Summary Scorecard
+## 5. Batch Simulation Verification
 
-| Area | Rating |
-|------|--------|
-| Static analysis (ruff + mypy strict) | 🟢 **GREEN** |
-| Unit tests (3,104 pass) | 🟢 **GREEN** |
-| Integration tests (150 pass, 49 skip) | 🟢 **GREEN** |
-| New Phase 7 tests (13 tests) | 🟢 **GREEN** |
-| CI configuration | 🟢 **GREEN** |
-| Test count matches target (3,179) | 🟢 **GREEN** |
+| Profile | Duration | Exit | Signals CSV | Ground Truth | Generators |
+|---------|----------|------|-------------|--------------|------------|
+| packaging (default) | 10s | ✅ Clean | 4,849 rows | 3 entries | 7 (press, laminator, slitter, coder, environment, energy, vibration) |
+| foodbev | 10s | ✅ Clean | 6,869 rows | 4 entries | 10 (mixer, oven, filler, sealer, qc, chiller, cip, coder, environment, energy) |
 
-**Note:** Batch simulation was not verified in this review — the reviewer used an incorrect CLI command (`factory-simulator batch` instead of `factory-simulator run`). Both profiles were verified in the Phase 6 review and the local agent's Phase 7 validation (task 7.13).
+Both profiles: proper CSV headers, ground truth JSONL generated, deterministic seed (42), clean shutdown.
+
+**Note:** CLI command is `run --batch-output DIR --batch-duration N` (not `batch` subcommand).
+
+---
+
+## 6. Summary Scorecard
+
+| Category | Score | Notes |
+|----------|-------|-------|
+| Static Analysis | 10/10 | Zero ruff + zero mypy issues, strict mode |
+| Test Count | 10/10 | 3,179 exactly as claimed |
+| Test Pass Rate | 9.5/10 | 3,104/3,104 on clean run; 1 non-reproducible flake in first run |
+| New Tests Quality | 10/10 | All 13 tests present, well-structured, cover error paths |
+| CI Configuration | 10/10 | fail-fast: false, proper matrix, sensible timeouts |
+| Batch Simulation | 10/10 | Both profiles run cleanly, proper output |
+| **Overall** | **🟢 9.8/10** | Production-ready. Single flake not blocking. |
+
+**Recommendation:** PASS. Consider adding retry/tolerance to whichever acceptance test involves signal handling in subprocess (the non-reproducible flake).
