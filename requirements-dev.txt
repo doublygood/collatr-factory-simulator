@@ -1,5 +1,6 @@
 -r requirements.txt
 pytest>=8.0
+scipy>=1.11
 pytest-asyncio>=0.23
 pytest-xdist>=3.5
 hypothesis>=6.0

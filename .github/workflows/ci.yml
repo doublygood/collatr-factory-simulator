@@ -18,7 +18,7 @@ jobs:
           python-version: "3.12"
           cache: "pip"
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt && pip install .
+        run: pip install -r requirements-dev.txt && pip install -e .
       - name: Run ruff
         run: ruff check src tests
 
@@ -33,7 +33,7 @@ jobs:
           python-version: "3.12"
           cache: "pip"
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt && pip install .
+        run: pip install -r requirements-dev.txt && pip install -e .
       - name: Run mypy
         run: mypy src
 
@@ -51,7 +51,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt && pip install .
+        run: pip install -r requirements-dev.txt && pip install -e .
       - name: Run unit tests
         run: pytest tests/unit --tb=short -q
         timeout-minutes: 5
@@ -67,7 +67,7 @@ jobs:
           python-version: "3.12"
           cache: "pip"
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt && pip install .
+        run: pip install -r requirements-dev.txt && pip install -e .
       - name: Run acceptance tests (non-slow)
         # Runs acceptance tests that do not require external services and are fast.
         # Slow 24-hour tests are excluded here; they are covered by the performance
