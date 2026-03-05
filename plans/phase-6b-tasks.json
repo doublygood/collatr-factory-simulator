@@ -60,7 +60,7 @@
             "description": "Run ruff + mypy + pytest full suite. Verify no regressions from 6a. Verify both profiles load with evaluation config. Fix any failures.",
             "review_ref": "All",
             "depends_on": ["6b.1", "6b.2", "6b.3", "6b.4", "6b.5"],
-            "passes": false
+            "passes": true
         }
     ]
 }

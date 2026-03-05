@@ -1,6 +1,6 @@
 # Phase 6b: Robustness — Progress
 
-## Status: IN PROGRESS
+## Status: COMPLETE
 
 ## Tasks
 - [x] 6b.1: MQTT Publisher Startup Retry and Disconnect Monitoring (Y4)
@@ -8,7 +8,7 @@
 - [x] 6b.3: SIGTERM Handler for Graceful Docker Shutdown (Y6)
 - [x] 6b.4: Profile-Aware 0x06 Device Busy Exception (Y7)
 - [x] 6b.5: Wire EvaluationConfig into FactoryConfig (Y8)
-- [ ] 6b.6: Validate All Fixes — Full Suite
+- [x] 6b.6: Validate All Fixes — Full Suite
 
 ## Notes
 
@@ -134,3 +134,15 @@ Tasks 6b.1-6b.5 are all independent (no dependencies between them). Task 6b.6 de
 - Backward compat: existing tests that use `SimpleNamespace(pre_margin=30.0, ...)` still work — `args.pre_margin is not None` → uses 30.0.
 - `DEFAULT_LATENCY_TARGETS` left in `metrics.py` for any code that still needs it directly; just removed the unused import from `evaluation/cli.py`.
 - RampModel epsilon `1e-9` (1 nanosecond) is well below any realistic tick size but large enough to absorb IEEE 754 accumulation errors over 100+ ticks.
+
+---
+
+## Task 6b.6: Validate All Fixes — Full Suite (DONE)
+
+**Result:** 3024 passed, 10 warnings in 236.81s (0:03:56)
+
+- ruff: clean (79 source files)
+- mypy: clean (79 source files)
+- pytest: 3024 tests passed — no regressions from 6a; all 6b fixes validated
+
+**10 warnings** are from an unrelated `superclaude` pytest plugin marking unknown `pytest.mark.unit` marks — not from this codebase.
