@@ -375,6 +375,58 @@ class TestModbusServerExceptionInjector:
         assert isinstance(result, list)
         assert 1 <= len(result) < 10
 
+    def test_fnb_state_signal_fires_0x06(self) -> None:
+        """F&B server with filler.state fires 0x06 on state transition."""
+        _fnb_path = Path(__file__).resolve().parents[3] / "config" / "factory-foodbev.yaml"
+        config = load_config(_fnb_path)
+        store = SignalStore()
+        server = ModbusServer(config, store, state_signal_id="filler.state")
+
+        # Initialise state
+        store.set("filler.state", 0.0, 0.0, "good")  # off
+        server.sync_registers()
+
+        # Trigger state transition: off → running
+        store.set("filler.state", 2.0, 1.0, "good")
+        server.sync_registers()
+
+        assert server._is_transition_active()
+
+    def test_state_signal_none_disables_0x06(self) -> None:
+        """state_signal_id=None means 0x06 is never triggered."""
+        config = load_config(_CONFIG_PATH)
+        store = SignalStore()
+        server = ModbusServer(config, store, state_signal_id=None)
+
+        # Even with press.machine_state changing, transition should not fire
+        store.set("press.machine_state", 2.0, 0.0, "good")
+        server.sync_registers()
+        store.set("press.machine_state", 3.0, 1.0, "good")
+        server.sync_registers()
+
+        # Transition window should NOT be active when state_signal_id is None
+        assert not server._is_transition_active()
+
+    def test_configurable_state_signal_id(self) -> None:
+        """state_signal_id parameter controls which signal is monitored."""
+        config = load_config(_CONFIG_PATH)
+        store = SignalStore()
+        # Use coder.state as the state signal instead of press.machine_state
+        server = ModbusServer(config, store, state_signal_id="coder.state")
+
+        store.set("coder.state", 0.0, 0.0, "good")
+        server.sync_registers()
+        store.set("coder.state", 1.0, 1.0, "good")
+        server.sync_registers()
+
+        assert server._is_transition_active()
+        # And press.machine_state changes should have no effect
+        server._last_machine_state = -1
+        server._transition_ts = -float("inf")
+        store.set("press.machine_state", 2.0, 2.0, "good")
+        server.sync_registers()
+        assert not server._is_transition_active()
+
 
 # ---------------------------------------------------------------------------
 # GroundTruthLogger — log_partial_modbus_response

@@ -40,7 +40,7 @@
             "description": "Make state signal configurable per ModbusServer instance (state_signal_id parameter). Packaging uses press.machine_state, F&B uses per-equipment state signals. Update _check_machine_state_transition() to use configured signal. Wire through topology manager for realistic mode. Test: F&B Modbus server fires 0x06 on state transition.",
             "review_ref": "Y7 (review-protocol-fidelity.md §6.4)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6b.5",

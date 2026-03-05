@@ -672,6 +672,12 @@ class ModbusServer:
         Bind address override (for testing).  Defaults to config value.
     port:
         Port override (for testing).  Defaults to config value.
+    state_signal_id:
+        Signal ID to monitor for state transitions that trigger 0x06 (Device
+        Busy) exceptions.  Defaults to ``"press.machine_state"`` for the
+        packaging profile.  Pass the appropriate signal for the F&B profile
+        (e.g. ``"filler.state"``, ``"mixer.state"``).  Pass ``None`` to
+        disable 0x06 injection entirely for this server instance.
     """
 
     def __init__(
@@ -686,6 +692,7 @@ class ModbusServer:
         duplicate_rng: np.random.Generator | None = None,
         endpoint: ModbusEndpointSpec | None = None,
         scan_cycle_model: ScanCycleModel | None = None,
+        state_signal_id: str | None = "press.machine_state",
     ) -> None:
         self._config = config
         self._store = store
@@ -730,6 +737,7 @@ class ModbusServer:
         self._dup_prob: float = config.data_quality.duplicate_probability
 
         # Machine state transition tracking for 0x06 injection
+        self._state_signal_id: str | None = state_signal_id
         self._last_machine_state: int = -1
         self._transition_ts: float = -float("inf")
         _TRANSITION_WINDOW_S: float = 0.5  # seconds window after transition
@@ -887,19 +895,24 @@ class ModbusServer:
     def _check_machine_state_transition(self) -> None:
         """Update transition tracking based on the current machine state.
 
-        Reads ``press.machine_state`` from the store.  If the state has
-        changed since the last call, records the transition timestamp so that
-        :meth:`_is_transition_active` returns True for the next window.
+        Reads the configured ``state_signal_id`` from the store.  If the state
+        has changed since the last call, records the transition timestamp so
+        that :meth:`_is_transition_active` returns True for the next window.
+
+        If ``state_signal_id`` is ``None``, transition tracking is disabled and
+        0x06 (Device Busy) exceptions will not fire for this server instance.
         """
-        sv = self._store.get("press.machine_state")
+        if self._state_signal_id is None:
+            return
+        sv = self._store.get(self._state_signal_id)
         if sv is None:
             return
         state = int(sv.value) if isinstance(sv.value, int | float) else -1
         if self._last_machine_state >= 0 and state != self._last_machine_state:
             self._transition_ts = time.monotonic()
             logger.debug(
-                "modbus: machine state transition %d → %d",
-                self._last_machine_state, state,
+                "modbus: machine state transition %d → %d (signal=%s)",
+                self._last_machine_state, state, self._state_signal_id,
             )
         self._last_machine_state = state
 

@@ -52,6 +52,9 @@ class ModbusEndpointSpec:
     # Example: {11: 1, 12: 2, 13: 3} maps Eurotherm zone controllers
     # (slave_ids 11-13) to UIDs 1-3 per PRD 03a oven gateway topology.
     secondary_uid_remap: dict[int, int] = field(default_factory=dict)
+    # Signal ID to monitor for state transitions that trigger 0x06 exceptions.
+    # None disables 0x06 injection for endpoints without a suitable state signal.
+    state_signal_id: str | None = None
     clock_drift: ClockDriftConfig = field(default_factory=ClockDriftConfig)
     scan_cycle: ScanCycleConfig = field(default_factory=ScanCycleConfig)
     connection_limit: ConnectionLimitConfig = field(
@@ -501,12 +504,13 @@ class NetworkTopologyManager:
                 controller_name="press_plc",
                 equipment_ids=["press", "energy"],
                 uid_equipment_map={1: ["press"], 5: ["energy"]},
+                state_signal_id="press.machine_state",
                 clock_drift=self._get_clock_drift("press_plc", "S7-1500"),
                 scan_cycle=self._get_scan_cycle("press_plc", "S7-1500"),
                 connection_limit=self._get_connection_limit("press_plc", "S7-1500"),
                 connection_drop=self._get_connection_drop("press_plc", "S7-1500"),
             ),
-            # Laminator PLC
+            # Laminator PLC — no state signal, 0x06 disabled for this endpoint
             ModbusEndpointSpec(
                 port=5021,
                 unit_ids=[1],
@@ -516,12 +520,13 @@ class NetworkTopologyManager:
                 controller_name="laminator_plc",
                 equipment_ids=["laminator"],
                 uid_equipment_map={1: ["laminator"]},
+                state_signal_id=None,
                 clock_drift=self._get_clock_drift("laminator_plc", "S7-1200"),
                 scan_cycle=self._get_scan_cycle("laminator_plc", "S7-1200"),
                 connection_limit=self._get_connection_limit("laminator_plc", "S7-1200"),
                 connection_drop=self._get_connection_drop("laminator_plc", "S7-1200"),
             ),
-            # Slitter PLC
+            # Slitter PLC — no state signal, 0x06 disabled for this endpoint
             ModbusEndpointSpec(
                 port=5022,
                 unit_ids=[1],
@@ -531,6 +536,7 @@ class NetworkTopologyManager:
                 controller_name="slitter_plc",
                 equipment_ids=["slitter"],
                 uid_equipment_map={1: ["slitter"]},
+                state_signal_id=None,
                 clock_drift=self._get_clock_drift("slitter_plc", "S7-1200"),
                 scan_cycle=self._get_scan_cycle("slitter_plc", "S7-1200"),
                 connection_limit=self._get_connection_limit("slitter_plc", "S7-1200"),
@@ -571,6 +577,7 @@ class NetworkTopologyManager:
                 controller_name="mixer_plc",
                 equipment_ids=["mixer"],
                 uid_equipment_map={1: ["mixer"]},
+                state_signal_id="mixer.state",
                 clock_drift=self._get_clock_drift("mixer_plc", "CompactLogix"),
                 scan_cycle=self._get_scan_cycle("mixer_plc", "CompactLogix"),
                 connection_limit=self._get_connection_limit(
@@ -598,6 +605,7 @@ class NetworkTopologyManager:
                     10: ["energy"],
                 },
                 secondary_uid_remap={11: 1, 12: 2, 13: 3},
+                state_signal_id="oven.state",
                 clock_drift=self._get_clock_drift("oven_gateway", "Eurotherm"),
                 scan_cycle=self._get_scan_cycle("oven_gateway", "Eurotherm"),
                 connection_limit=self._get_connection_limit(
@@ -617,12 +625,13 @@ class NetworkTopologyManager:
                 controller_name="filler_plc",
                 equipment_ids=["filler"],
                 uid_equipment_map={1: ["filler"]},
+                state_signal_id="filler.state",
                 clock_drift=self._get_clock_drift("filler_plc", "S7-1200"),
                 scan_cycle=self._get_scan_cycle("filler_plc", "S7-1200"),
                 connection_limit=self._get_connection_limit("filler_plc", "S7-1200"),
                 connection_drop=self._get_connection_drop("filler_plc", "S7-1200"),
             ),
-            # Sealer PLC
+            # Sealer PLC — no state signal (sealer has no machine state enum)
             ModbusEndpointSpec(
                 port=5033,
                 unit_ids=[1],
@@ -632,6 +641,7 @@ class NetworkTopologyManager:
                 controller_name="sealer_plc",
                 equipment_ids=["sealer"],
                 uid_equipment_map={1: ["sealer"]},
+                state_signal_id=None,
                 clock_drift=self._get_clock_drift("sealer_plc", "S7-1200"),
                 scan_cycle=self._get_scan_cycle("sealer_plc", "S7-1200"),
                 connection_limit=self._get_connection_limit("sealer_plc", "S7-1200"),
@@ -647,6 +657,7 @@ class NetworkTopologyManager:
                 controller_name="chiller",
                 equipment_ids=["chiller"],
                 uid_equipment_map={1: ["chiller"]},
+                state_signal_id="chiller.compressor_state",
                 clock_drift=self._get_clock_drift("chiller", "Danfoss"),
                 scan_cycle=self._get_scan_cycle("chiller", "Danfoss"),
                 connection_limit=self._get_connection_limit("chiller", "Danfoss"),
@@ -662,6 +673,7 @@ class NetworkTopologyManager:
                 controller_name="cip_controller",
                 equipment_ids=["cip"],
                 uid_equipment_map={1: ["cip"]},
+                state_signal_id="cip.state",
                 clock_drift=self._get_clock_drift("cip_controller", "S7-1200"),
                 scan_cycle=self._get_scan_cycle("cip_controller", "S7-1200"),
                 connection_limit=self._get_connection_limit(

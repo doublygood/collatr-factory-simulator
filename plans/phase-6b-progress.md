@@ -6,7 +6,7 @@
 - [x] 6b.1: MQTT Publisher Startup Retry and Disconnect Monitoring (Y4)
 - [x] 6b.2: CsvWriter Idempotent Close (Y5)
 - [x] 6b.3: SIGTERM Handler for Graceful Docker Shutdown (Y6)
-- [ ] 6b.4: Profile-Aware 0x06 Device Busy Exception (Y7)
+- [x] 6b.4: Profile-Aware 0x06 Device Busy Exception (Y7)
 - [ ] 6b.5: Wire EvaluationConfig into FactoryConfig (Y8)
 - [ ] 6b.6: Validate All Fixes — Full Suite
 
@@ -73,3 +73,29 @@ Tasks 6b.1-6b.5 are all independent (no dependencies between them). Task 6b.6 de
 - Task captured at registration time (closure over `_this_task`) rather than using `asyncio.current_task()` inside the handler itself — handlers run as event-loop callbacks where `current_task()` returns `None`.
 - Added `except asyncio.CancelledError` in `run_command()` because when `task.cancel()` is called and the coroutine suppresses `CancelledError` internally (returning normally), Python 3.12's Task marks itself as cancelled on StopIteration (since `_must_cancel` stays True). `asyncio.run()` then raises `CancelledError`. This is different from the SIGINT path where `asyncio.run()` converts it to `KeyboardInterrupt`.
 - The existing `finally` block cleanup in `_run_realtime` may be partially interrupted at `await srv.stop()` (a CancelledError is re-thrown there by the task machinery) — this is a pre-existing limitation with the same behaviour as SIGINT. The important thing is that `engine.stop()` and `health.update(status="stopping")` still run before the interrupt.
+
+---
+
+## Task 6b.4: Profile-Aware 0x06 Device Busy Exception (DONE)
+
+**Files changed:**
+- `src/factory_simulator/protocols/modbus_server.py`
+- `src/factory_simulator/topology.py`
+- `src/factory_simulator/engine/data_engine.py`
+- `tests/unit/test_protocols/test_modbus_exceptions.py`
+
+**What was done:**
+1. Added `state_signal_id: str | None = "press.machine_state"` to `ModbusServer.__init__()`. Default preserves backward compat for packaging tests.
+2. Stored as `self._state_signal_id`. Updated `_check_machine_state_transition()` to use it instead of hardcoded `"press.machine_state"`. If `None`, returns early — 0x06 disabled.
+3. Added `state_signal_id: str | None = None` to `ModbusEndpointSpec` dataclass in `topology.py`.
+4. Wired `state_signal_id` per endpoint in `_packaging_modbus()` and `_foodbev_modbus()`:
+   - press_plc → `"press.machine_state"`; laminator/slitter → `None`
+   - mixer_plc → `"mixer.state"`, oven_gateway → `"oven.state"`, filler_plc → `"filler.state"`, chiller → `"chiller.compressor_state"`, cip_controller → `"cip.state"`, sealer_plc → `None`
+5. Updated `data_engine.py` collapsed mode to detect profile from `config.equipment`: F&B (has `"filler"`) → `"filler.state"`, packaging → `"press.machine_state"`.
+6. Updated `data_engine.py` realistic mode to pass `endpoint.state_signal_id` to `ModbusServer`.
+7. Added 3 new tests: F&B server fires 0x06, `state_signal_id=None` disables it, configurable signal ID works.
+
+**Decisions:**
+- Default `state_signal_id = "press.machine_state"` keeps all existing packaging tests passing without modification.
+- Sealer has no state signal in the F&B config; its endpoint gets `None` so 0x06 is disabled there.
+- Collapsed F&B detection uses `"filler" in config.equipment` — filler is always present in the F&B profile and not in packaging.

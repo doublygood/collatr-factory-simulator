@@ -254,8 +254,16 @@ class DataEngine:
         from factory_simulator.protocols.modbus_server import ModbusServer
 
         if self._topology is None or self._topology.mode == "collapsed":
-            # Collapsed mode: single server, all registers, no scan quantisation
-            return [ModbusServer(self._config, self._store)]
+            # Collapsed mode: single server, all registers, no scan quantisation.
+            # Detect profile from equipment keys: packaging has "press",
+            # F&B has "filler".  Fall back to press.machine_state for unknown.
+            if "filler" in self._config.equipment:
+                _state_sig: str | None = "filler.state"
+            else:
+                _state_sig = "press.machine_state"
+            return [ModbusServer(
+                self._config, self._store, state_signal_id=_state_sig,
+            )]
 
         # Realistic mode: one server per endpoint, each with its own
         # ScanCycleModel and isolated RNG (PRD 3a.8, Rule 13).
@@ -275,6 +283,7 @@ class DataEngine:
                 endpoint=ep,
                 scan_cycle_model=scan_model,
                 comm_drop_rng=drop_rng,
+                state_signal_id=ep.state_signal_id,
             )
             servers.append(server)
         return servers
