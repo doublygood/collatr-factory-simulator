@@ -60,7 +60,7 @@
             "description": "OPC-UA sync errors (freeze failed, write failed) logged at DEBUG. Elevate to logger.warning for operational visibility. Keep DEBUG for routine messages only.",
             "review_ref": "G-Arch23 (review-architecture.md #23)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "7.7",

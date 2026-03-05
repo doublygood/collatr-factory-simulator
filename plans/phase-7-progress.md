@@ -8,7 +8,7 @@
 - [x] 7.3: Extract OPC-UA Node Creation Helper (CQ-Y3)
 - [x] 7.4: Guard Overlapping OPC-UA Node Paths + Test (CQ-Y4) — depends on 7.3
 - [x] 7.5: Remove Dead FactoryInfo.timezone Field (G-Arch21)
-- [ ] 7.6: Elevate OPC-UA Error Log Levels (G-Arch23)
+- [x] 7.6: Elevate OPC-UA Error Log Levels (G-Arch23)
 - [ ] 7.7: Return Defensive Copy from store.get_all() (G-Arch24)
 - [ ] 7.8: Add I/O Error Handling in Ground Truth _write_line (G-Arch26)
 - [ ] 7.9: Rename float32_hr_addresses to dual_register_hr_addresses (G-Proto8)
@@ -36,6 +36,15 @@ Added overlap guard in `_build_inactive_nodes` (`opcua_server.py`): before creat
 ## Task 7.5 Notes
 
 Removed dead `FactoryInfo.timezone` field from `config.py`. The field was defined with default `"Europe/London"` but never read by any code — all timestamps use UTC via `time_utils`. Removed the `timezone` key from both `config/factory.yaml` and `config/factory-foodbev.yaml`. Updated `test_config.py` to remove the timezone assertion from `test_defaults` and the timezone parameter from `test_custom_values`. 3170 tests pass, ruff + mypy clean.
+
+## Task 7.6 Notes
+
+Elevated three OPC-UA error log levels from `logger.debug` to `logger.warning` for operational visibility:
+1. `_sync_values` freeze failed (line 554): `logger.debug` → `logger.warning`
+2. `_sync_values` setpoint read failed (line 622): bare `except Exception: continue` → `except Exception as exc:` with `logger.warning` before `continue`
+3. `_sync_values` write failed (line 695): `logger.debug` → `logger.warning`
+
+These are genuine error conditions (OPC-UA node operations failing) that should be visible in production logs, not hidden at DEBUG level. 3170 tests pass, ruff + mypy clean.
 
 ## Notes
 

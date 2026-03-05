@@ -551,7 +551,7 @@ class OpcuaServer:
                 )
                 await var_node.write_value(dv)
             except Exception as exc:
-                logger.debug("OPC-UA freeze failed for %s: %s", node_path, exc)
+                logger.warning("OPC-UA freeze failed for %s: %s", node_path, exc)
 
     async def _update_loop(self) -> None:
         """Periodically sync signal values from SignalStore to OPC-UA nodes.
@@ -619,7 +619,10 @@ class OpcuaServer:
             try:
                 dv = await var_node.read_data_value(raise_on_bad_status=False)
                 raw = dv.Value.Value if dv.Value is not None else None
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "OPC-UA setpoint read failed for %s: %s", node_path, exc,
+                )
                 continue
 
             if raw is None:
@@ -692,7 +695,7 @@ class OpcuaServer:
                 else:
                     await var_node.write_value(cast_val, varianttype=vtype)
             except Exception as exc:
-                logger.debug("OPC-UA write failed for %s: %s", node_path, exc)
+                logger.warning("OPC-UA write failed for %s: %s", node_path, exc)
                 continue
 
             # Update last-written tracker for setpoints so we can distinguish
