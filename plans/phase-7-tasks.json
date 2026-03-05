@@ -120,7 +120,7 @@
             "description": "Two small fixes: (1) Add explicit line_id: packaging1 to config/factory.yaml MQTT section. (2) Add field_validator on ShiftChangeConfig.times to validate HH:MM format (regex + range check). Tests: valid times accepted, invalid format rejected, invalid values rejected, packaging config has line_id.",
             "review_ref": "G-Proto14 (review-protocol-fidelity.md #14), G-Arch-ShiftChange (review-architecture.md §4.1)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "7.13",

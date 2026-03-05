@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 from pathlib import Path
 from typing import Any, Literal
 
@@ -478,6 +479,18 @@ class ShiftChangeConfig(BaseModel):
     changeover_seconds: list[int] = Field(default_factory=lambda: [300, 900])
     night_shift_speed_factor: float = 0.9
     weekend_enabled: bool = False
+
+    @field_validator("times")
+    @classmethod
+    def _valid_hhmm(cls, v: list[str]) -> list[str]:
+        pattern = re.compile(r"^\d{2}:\d{2}$")
+        for t in v:
+            if not pattern.match(t):
+                raise ValueError(f"Shift time must be HH:MM format, got: {t!r}")
+            hh, mm = int(t[:2]), int(t[3:])
+            if not (0 <= hh <= 23 and 0 <= mm <= 59):
+                raise ValueError(f"Invalid shift time: {t!r}")
+        return v
 
     @model_validator(mode="after")
     def _ranges_valid(self) -> ShiftChangeConfig:

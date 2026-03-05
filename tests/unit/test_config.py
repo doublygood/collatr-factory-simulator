@@ -41,6 +41,7 @@ from factory_simulator.config import (
     ScenariosConfig,
     SealIntegrityFailureConfig,
     SensorDisconnectConfig,
+    ShiftChangeConfig,
     ShiftsConfig,
     SignalConfig,
     SimulationConfig,
@@ -1599,3 +1600,33 @@ class TestNoiseCalibrationFoodBev:
         sig = cfg.equipment["energy"].signals["line_power"]
         assert sig.noise_sigma == pytest.approx(0.2)   # power meter resolution
         assert sig.noise_type == "gaussian"
+
+
+class TestShiftChangeConfig:
+    def test_valid_times_accepted(self) -> None:
+        cfg = ShiftChangeConfig(times=["06:00", "14:00", "22:00"])
+        assert cfg.times == ["06:00", "14:00", "22:00"]
+
+    def test_midnight_and_boundary_times_accepted(self) -> None:
+        cfg = ShiftChangeConfig(times=["00:00", "23:59"])
+        assert cfg.times == ["00:00", "23:59"]
+
+    def test_invalid_format_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="HH:MM format"):
+            ShiftChangeConfig(times=["6:00"])
+
+    def test_non_numeric_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="HH:MM format"):
+            ShiftChangeConfig(times=["abc"])
+
+    def test_invalid_hour_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="Invalid shift time"):
+            ShiftChangeConfig(times=["25:00"])
+
+    def test_invalid_minute_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="Invalid shift time"):
+            ShiftChangeConfig(times=["12:60"])
+
+    def test_packaging_config_has_line_id(self) -> None:
+        cfg = load_config("config/factory.yaml", apply_env=False)
+        assert cfg.protocols.mqtt.line_id == "packaging1"

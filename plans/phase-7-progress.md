@@ -14,7 +14,7 @@
 - [x] 7.9: Rename float32_hr_addresses to dual_register_hr_addresses (G-Proto8)
 - [x] 7.10: Derive Modbus Update Interval from Config (G-Proto10)
 - [x] 7.11: Improve _compute_block_size Documentation (G-Proto13)
-- [ ] 7.12: Explicit line_id + ShiftChange HH:MM Validator (G-Proto14 + G-Arch-ShiftChange)
+- [x] 7.12: Explicit line_id + ShiftChange HH:MM Validator (G-Proto14 + G-Arch-ShiftChange)
 - [ ] 7.13: CI fail-fast: false + Validate All Fixes
 
 ## Task 7.1 Notes
@@ -65,6 +65,16 @@ Replaced hardcoded `asyncio.sleep(0.05)` (50ms) in Modbus sync loop with `self._
 ## Task 7.11 Notes
 
 Improved `_compute_block_size` docstring and added inline comment per G-Proto13. Docstring now explains the three components clearly: pymodbus 1-based indexing (address → index = address+1), 32-bit values spanning 2 registers (indices N+1 and N+2), therefore block needs max(address)+3 entries. Added inline comment on the return line: `# +3: pymodbus 1-based indexing (+1) + 32-bit value spans 2 registers (+2)`. Documentation-only change — 3172 tests pass, ruff + mypy clean.
+
+## Task 7.12 Notes
+
+Two small fixes per G-Proto14 and G-Arch-ShiftChange:
+
+1. **Explicit `line_id` in packaging config**: Added `line_id: "packaging1"` to `config/factory.yaml` MQTT section, matching how `factory-foodbev.yaml` already specifies `line_id: "foodbev1"`. The field had a correct default in the Pydantic model, but making it explicit in the YAML eliminates ambiguity.
+
+2. **ShiftChange HH:MM validator**: Added `field_validator("times")` to `ShiftChangeConfig` that validates each time string against `^\d{2}:\d{2}$` regex format and checks `0 <= HH <= 23`, `0 <= MM <= 59`. Added `import re` to config.py. Invalid formats like `"6:00"`, `"abc"` raise "Shift time must be HH:MM format"; out-of-range values like `"25:00"`, `"12:60"` raise "Invalid shift time".
+
+Added 7 tests in `TestShiftChangeConfig`: valid times accepted, boundary times (00:00, 23:59) accepted, invalid format rejected, non-numeric rejected, invalid hour rejected, invalid minute rejected, packaging config has line_id. 3179 tests pass, ruff + mypy clean.
 
 ## Notes
 

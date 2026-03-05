@@ -42,6 +42,7 @@ protocols:
     broker_host: "mqtt-broker"
     broker_port: 1883
     topic_prefix: "collatr/factory"
+    line_id: "packaging1"
     client_id: "factory-simulator"
     username: null
     password: null
