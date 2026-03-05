@@ -1,6 +1,6 @@
 # Phase 6a: Critical Fixes — Progress
 
-## Status: IN PROGRESS
+## Status: COMPLETE
 
 ## Tasks
 - [x] 6a.1: Wire Ground Truth Logger into CLI (R1)
@@ -11,7 +11,7 @@
 - [x] 6a.6: Fix Severity Weight Key Mismatch (Y1)
 - [x] 6a.7: Fix Double-Logging of Ground Truth Events (Y2)
 - [x] 6a.8: Handle Open Scenarios in Evaluator (Y3)
-- [ ] 6a.9: Validate All Fixes — Full Suite + Integration Check
+- [x] 6a.9: Validate All Fixes — Full Suite + Integration Check
 
 ## Notes
 
@@ -120,6 +120,20 @@ Tasks 6a.1-6a.8 are all independent (no dependencies between them). Task 6a.9 de
 - "Last event timestamp" means the last record with a `sim_time` field in the file — any event type, not just scenario events. This captures the true simulation end time even if the last event is a state_change or data_quality record.
 - The `open` field is purely informational — the evaluator treats open events identically to closed ones (same matching logic, same metrics contribution). Callers can filter on `open=True` if they want to separate them.
 - 3002 tests passed after the change.
+
+## Task 6a.9 — Validate All Fixes — Full Suite + Integration Check
+
+**What was verified:**
+- `ruff check src tests && mypy src && pytest --tb=short -q` — **3002 passed, 10 warnings in 3m53s** — all green
+- End-to-end batch simulation: `python -m factory_simulator run --batch-output /tmp/test-batch-6a --batch-duration 1h --batch-format csv --seed 42`
+  - Completed in ~4s of wall time (3600s simulated)
+  - `signals.csv` produced (96 MB, all 47 signals × 36000 ticks)
+  - `ground_truth.jsonl` produced (12 lines: 1 config header + 3×scenario_start + 3×scenario_end + metadata)
+  - Header contains all 14 scenarios (including micro_stop, contextual_anomaly, intermittent_fault added in 6a.2)
+- Evaluate subcommand tested against produced JSONL with empty detections:
+  - 3 events detected, 0 TP, 0 FP, 3 FN — correct metrics, no errors
+  - Per-scenario breakdown shows CoderDepletion, MaterialSplice, UnplannedStop
+- No regressions found.
 
 ## Task 6a.6 — Fix Severity Weight Key Mismatch
 

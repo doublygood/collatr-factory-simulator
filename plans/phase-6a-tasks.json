@@ -90,7 +90,7 @@
             "description": "Run ruff + mypy + pytest full suite. Run short batch simulation end-to-end. Verify ground truth JSONL produced with events. Verify no regressions. Fix any failures.",
             "review_ref": "All",
             "depends_on": ["6a.1", "6a.2", "6a.3", "6a.4", "6a.5", "6a.6", "6a.7", "6a.8"],
-            "passes": false
+            "passes": true
         }
     ]
 }
