@@ -9,7 +9,7 @@
 - [x] 6c.4: Fix Random Walk Docstring (Y12)
 - [x] 6c.5: Dryer Zone Cholesky Correlation (Y13)
 - [x] 6c.6: Oven Zone Cholesky Correlation (Y13)
-- [ ] 6c.7: Coil 4 Derivation Fix (Y14)
+- [x] 6c.7: Coil 4 Derivation Fix (Y14)
 - [ ] 6c.8: OPC-UA MinimumSamplingInterval (Y15)
 - [ ] 6c.9: Validate All Fixes — Full Suite
 
@@ -84,3 +84,14 @@ Changes to `src/factory_simulator/generators/oven.py`:
 - `test_zone_temp_noise_not_double_applied`: verifies lag models have `_noise is None`
 
 Suite: 3038 passed, ruff + mypy clean.
+
+## Task 6c.7 — Coil 4 Derivation Fix
+
+**Completed.** Changed Coil 4 (laminator.running) derivation from `CoilDefinition(4, "press.machine_state", derive_value=2)` to `CoilDefinition(4, "laminator.web_speed", mode="gt_zero")`. This derives the laminator's running state from its own speed signal rather than the press machine state, consistent with Coil 5 (`slitter.speed`, `mode="gt_zero"`).
+
+3 new tests in `tests/unit/test_protocols/test_modbus.py::TestCoilSync`:
+- `test_laminator_running_coil_true_when_speed_positive`: Coil 4 True when `laminator.web_speed > 0`
+- `test_laminator_running_coil_false_when_speed_zero`: Coil 4 False when `laminator.web_speed == 0`
+- `test_laminator_running_independent_of_press_state`: Coil 4 False when press is running but laminator speed is 0
+
+Suite: 3041 passed, ruff + mypy clean.

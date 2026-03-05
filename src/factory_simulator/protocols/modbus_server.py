@@ -536,7 +536,7 @@ def build_register_map(
             CoilDefinition(1, "press.machine_state", derive_value=4),   # press.fault_active
             CoilDefinition(2, None),                                    # press.emergency_stop
             CoilDefinition(3, "press.web_break", mode="gt_zero"),        # press.web_break
-            CoilDefinition(4, "press.machine_state", derive_value=2),   # laminator.running
+            CoilDefinition(4, "laminator.web_speed", mode="gt_zero"),    # laminator.running
             CoilDefinition(5, "slitter.speed", mode="gt_zero"),          # slitter.running
         ]
 

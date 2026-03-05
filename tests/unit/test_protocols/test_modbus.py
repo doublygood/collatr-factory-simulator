@@ -451,6 +451,44 @@ class TestCoilSync:
         coils = server._coil_block.getValues(3, 1)  # +1 offset
         assert coils[0] is False
 
+    def test_laminator_running_coil_true_when_speed_positive(self) -> None:
+        """Coil 4 (laminator.running) is True when laminator.web_speed > 0."""
+        config = load_config(_CONFIG_PATH, apply_env=False)
+        store = SignalStore()
+        store.set("laminator.web_speed", 150.0, 0.0)
+
+        server = ModbusServer(config, store, port=15504)
+        server.sync_registers()
+
+        coils = server._coil_block.getValues(5, 1)  # +1 offset
+        assert coils[0] is True
+
+    def test_laminator_running_coil_false_when_speed_zero(self) -> None:
+        """Coil 4 (laminator.running) is False when laminator.web_speed == 0."""
+        config = load_config(_CONFIG_PATH, apply_env=False)
+        store = SignalStore()
+        store.set("laminator.web_speed", 0.0, 0.0)
+
+        server = ModbusServer(config, store, port=15504)
+        server.sync_registers()
+
+        coils = server._coil_block.getValues(5, 1)  # +1 offset
+        assert coils[0] is False
+
+    def test_laminator_running_independent_of_press_state(self) -> None:
+        """Coil 4 derives from laminator.web_speed, not press.machine_state."""
+        config = load_config(_CONFIG_PATH, apply_env=False)
+        store = SignalStore()
+        # Press is running (state 2) but laminator speed is 0
+        store.set("press.machine_state", 2.0, 0.0)
+        store.set("laminator.web_speed", 0.0, 0.0)
+
+        server = ModbusServer(config, store, port=15504)
+        server.sync_registers()
+
+        coils = server._coil_block.getValues(5, 1)  # +1 offset
+        assert coils[0] is False, "Coil 4 should be False even with press running"
+
     def test_missing_state_all_coils_false(self) -> None:
         """All coils False when machine_state not in store."""
         config = load_config(_CONFIG_PATH, apply_env=False)

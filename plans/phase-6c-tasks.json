@@ -70,7 +70,7 @@
             "description": "Change Coil 4 (laminator.running) from CoilDefinition(4, 'press.machine_state', derive_value=2) to CoilDefinition(4, 'laminator.web_speed', mode='gt_zero'). Matches Coil 5 pattern and derives from laminator's own signal. Test: coil True when laminator speed > 0, False when 0, independent of press state.",
             "review_ref": "Y14 (review-protocol-fidelity.md §2.8)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6c.8",
