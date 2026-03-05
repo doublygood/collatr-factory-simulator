@@ -611,14 +611,13 @@ class TestPublishRate:
             time.sleep(0.5)
 
             await publisher.start()
-            # Wait ~4s to collect multiple publish cycles
-            await asyncio.sleep(4.0)
+            # Wait ~5s to collect multiple publish cycles (extra second for startup jitter)
+            await asyncio.sleep(5.0)
 
             msgs = [m for m in collector.get_messages() if m["topic"] == vib_topic]
-            # 4s with 1s interval → expect 3-5 messages
-            # (first at ~0s, then 1s, 2s, 3s)
+            # 5s with 1s interval → expect ≥3 messages (tolerates ~1s of startup delay)
             assert len(msgs) >= 3, (
-                f"Expected ≥3 vibration messages in 4s (1s interval), "
+                f"Expected ≥3 vibration messages in 5s (1s interval), "
                 f"got {len(msgs)}"
             )
         finally:

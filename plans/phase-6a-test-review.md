@@ -187,3 +187,67 @@ Option C is a free 5–15% extra. Option B can be done as a CI strategy on top.
 | Hypothesis misses a real bug with 50 examples | Low | Hypothesis shrinks counterexamples; 50 examples still covers the typical failure modes |
 | MQTT spike tests conflict on broker | Low | Spike tests share a single Docker broker which handles concurrent clients fine |
 | Performance tests flakier under parallel load | Possible | Run performance tests in a separate non-parallel invocation: `pytest tests/performance -p no:xdist` |
+
+---
+
+## Implementation (completed)
+
+**Date**: 2026-03-05 | **Branch**: main
+
+### What was actually implemented (Option A + C)
+
+| File | Change |
+|------|--------|
+| `requirements-dev.txt` | Added `pytest-xdist>=3.5` |
+| `pyproject.toml` | Added `addopts = "-n auto --dist=loadfile --ignore=tests/performance"` |
+| `tests/integration/test_cross_protocol.py` | Changed `_MODBUS_PORT = 15503` → `15521` |
+| `tests/conftest.py` | Added Hypothesis CI profile (`max_examples=50`) |
+| `tests/integration/test_mqtt_integration.py` | Extended vibration publish-rate window from 4s → 5s |
+| `CLAUDE.md` | Updated timing to ~4–5 min; sub-agent timeout 1200000ms → 360000ms |
+
+### Deviation from plan
+
+`--ignore=tests/performance` added to `addopts` (not in original plan). Reason: `_update_results()` in `test_performance.py` does an unguarded read-modify-write on `performance-results.json` — a race condition under parallel workers — and wall-time assertions are meaningless under CPU contention. The performance test docstring itself says "Skip benchmarks in normal test runs". Explicit path `pytest tests/performance -p no:xdist` still works.
+
+### MQTT timing fix
+
+`test_vibration_publishes_approximately_every_1s` failed intermittently under parallel load: 4s window was tight when publisher startup took ~1s, leaving only 2 full 1s intervals. Extended to 5s; ≥3 assertion unchanged. This was a pre-existing fragility exposed by parallelism, not introduced by it.
+
+### Results
+
+| Metric | Before | After |
+|--------|--------|-------|
+| pytest runtime | ~16 min | **3:54** |
+| Tests executed | 2,998 | 2,992 (6 performance excluded from default run) |
+| Failures | 0 | 0 |
+| Workers | 1 (sequential) | auto (`-n auto`) |
+
+---
+
+## CI Coverage Gap (not yet implemented)
+
+`.github/workflows/ci.yml` runs two pytest steps:
+- `pytest tests/unit` — full unit suite ✅ (now benefits from xdist automatically via addopts)
+- `pytest tests/integration/test_acceptance.py -m "acceptance and not slow"` — acceptance only
+
+The rest of `tests/integration/` (Modbus, OPC-UA, MQTT, cross-protocol, oven UID routing, F&B protocols) is **never run in CI**. It requires a live Mosquitto broker which the workflow does not provision.
+
+To fix, add a `services:` block to the integration job in `.github/workflows/ci.yml`:
+
+```yaml
+integration-tests:
+  services:
+    mosquitto:
+      image: eclipse-mosquitto:2
+      ports:
+        - 1883:1883
+      volumes:
+        - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+  steps:
+    ...
+    - name: Run full integration suite
+      run: pytest tests/integration --tb=short -q
+      timeout-minutes: 5
+```
+
+This is a pre-existing gap — not introduced by the xdist changes — but worth closing in a future task.

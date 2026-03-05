@@ -53,7 +53,7 @@ from factory_simulator.store import SignalStore
 
 _CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "factory.yaml"
 _HOST = "127.0.0.1"
-_MODBUS_PORT = 15503  # Unique port to avoid conflict with other integration tests
+_MODBUS_PORT = 15521  # Unique port to avoid conflict with other integration tests
 _BROKER_HOST = "127.0.0.1"
 _BROKER_PORT = 1883
 _MQTT_TOPIC_PREFIX = "collatr/factory/demo/packaging1"

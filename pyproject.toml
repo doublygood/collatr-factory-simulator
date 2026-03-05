@@ -19,6 +19,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = "-n auto --dist=loadfile --ignore=tests/performance"
 markers = [
     "integration: requires external services (Docker Compose)",
     "slow: long-running tests (7-day simulation runs); skip with -m 'not slow'",

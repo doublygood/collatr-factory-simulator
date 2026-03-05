@@ -33,3 +33,6 @@ Thumbs.db
 # Docker
 mosquitto-data/
 mosquitto-log/
+
+# Benchmark output
+performance-results.json
