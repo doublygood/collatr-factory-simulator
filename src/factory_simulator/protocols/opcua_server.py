@@ -123,6 +123,12 @@ class OpcuaServer:
     port:
         Port override (for testing).  Use 0 for OS-assigned port.
         Defaults to config value.
+    inactive_config:
+        Config for the inactive profile (PRD 3.2.1).  When set and the
+        server is in collapsed mode (no ``endpoint``), nodes for the
+        inactive profile are created with ``AccessLevel=0`` and
+        ``StatusCode.BadNotReadable`` so clients can browse them but
+        cannot read live data from them.
     """
 
     def __init__(
@@ -135,12 +141,14 @@ class OpcuaServer:
         comm_drop_rng: np.random.Generator | None = None,
         endpoint: OpcuaEndpointSpec | None = None,
         clock_drift: ClockDriftModel | None = None,
+        inactive_config: FactoryConfig | None = None,
     ) -> None:
         self._config = config
         self._store = store
         self._opcua_cfg = config.protocols.opcua
         self._endpoint = endpoint
         self._clock_drift = clock_drift
+        self._inactive_config = inactive_config
 
         # Port/host resolution: endpoint overrides config, explicit args override both
         if port is not None:
@@ -392,11 +400,132 @@ class OpcuaServer:
                 self._node_types[node_path] = vtype
                 self._signal_to_node[signal_id] = node_path
 
+        # -- Inactive profile nodes (PRD 3.2.1) ----------------------------------
+        # Only in collapsed mode (node_tree_root == "") — each realistic-mode
+        # server is already scoped to its own subtree, no inactive concept.
+        if self._inactive_config is not None and not self._node_tree_root:
+            await self._build_inactive_nodes(ns, folder_cache)
+
         logger.info(
             "OPC-UA node tree built: %d variable nodes, %d folder nodes",
             len(self._nodes),
             len(folder_cache),
         )
+
+    async def _build_inactive_nodes(
+        self, ns: int, folder_cache: dict[str, Any]
+    ) -> None:
+        """Create OPC-UA nodes for the inactive profile (PRD 3.2.1).
+
+        Nodes are present in the address space so clients can browse the
+        dual-profile tree, but have:
+        - ``AccessLevel = 0`` (not readable, not writable)
+        - Initial value with ``StatusCode.BadNotReadable``
+
+        They are NOT added to ``self._nodes`` / ``self._node_to_signal``,
+        so the sync loop never updates them — they remain permanently
+        inaccessible.
+
+        Only called from ``_build_node_tree`` when ``self._inactive_config``
+        is set and the server is in collapsed mode (``_node_tree_root == ""``).
+        """
+        assert self._server is not None
+        assert self._inactive_config is not None
+
+        objects = self._server.nodes.objects
+        inactive_count = 0
+
+        for equip_cfg in self._inactive_config.equipment.values():
+            if not equip_cfg.enabled:
+                continue
+            for sig_cfg in equip_cfg.signals.values():
+                if sig_cfg.opcua_node is None:
+                    continue
+
+                node_path = sig_cfg.opcua_node
+                parts = node_path.split(".")
+
+                # Folder hierarchy — reuse active folder_cache
+                parent: Any = objects
+                accumulated_path = ""
+                for part in parts[:-1]:
+                    accumulated_path = (
+                        f"{accumulated_path}.{part}" if accumulated_path else part
+                    )
+                    if accumulated_path not in folder_cache:
+                        folder_node = await parent.add_folder(
+                            ua.NodeId(accumulated_path, ns),
+                            part,
+                        )
+                        folder_cache[accumulated_path] = folder_node
+                    parent = folder_cache[accumulated_path]
+
+                var_name = parts[-1]
+                type_str = sig_cfg.opcua_type or "Double"
+                vtype = _VARIANT_TYPE_MAP.get(type_str, ua.VariantType.Double)
+                init_val = _initial_value(vtype)
+
+                var_node = await parent.add_variable(
+                    ua.NodeId(node_path, ns),
+                    var_name,
+                    init_val,
+                    varianttype=vtype,
+                )
+
+                # AccessLevel = 0: not readable, not writable (PRD 3.2.1)
+                await var_node.write_attribute(
+                    ua.AttributeIds.AccessLevel,
+                    ua.DataValue(ua.Variant(0, ua.VariantType.Byte)),
+                )
+
+                # Write initial value with BadNotReadable status
+                await var_node.write_value(
+                    ua.DataValue(
+                        ua.Variant(init_val, vtype),
+                        ua.StatusCode(ua.StatusCodes.BadNotReadable),
+                    )
+                )
+
+                # EURange property
+                eu_low = (
+                    float(sig_cfg.min_clamp) if sig_cfg.min_clamp is not None else 0.0
+                )
+                eu_high = (
+                    float(sig_cfg.max_clamp) if sig_cfg.max_clamp is not None else 0.0
+                )
+                await var_node.add_property(
+                    ua.NodeId(0, 0),
+                    "EURange",
+                    ua.Range(Low=eu_low, High=eu_high),
+                )
+
+                # EngineeringUnits property
+                eu_info = ua.EUInformation(
+                    NamespaceUri="http://www.opcfoundation.org/UA/units/un/cefact",
+                    UnitId=-1,
+                    DisplayName=ua.LocalizedText(sig_cfg.units or ""),
+                    Description=ua.LocalizedText(sig_cfg.units or ""),
+                )
+                await var_node.add_property(
+                    ua.NodeId(0, 0),
+                    "EngineeringUnits",
+                    eu_info,
+                )
+
+                # MinimumSamplingInterval attribute
+                min_sampling_ms = float(
+                    sig_cfg.sample_rate_ms
+                    if sig_cfg.sample_rate_ms is not None
+                    else self._inactive_config.simulation.tick_interval_ms
+                )
+                await var_node.write_attribute(
+                    ua.AttributeIds.MinimumSamplingInterval,
+                    ua.DataValue(ua.Variant(min_sampling_ms, ua.VariantType.Double)),
+                )
+
+                inactive_count += 1
+
+        logger.info("OPC-UA inactive profile nodes built: %d", inactive_count)
 
     # -- Value sync ----------------------------------------------------------
 

@@ -10,7 +10,7 @@
             "description": "In collapsed mode, create OPC-UA nodes for the inactive profile with AccessLevel=0 and StatusCode BadNotReadable (PRD 3.2.1). Add inactive_config parameter to OpcuaServer. In _build_node_tree(), after active nodes, create inactive profile nodes with AccessLevel=0, BadNotReadable status, EURange/EngineeringUnits/MinimumSamplingInterval. Do NOT add to sync loop. In realistic mode skip (no inactive concept per-server). Wire through CLI: load other profile config, pass to OpcuaServer. Test: inactive nodes exist with AccessLevel=0, BadNotReadable status, not synced.",
             "review_ref": "Y25 (review-protocol-fidelity.md §3.9)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6e.2",

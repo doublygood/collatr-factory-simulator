@@ -573,12 +573,23 @@ async def _async_run(args: argparse.Namespace) -> int:
     ground_truth.open()
     ground_truth.write_header(config)
 
+    # Determine inactive profile config for OPC-UA dual-profile node tree
+    # (PRD 3.2.1: inactive profile nodes have AccessLevel=0, BadNotReadable).
+    profile_str = getattr(args, "profile", "packaging")
+    inactive_profile = "foodbev" if profile_str == "packaging" else "packaging"
+    inactive_config_path = _default_config_path(inactive_profile)
+    inactive_config = None
+    if inactive_config_path.exists():
+        from factory_simulator.config import load_config as _load_cfg
+        inactive_config = _load_cfg(inactive_config_path)
+
     store = SignalStore()
     engine = DataEngine(
         config, store,
         topology=topology,
         batch_writer=batch_writer,
         ground_truth=ground_truth,
+        inactive_config=inactive_config,
     )
 
     sim_duration_s = config.simulation.sim_duration_s

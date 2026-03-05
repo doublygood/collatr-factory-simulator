@@ -120,6 +120,7 @@ class DataEngine:
         ground_truth: GroundTruthLogger | None = None,
         topology: NetworkTopologyManager | None = None,
         batch_writer: BatchWriter | None = None,
+        inactive_config: FactoryConfig | None = None,
     ) -> None:
         self._config = config
         self._store = store
@@ -131,6 +132,7 @@ class DataEngine:
         self._ground_truth = ground_truth
         self._topology = topology
         self._batch_writer = batch_writer
+        self._inactive_config = inactive_config
 
         # Master RNG -- child rngs are spawned per generator (Rule 13)
         # Use SeedSequence hierarchy for proper statistical independence (Y1 fix)
@@ -307,8 +309,13 @@ class DataEngine:
         from factory_simulator.topology import ClockDriftModel
 
         if self._topology is None or self._topology.mode == "collapsed":
-            # Collapsed mode: single server, full node tree
-            return [OpcuaServer(self._config, self._store)]
+            # Collapsed mode: single server, full node tree.
+            # Pass inactive profile config so both profile node subtrees are
+            # present in the address space (PRD 3.2.1).
+            return [OpcuaServer(
+                self._config, self._store,
+                inactive_config=self._inactive_config,
+            )]
 
         # Realistic mode: one server per endpoint with clock drift
         servers: list[OpcuaServer] = []
