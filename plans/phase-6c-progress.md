@@ -1,6 +1,6 @@
 # Phase 6c: Validation & Protocol Polish — Progress
 
-## Status: IN PROGRESS
+## Status: COMPLETE
 
 ## Tasks
 - [x] 6c.1: SignalConfig min_clamp <= max_clamp Validator (Y9)
@@ -11,7 +11,7 @@
 - [x] 6c.6: Oven Zone Cholesky Correlation (Y13)
 - [x] 6c.7: Coil 4 Derivation Fix (Y14)
 - [x] 6c.8: OPC-UA MinimumSamplingInterval (Y15)
-- [ ] 6c.9: Validate All Fixes — Full Suite
+- [x] 6c.9: Validate All Fixes — Full Suite
 
 ## Notes
 
@@ -112,3 +112,15 @@ Changes to `src/factory_simulator/protocols/opcua_server.py`:
 - `test_web_tension_sample_rate`: WebTension reads 500.0ms (from `sample_rate_ms=500`)
 
 Suite: 3045 passed, ruff + mypy clean.
+
+## Task 6c.9 — Validate All Fixes — Full Suite
+
+**Completed.** Final validation of all phase 6c fixes.
+
+- `ruff check src tests` — clean
+- `mypy src` — clean
+- `pytest --tb=short -q` — 3045 passed in 3m 47s
+- Packaging batch sim (`--batch-duration 1h --seed 42`) — completed successfully, 3600.1s simulated
+- F&B batch sim (`--config config/factory-foodbev.yaml --batch-duration 1h --seed 42`) — completed successfully, 3600.1s simulated
+
+No regressions. All 9 tasks pass.
