@@ -10,7 +10,7 @@
             "description": "Add model_validator(mode='after') to SignalConfig that raises ValueError when both min_clamp and max_clamp are set and min_clamp > max_clamp. Single-sided clamp (only one set) and equal values are valid. Test: reversed clamps raise, equal pass, single-sided pass, neither pass.",
             "review_ref": "Y9 (review-architecture.md §4.1)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6c.2",

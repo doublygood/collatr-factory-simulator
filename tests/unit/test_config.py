@@ -284,6 +284,36 @@ class TestSignalConfig:
         assert sig.model_extra is not None
         assert sig.model_extra.get("custom_field") == "custom_value"
 
+    # -- min_clamp / max_clamp ordering (Y9) --
+
+    def test_clamp_order_valid(self) -> None:
+        sig = SignalConfig(model="steady_state", min_clamp=0.0, max_clamp=100.0)
+        assert sig.min_clamp == 0.0
+        assert sig.max_clamp == 100.0
+
+    def test_clamp_equal(self) -> None:
+        sig = SignalConfig(model="steady_state", min_clamp=50.0, max_clamp=50.0)
+        assert sig.min_clamp == sig.max_clamp == 50.0
+
+    def test_clamp_reversed_rejected(self) -> None:
+        with pytest.raises(ValidationError, match=r"min_clamp.*must be <= max_clamp"):
+            SignalConfig(model="steady_state", min_clamp=100.0, max_clamp=50.0)
+
+    def test_clamp_one_sided_min_only(self) -> None:
+        sig = SignalConfig(model="steady_state", min_clamp=0.0)
+        assert sig.min_clamp == 0.0
+        assert sig.max_clamp is None
+
+    def test_clamp_one_sided_max_only(self) -> None:
+        sig = SignalConfig(model="steady_state", max_clamp=200.0)
+        assert sig.min_clamp is None
+        assert sig.max_clamp == 200.0
+
+    def test_clamp_neither(self) -> None:
+        sig = SignalConfig(model="steady_state")
+        assert sig.min_clamp is None
+        assert sig.max_clamp is None
+
 
 # ===================================================================
 # EquipmentConfig

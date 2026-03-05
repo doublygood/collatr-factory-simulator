@@ -299,6 +299,18 @@ class SignalConfig(BaseModel):
             raise ValueError("noise_phi (AR(1) coefficient) must be in (-1, 1)")
         return v
 
+    @model_validator(mode="after")
+    def _clamp_order(self) -> SignalConfig:
+        if (
+            self.min_clamp is not None
+            and self.max_clamp is not None
+            and self.min_clamp > self.max_clamp
+        ):
+            raise ValueError(
+                f"min_clamp ({self.min_clamp}) must be <= max_clamp ({self.max_clamp})"
+            )
+        return self
+
 
 class EquipmentConfig(BaseModel):
     """Configuration for one equipment group.
