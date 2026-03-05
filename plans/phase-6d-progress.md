@@ -9,7 +9,7 @@
 - [x] 6d.4: Server Task Verification After Startup (Y20)
 - [x] 6d.5: Narrow Exception Suppression During Shutdown (Y27)
 - [x] 6d.6: Dead Config Cleanup — sparkplug_b, retain (Y22+Y23)
-- [ ] 6d.7: Generator Tests: Coder (Y19)
+- [x] 6d.7: Generator Tests: Coder (Y19)
 - [ ] 6d.8: Generator Tests: Energy (Y19)
 - [ ] 6d.9: Generator Tests: Laminator (Y19)
 - [ ] 6d.10: Generator Tests: Slitter (Y19)
@@ -115,3 +115,23 @@ Tests added to `TestMqttProtocolConfig` in `tests/unit/test_config.py`:
 - `test_no_global_retain_field` — verifies attribute doesn't exist
 
 Full suite: 3070 passed.
+
+## Task 6d.7 — Generator Tests: Coder
+
+Created `tests/unit/test_generators/test_coder.py` with 20 tests covering the CoderGenerator's 11 signals:
+
+- **TestSignalIds**: signal count (11) and signal names
+- **TestOffState**: steady-state signals at min_clamp when Off (pressure=0, viscosity=0, voltage=22 due to min_clamp), pump near base (correlated follower), printhead at ambient 25C
+- **TestPrintingState**: state transitions to Printing when press Running, printhead temp near target, pump follows press speed
+- **TestPrintsCounter**: increments when Printing, stays 0 when Off
+- **TestInkDepletion**: depletes when Printing, stable when Off
+- **TestInkViscosity**: near target when active, 0 when Off
+- **TestAllSignals**: 11 signals per tick, all quality "good"
+- **TestNozzleHealth**: degrades when Printing
+- **TestGutterFault**: starts Clear
+- **TestReadyState**: coder Ready when press in Setup
+- **TestDeterminism**: same seed → identical output
+
+Key design note: pump speed uses CorrelatedFollowerModel (base=100 + gain*parent), so when Off it stays near base, not 0. Supply voltage raw=0 when Off is clamped to min_clamp=22.
+
+Full suite: 3090 passed.
