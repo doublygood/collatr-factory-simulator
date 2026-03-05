@@ -7,7 +7,7 @@
 - [x] 7.2: Extract SIGTERM Handler Context Manager (CQ-Y2)
 - [x] 7.3: Extract OPC-UA Node Creation Helper (CQ-Y3)
 - [x] 7.4: Guard Overlapping OPC-UA Node Paths + Test (CQ-Y4) — depends on 7.3
-- [ ] 7.5: Remove Dead FactoryInfo.timezone Field (G-Arch21)
+- [x] 7.5: Remove Dead FactoryInfo.timezone Field (G-Arch21)
 - [ ] 7.6: Elevate OPC-UA Error Log Levels (G-Arch23)
 - [ ] 7.7: Return Defensive Copy from store.get_all() (G-Arch24)
 - [ ] 7.8: Add I/O Error Handling in Ground Truth _write_line (G-Arch26)
@@ -32,6 +32,10 @@ Extracted `_create_variable_node()` helper method in `opcua_server.py` that hand
 ## Task 7.4 Notes
 
 Added overlap guard in `_build_inactive_nodes` (`opcua_server.py`): before creating each inactive node, check if `sig_cfg.opcua_node` already exists in `self._node_to_signal` (populated by active node creation). If so, log a warning and `continue` — the active node is preserved, the duplicate inactive node is skipped. Added two tests in `test_opcua_inactive.py` using synthetic configs with a shared `opcua_node` path: `test_overlapping_opcua_node_skipped` (server starts OK, active node remains readable) and `test_overlapping_opcua_node_logged` (warning logged with node path). 3170 tests pass, ruff + mypy clean.
+
+## Task 7.5 Notes
+
+Removed dead `FactoryInfo.timezone` field from `config.py`. The field was defined with default `"Europe/London"` but never read by any code — all timestamps use UTC via `time_utils`. Removed the `timezone` key from both `config/factory.yaml` and `config/factory-foodbev.yaml`. Updated `test_config.py` to remove the timezone assertion from `test_defaults` and the timezone parameter from `test_custom_values`. 3170 tests pass, ruff + mypy clean.
 
 ## Notes
 

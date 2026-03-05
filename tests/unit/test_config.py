@@ -77,10 +77,9 @@ class TestFactoryInfo:
         info = FactoryInfo()
         assert info.name == "Demo Packaging Factory"
         assert info.site_id == "demo"
-        assert info.timezone == "Europe/London"
 
     def test_custom_values(self) -> None:
-        info = FactoryInfo(name="My Factory", site_id="mf01", timezone="US/Eastern")
+        info = FactoryInfo(name="My Factory", site_id="mf01")
         assert info.name == "My Factory"
         assert info.site_id == "mf01"
 

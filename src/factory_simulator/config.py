@@ -25,7 +25,6 @@ class FactoryInfo(BaseModel):
 
     name: str = "Demo Packaging Factory"
     site_id: str = "demo"
-    timezone: str = "Europe/London"
 
 
 # ---------------------------------------------------------------------------

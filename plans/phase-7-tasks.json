@@ -50,7 +50,7 @@
             "description": "FactoryInfo.timezone defined but never read by any code. Remove the field. Check YAML configs and tests for references. All timestamps use UTC via time_utils.",
             "review_ref": "G-Arch21 (review-architecture.md #21)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "7.6",
