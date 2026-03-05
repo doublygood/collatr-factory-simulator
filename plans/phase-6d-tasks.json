@@ -100,7 +100,7 @@
             "description": "Create dedicated test file for SlitterGenerator (3 signals: speed, web_tension, reel_count). Tests: speed follows press with lag, tension correlates with speed, reel count increments, off state zeros, determinism, signal count (3).",
             "review_ref": "Y19 (review-architecture.md §5.1)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6d.11",

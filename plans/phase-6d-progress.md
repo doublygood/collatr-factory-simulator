@@ -12,7 +12,7 @@
 - [x] 6d.7: Generator Tests: Coder (Y19)
 - [x] 6d.8: Generator Tests: Energy (Y19)
 - [x] 6d.9: Generator Tests: Laminator (Y19)
-- [ ] 6d.10: Generator Tests: Slitter (Y19)
+- [x] 6d.10: Generator Tests: Slitter (Y19)
 - [ ] 6d.11: Generator Tests: Vibration (Y19)
 - [ ] 6d.12: CI Matrix: Python 3.13 + Integration Tests (Y21)
 - [ ] 6d.13: Validate All Fixes — Full Suite
@@ -163,3 +163,18 @@ Created `tests/unit/test_generators/test_laminator.py` with 16 tests covering th
 Key design: laminator uses `press.line_speed > 0` as its active condition (not press state enum). Thermal signals (nip_temp, tunnel_temp) use FirstOrderLagModel with setpoint tracking when active and ambient cool-down when stopped. nip_pressure and adhesive_weight use SteadyStateModel but return raw 0.0 when inactive.
 
 Full suite: 3120 passed.
+
+## Task 6d.10 — Generator Tests: Slitter
+
+Created `tests/unit/test_generators/test_slitter.py` with 14 tests covering the SlitterGenerator's 3 signals (speed, web_tension, reel_count):
+
+- **TestSignalIds**: signal count (3) and signal names
+- **TestOffState**: speed zero outside schedule, web_tension near zero, reel_count stays 0, is_running property false
+- **TestRunningState**: speed ramps up in schedule window, is_running true, web_tension follows speed, reel_count increments when running
+- **TestScheduleTransitions**: speed ramps down after schedule window ends
+- **TestAllSignals**: 3 signals per tick, all quality "good"
+- **TestDeterminism**: same seed → identical output
+
+Key design: slitter uses schedule-based activation (default: offset=2h, duration=4h within 8h shift) rather than press state. Tests set sim_time to 7200s+ to enter the schedule window. Speed ramps via RampModel on schedule transitions.
+
+Full suite: 3134 passed.
