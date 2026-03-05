@@ -6,7 +6,7 @@
 - [x] 6c.1: SignalConfig min_clamp <= max_clamp Validator (Y9)
 - [x] 6c.2: ClockDriftConfig Allow Negative Values (Y10)
 - [x] 6c.3: Fix Calibration Drift Rate Docstring (Y11)
-- [ ] 6c.4: Fix Random Walk Docstring (Y12)
+- [x] 6c.4: Fix Random Walk Docstring (Y12)
 - [ ] 6c.5: Dryer Zone Cholesky Correlation (Y13)
 - [ ] 6c.6: Oven Zone Cholesky Correlation (Y13)
 - [ ] 6c.7: Coil 4 Derivation Fix (Y14)
@@ -40,3 +40,9 @@ Suite: 3038 passed, ruff + mypy clean.
 ## Task 6c.3 — Fix Calibration Drift Rate Docstring
 
 **Completed.** Documentation-only change. Clarified `SteadyStateModel` docstring for `calibration_drift_rate`: explicitly states units are per simulated **second** internally, PRD specifies per **hour**, callers must divide by 3600. Added inline comment at the application line (line 143) noting the unit convention. No logic change.
+
+## Task 6c.4 — Fix Random Walk Docstring
+
+**Completed.** Documentation-only change. Replaced incorrect claim that `drift_rate` is "units per sqrt-second -- scaled by `sqrt(dt)` implicitly" with accurate description: each tick applies `drift_rate * N(0,1) * dt` — linear `dt` scaling per PRD Section 4.2.5. Added note distinguishing this from the steady-state O-U drift model which uses `sqrt(dt)`. No logic change.
+
+Suite: 3032 passed, ruff + mypy clean.

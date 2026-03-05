@@ -38,10 +38,11 @@ class RandomWalkModel(SignalModel):
         delta = drift_rate * N(0, 1) - reversion_rate * (value - center)
         value = value + delta * dt
 
-    The ``drift_rate`` controls how fast the signal wanders (units per
-    sqrt-second -- scaled by ``sqrt(dt)`` implicitly through the discrete
-    Euler step).  The ``reversion_rate`` pulls the signal back toward
-    ``center``.
+    The ``drift_rate`` controls how fast the signal wanders.  Each tick
+    applies ``drift_rate * N(0, 1) * dt`` -- linear ``dt`` scaling per
+    PRD Section 4.2.5.  (This differs from the steady-state O-U drift
+    model which uses ``sqrt(dt)`` for its Wiener-process noise term.)
+    The ``reversion_rate`` pulls the signal back toward ``center``.
 
     An optional :class:`NoiseGenerator` adds observation noise *on top*
     of the random walk (measurement noise distinct from the walk process).

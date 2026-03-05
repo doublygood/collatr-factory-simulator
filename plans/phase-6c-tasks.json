@@ -40,7 +40,7 @@
             "description": "Replace misleading docstring claiming sqrt(dt) scaling with correct description: innovation = drift_rate * N(0,1), delta scaled by linear dt per PRD 4.2.5. Note difference from steady-state O-U drift which uses sqrt(dt).",
             "review_ref": "Y12 (review-signal-integrity.md §2.8)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6c.5",
