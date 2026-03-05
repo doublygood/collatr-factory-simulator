@@ -41,7 +41,7 @@ from factory_simulator.generators.base import EquipmentGenerator
 from factory_simulator.models.base import clamp, quantise
 from factory_simulator.models.correlated import CorrelatedFollowerModel
 from factory_simulator.models.first_order_lag import FirstOrderLagModel
-from factory_simulator.models.noise import NoiseGenerator
+from factory_simulator.models.noise import CholeskyCorrelator, NoiseGenerator
 from factory_simulator.models.state import StateMachineModel
 from factory_simulator.models.steady_state import SteadyStateModel
 from factory_simulator.models.thermal_diffusion import ThermalDiffusionModel
@@ -152,10 +152,35 @@ class OvenGenerator(EquipmentGenerator):
         ]
 
         # 3. Zone temperatures (FirstOrderLag tracking setpoints)
+        # Extract noise generators separately for Cholesky correlation pipeline
+        self._zone_temp_names = [
+            "zone_1_temp", "zone_2_temp", "zone_3_temp",
+        ]
+        self._zone_temp_noises: list[NoiseGenerator | None] = []
+        for name in self._zone_temp_names:
+            sig_cfg = sigs.get(name)
+            self._zone_temp_noises.append(
+                self._make_noise(sig_cfg) if sig_cfg is not None else None,
+            )
+        # Pass noise=None to lag models — all noise applied via Cholesky
         self._zone_temp_models: list[FirstOrderLagModel] = [
-            self._build_zone_temp(sigs.get(f"zone_{i+1}_temp"))
+            self._build_zone_temp(sigs.get(f"zone_{i+1}_temp"), apply_noise=False)
             for i in range(3)
         ]
+
+        # PRD 4.3.1: Cholesky correlator for oven zone noise
+        oven_extras = self._config.model_extra or {}
+        custom_matrix = oven_extras.get("oven_zone_correlation_matrix")
+        if custom_matrix is not None:
+            oven_corr = np.array(custom_matrix, dtype=np.float64)
+        else:
+            # PRD Section 4.3.1 oven zone correlation matrix
+            oven_corr = np.array([
+                [1.0,  0.15, 0.05],
+                [0.15, 1.0,  0.15],
+                [0.05, 0.15, 1.0],
+            ])
+        self._oven_cholesky = CholeskyCorrelator(oven_corr)
 
         # 4. Belt speed (SteadyState)
         self._belt_speed_model = self._build_steady_state(sigs.get("belt_speed"))
@@ -206,13 +231,23 @@ class OvenGenerator(EquipmentGenerator):
         return StateMachineModel(params, self._spawn_rng())
 
     def _build_zone_temp(
-        self, sig_cfg: SignalConfig | None,
+        self,
+        sig_cfg: SignalConfig | None,
+        *,
+        apply_noise: bool = True,
     ) -> FirstOrderLagModel:
         """Build a zone temperature first-order lag model.
 
         Zone always starts at ambient temperature (oven is off initially).
         The setpoint is updated to the configured target when the oven enters
         Preheat/Running/Idle via _handle_state_transition.
+
+        Parameters
+        ----------
+        apply_noise:
+            When *False*, the model is created without internal noise.
+            Used for signals whose noise is applied externally via the
+            Cholesky correlation pipeline (PRD 4.3.1).
         """
         params: dict[str, object] = {
             "setpoint": _AMBIENT_TEMP_C,
@@ -225,7 +260,8 @@ class OvenGenerator(EquipmentGenerator):
             # Zone always starts at ambient regardless of configured initial_value
             params["setpoint"] = _AMBIENT_TEMP_C
             params["initial_value"] = _AMBIENT_TEMP_C
-            noise = self._make_noise(sig_cfg)
+            if apply_noise:
+                noise = self._make_noise(sig_cfg)
         return FirstOrderLagModel(params, self._spawn_rng(), noise=noise)
 
     def _build_steady_state(
@@ -356,14 +392,27 @@ class OvenGenerator(EquipmentGenerator):
             self._update_zone_setpoints(sp)
         # Off/Cooldown setpoints updated in state transition
 
+        # Generate raw (noise-free) zone temps from lag models
+        raw_temps = [m.generate(sim_time, dt) for m in self._zone_temp_models]
+
+        # PRD 4.3.1: Apply Cholesky-correlated noise across oven zones
+        # Pipeline: N(0,1) draws → Cholesky L → scale by effective_sigma
+        sigmas = np.array([
+            ng.effective_sigma() if ng is not None else 0.0
+            for ng in self._zone_temp_noises
+        ])
+        correlated_noise = self._oven_cholesky.generate_correlated(
+            self._rng, sigmas,
+        )
+
         zone_temps: list[float] = []
-        for i in range(3):
-            raw_temp = self._zone_temp_models[i].generate(sim_time, dt)
-            z_temp = self._post_process(f"zone_{i+1}_temp", raw_temp)
+        for i, name in enumerate(self._zone_temp_names):
+            z_temp = raw_temps[i] + float(correlated_noise[i])
+            z_temp = self._post_process(name, z_temp)
             zone_temps.append(z_temp)
             results.append(self._make_sv(
-                f"zone_{i+1}_temp", z_temp, sim_time,
-                self._signal_configs.get(f"zone_{i+1}_temp"),
+                name, z_temp, sim_time,
+                self._signal_configs.get(name),
             ))
 
         # Save zone temps for next tick's thermal coupling computation

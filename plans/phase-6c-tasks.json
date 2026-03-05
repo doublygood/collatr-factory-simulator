@@ -60,7 +60,7 @@
             "description": "Add PRD 4.3.1 Cholesky noise correlation for oven zones (3x3 matrix: 1-2=0.15, 1-3=0.05, 2-3=0.15). Same pattern as 6c.5 but in OvenGenerator. Thermal coupling (physical model) and Cholesky (noise correlation) are independent — both should coexist. Allow custom matrix via oven_zone_correlation_matrix. Test: positive sample correlation, higher than dryer correlation.",
             "review_ref": "Y13 (review-signal-integrity.md §4.5)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6c.7",

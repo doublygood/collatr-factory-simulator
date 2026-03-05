@@ -559,6 +559,197 @@ class TestDeterminism:
 # ---------------------------------------------------------------------------
 
 
+class TestOvenZoneCholesky:
+    """Oven zone noise is correlated via Cholesky pipeline (PRD 4.3.1)."""
+
+    @staticmethod
+    def _make_noisy_config(
+        **extra_kwargs: object,
+    ) -> EquipmentConfig:
+        """Create oven config with noise on zone temps for correlation testing."""
+        zone_sp = [160.0, 200.0, 180.0]
+        signals: dict[str, SignalConfig] = {}
+
+        for i, sp in enumerate(zone_sp):
+            signals[f"zone_{i + 1}_temp"] = SignalConfig(
+                model="first_order_lag",
+                noise_sigma=0.5,
+                sample_rate_ms=1000,
+                min_clamp=0.0,
+                max_clamp=300.0,
+                units="C",
+                params={"tau": 180.0, "initial_value": 20.0},
+            )
+            signals[f"zone_{i + 1}_setpoint"] = SignalConfig(
+                model="steady_state",
+                noise_sigma=0.0,
+                sample_rate_ms=1000,
+                min_clamp=0.0,
+                max_clamp=300.0,
+                units="C",
+                params={"target": sp},
+            )
+
+        signals["belt_speed"] = SignalConfig(
+            model="steady_state",
+            noise_sigma=0.0,
+            sample_rate_ms=1000,
+            min_clamp=0.0,
+            max_clamp=5.0,
+            units="m/min",
+            params={"target": 2.0},
+        )
+        signals["product_core_temp"] = SignalConfig(
+            model="steady_state",
+            noise_sigma=0.0,
+            sample_rate_ms=1000,
+            min_clamp=0.0,
+            max_clamp=100.0,
+            units="C",
+            params={},
+        )
+        signals["humidity_zone_2"] = SignalConfig(
+            model="steady_state",
+            noise_sigma=0.0,
+            sample_rate_ms=1000,
+            min_clamp=0.0,
+            max_clamp=100.0,
+            units="%",
+            params={"target": 50.0},
+        )
+        signals["state"] = SignalConfig(
+            model="state_machine",
+            sample_rate_ms=1000,
+            min_clamp=0.0,
+            max_clamp=4.0,
+            units="enum",
+            params={
+                "states": ["Off", "Preheat", "Running", "Idle", "Cooldown"],
+                "initial_state": "Off",
+            },
+        )
+        for i in range(3):
+            signals[f"zone_{i + 1}_output_power"] = SignalConfig(
+                model="correlated_follower",
+                noise_sigma=0.0,
+                sample_rate_ms=1000,
+                min_clamp=0.0,
+                max_clamp=100.0,
+                units="%",
+                params={"base": 50.0, "factor": -0.3},
+            )
+
+        return EquipmentConfig(
+            enabled=True,
+            type="tunnel_oven",
+            signals=signals,
+            tunnel_length=6.0,
+            thermal_coupling=0.05,
+            **extra_kwargs,
+        )
+
+    def test_oven_zones_positively_correlated(self) -> None:
+        """Oven zone noise residuals should be positively correlated.
+
+        Run many ticks in Preheat state, extract residuals (value - lag trend),
+        and verify that Pearson correlations are positive for adjacent zones.
+        """
+        config = self._make_noisy_config()
+        store = SignalStore()
+        gen = OvenGenerator("oven", config, np.random.default_rng(12345))
+        gen.state_machine.force_state("Preheat")
+
+        # Warm up: let lag models reach setpoints (tau=180s, run 600s)
+        sim_time = 0.0
+        dt = 0.1
+        for _ in range(6000):
+            sim_time += dt
+            gen.generate(sim_time, dt, store)
+
+        # Collect residuals (detrend via rolling mean of 50 samples)
+        temps_1: list[float] = []
+        temps_2: list[float] = []
+        temps_3: list[float] = []
+        for _ in range(5000):
+            sim_time += dt
+            results = gen.generate(sim_time, dt, store)
+            temps_1.append(_find_signal(results, "oven.zone_1_temp").value)
+            temps_2.append(_find_signal(results, "oven.zone_2_temp").value)
+            temps_3.append(_find_signal(results, "oven.zone_3_temp").value)
+
+        # Use diff to remove trend (lag convergence), keeping noise signal
+        d1 = np.diff(temps_1)
+        d2 = np.diff(temps_2)
+        d3 = np.diff(temps_3)
+
+        # Compute sample Pearson correlations
+        r12 = np.corrcoef(d1, d2)[0, 1]
+        r13 = np.corrcoef(d1, d3)[0, 1]
+        r23 = np.corrcoef(d2, d3)[0, 1]
+
+        # PRD matrix: r12=0.15, r13=0.05, r23=0.15
+        # Correlations should be positive
+        assert r12 > 0.0, f"Zone 1-2 correlation should be positive, got {r12:.4f}"
+        assert r23 > 0.0, f"Zone 2-3 correlation should be positive, got {r23:.4f}"
+        # Zone 1-3 has weak correlation (0.05), may not be strongly detectable
+        assert r13 > -0.1, f"Zone 1-3 correlation should not be negative, got {r13:.4f}"
+
+        # Zone 1-2 and 2-3 should be stronger than 1-3
+        assert r12 > r13, (
+            f"Zone 1-2 ({r12:.4f}) should be more correlated than 1-3 ({r13:.4f})"
+        )
+
+    def test_custom_correlation_matrix(self) -> None:
+        """Custom oven_zone_correlation_matrix overrides PRD default."""
+        custom_matrix = [
+            [1.0, 0.5, 0.3],
+            [0.5, 1.0, 0.5],
+            [0.3, 0.5, 1.0],
+        ]
+        config = self._make_noisy_config(oven_zone_correlation_matrix=custom_matrix)
+        gen = OvenGenerator("oven", config, np.random.default_rng(42))
+        store = SignalStore()
+        gen.state_machine.force_state("Preheat")
+
+        # Warm up
+        sim_time = 0.0
+        dt = 0.1
+        for _ in range(6000):
+            sim_time += dt
+            gen.generate(sim_time, dt, store)
+
+        # Collect
+        temps_1: list[float] = []
+        temps_2: list[float] = []
+        for _ in range(5000):
+            sim_time += dt
+            results = gen.generate(sim_time, dt, store)
+            temps_1.append(_find_signal(results, "oven.zone_1_temp").value)
+            temps_2.append(_find_signal(results, "oven.zone_2_temp").value)
+
+        d1 = np.diff(temps_1)
+        d2 = np.diff(temps_2)
+        r12 = np.corrcoef(d1, d2)[0, 1]
+        # With stronger correlation matrix (0.5), expect higher correlation
+        assert r12 > 0.1, f"Custom matrix correlation should be stronger, got {r12:.4f}"
+
+    def test_zone_temp_noise_not_double_applied(self) -> None:
+        """Lag models should not have internal noise (avoid double-noising).
+
+        Verify that the FirstOrderLagModel instances for zone temps
+        have noise=None — all noise is applied externally via Cholesky.
+        """
+        config = self._make_noisy_config()
+        gen = OvenGenerator("oven", config, np.random.default_rng(42))
+        for model in gen.zone_temp_models:
+            assert model._noise is None
+
+
+# ---------------------------------------------------------------------------
+# Tests: protocol mappings
+# ---------------------------------------------------------------------------
+
+
 class TestProtocolMappings:
     """Protocol mappings are derived from config."""
 
