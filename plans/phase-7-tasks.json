@@ -1,0 +1,136 @@
+{
+    "phase": "7",
+    "name": "Polish",
+    "tasks": [
+        {
+            "id": "7.1",
+            "name": "Fix MQTT Retry Delays Tuple",
+            "group": "Code Quality YELLOWs",
+            "file": "src/factory_simulator/protocols/mqtt_publisher.py",
+            "description": "MQTT retry _delays tuple has 3 elements but only 2 are used. Restructure loop to use all 3 delays (4 total attempts). Update existing tests and add test for 4th-attempt success.",
+            "review_ref": "CQ-Y1 (review-post-phase6-code-quality.md)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "7.2",
+            "name": "Extract SIGTERM Handler Context Manager",
+            "group": "Code Quality YELLOWs",
+            "file": "src/factory_simulator/cli.py",
+            "description": "SIGTERM handler code is duplicated between _run_batch and _run_realtime. Extract into a _sigterm_cancels_current_task() context manager. Handler should be removed on exit. Test handler removal.",
+            "review_ref": "CQ-Y2 (review-post-phase6-code-quality.md)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "7.3",
+            "name": "Extract OPC-UA Node Creation Helper",
+            "group": "Code Quality YELLOWs",
+            "file": "src/factory_simulator/protocols/opcua_server.py",
+            "description": "_build_inactive_nodes duplicates ~40 lines from _build_node_tree (folder hierarchy, EURange, EngineeringUnits, MinimumSamplingInterval). Extract shared _create_variable_node() helper. Both active and inactive paths call it. Pure refactor — all existing OPC-UA tests must pass.",
+            "review_ref": "CQ-Y3 (review-post-phase6-code-quality.md)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "7.4",
+            "name": "Guard Overlapping OPC-UA Node Paths + Test",
+            "group": "Code Quality YELLOWs",
+            "file": "src/factory_simulator/protocols/opcua_server.py",
+            "description": "If custom config uses same opcua_node path in both profiles, _build_inactive_nodes crashes. Add guard to skip nodes already in self._node_to_signal with a warning log. Add test for overlapping path (skipped) and test for warning logged.",
+            "review_ref": "CQ-Y4 (review-post-phase6-code-quality.md)",
+            "depends_on": ["7.3"],
+            "passes": false
+        },
+        {
+            "id": "7.5",
+            "name": "Remove Dead FactoryInfo.timezone Field",
+            "group": "GREEN Cleanup",
+            "file": "src/factory_simulator/config.py",
+            "description": "FactoryInfo.timezone defined but never read by any code. Remove the field. Check YAML configs and tests for references. All timestamps use UTC via time_utils.",
+            "review_ref": "G-Arch21 (review-architecture.md #21)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "7.6",
+            "name": "Elevate OPC-UA Error Log Levels",
+            "group": "GREEN Cleanup",
+            "file": "src/factory_simulator/protocols/opcua_server.py",
+            "description": "OPC-UA sync errors (freeze failed, write failed) logged at DEBUG. Elevate to logger.warning for operational visibility. Keep DEBUG for routine messages only.",
+            "review_ref": "G-Arch23 (review-architecture.md #23)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "7.7",
+            "name": "Return Defensive Copy from store.get_all()",
+            "group": "GREEN Cleanup",
+            "file": "src/factory_simulator/store.py",
+            "description": "store.get_all() returns internal dict directly. Use types.MappingProxyType for a zero-copy read-only view. Update return type to Mapping[str, SignalValue]. Add test_get_all_not_mutable. Check all callers work with read-only view.",
+            "review_ref": "G-Arch24 (review-architecture.md #24)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "7.8",
+            "name": "Add I/O Error Handling in Ground Truth _write_line",
+            "group": "GREEN Cleanup",
+            "file": "src/factory_simulator/engine/ground_truth.py",
+            "description": "_write_line has no I/O error handling. Wrap in try/except OSError: log warning, set self._fh = None to disable further writes. Test: mock write to raise OSError, verify subsequent calls are no-ops and warning logged.",
+            "review_ref": "G-Arch26 (review-architecture.md #26)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "7.9",
+            "name": "Rename float32_hr_addresses to dual_register_hr_addresses",
+            "group": "GREEN Cleanup",
+            "file": "src/factory_simulator/protocols/modbus_server.py",
+            "description": "float32_hr_addresses also contains uint32 addresses. Rename to dual_register_hr_addresses across RegisterMap, all .add() calls, and parameter pass-through. Search entire codebase for old name.",
+            "review_ref": "G-Proto8 (review-protocol-fidelity.md #8), CQ-G9",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "7.10",
+            "name": "Derive Modbus Update Interval from Config",
+            "group": "GREEN Cleanup",
+            "file": "src/factory_simulator/protocols/modbus_server.py",
+            "description": "Modbus sync loop hardcodes 50ms sleep. Derive from tick_interval_ms / 2 (half-tick for freshness). Add comment explaining the rationale. Uses self._config.simulation.tick_interval_ms.",
+            "review_ref": "G-Proto10 (review-protocol-fidelity.md #10)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "7.11",
+            "name": "Improve _compute_block_size Documentation",
+            "group": "GREEN Cleanup",
+            "file": "src/factory_simulator/protocols/modbus_server.py",
+            "description": "Improve docstring and inline comment for the +3 safety margin in _compute_block_size. Explain: pymodbus 1-based indexing (+1) + 32-bit value spans 2 registers (+2) = +3.",
+            "review_ref": "G-Proto13 (review-protocol-fidelity.md #13)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "7.12",
+            "name": "Explicit line_id in Packaging Config + ShiftChange HH:MM Validator",
+            "group": "GREEN Cleanup",
+            "file": "src/factory_simulator/config.py",
+            "description": "Two small fixes: (1) Add explicit line_id: packaging1 to config/factory.yaml MQTT section. (2) Add field_validator on ShiftChangeConfig.times to validate HH:MM format (regex + range check). Tests: valid times accepted, invalid format rejected, invalid values rejected, packaging config has line_id.",
+            "review_ref": "G-Proto14 (review-protocol-fidelity.md #14), G-Arch-ShiftChange (review-architecture.md §4.1)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "7.13",
+            "name": "CI fail-fast: false + Validate All Fixes",
+            "group": "Validation",
+            "file": ".github/workflows/ci.yml",
+            "description": "Add fail-fast: false to CI unit test matrix strategy. Run ruff + mypy + pytest full suite. Fix any failures.",
+            "review_ref": "review-post-phase6-test-ci.md recommendation #1",
+            "depends_on": ["7.1", "7.2", "7.3", "7.4", "7.5", "7.6", "7.7", "7.8", "7.9", "7.10", "7.11", "7.12"],
+            "passes": false
+        }
+    ]
+}
