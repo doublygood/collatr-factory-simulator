@@ -13,7 +13,7 @@
 - [x] 6d.8: Generator Tests: Energy (Y19)
 - [x] 6d.9: Generator Tests: Laminator (Y19)
 - [x] 6d.10: Generator Tests: Slitter (Y19)
-- [ ] 6d.11: Generator Tests: Vibration (Y19)
+- [x] 6d.11: Generator Tests: Vibration (Y19)
 - [ ] 6d.12: CI Matrix: Python 3.13 + Integration Tests (Y21)
 - [ ] 6d.13: Validate All Fixes — Full Suite
 
@@ -178,3 +178,19 @@ Created `tests/unit/test_generators/test_slitter.py` with 14 tests covering the 
 Key design: slitter uses schedule-based activation (default: offset=2h, duration=4h within 8h shift) rather than press state. Tests set sim_time to 7200s+ to enter the schedule window. Speed ramps via RampModel on schedule transitions.
 
 Full suite: 3134 passed.
+
+## Task 6d.11 — Generator Tests: Vibration
+
+Created `tests/unit/test_generators/test_vibration.py` with 15 tests covering the VibrationGenerator's 3 signals (main_drive_x, main_drive_y, main_drive_z with Cholesky correlation):
+
+- **TestSignalIds**: signal count (3) and signal names
+- **TestRunning**: non-zero values when press running (speed > 1.0), mean values near targets (x=4.0, y=3.5, z=5.0)
+- **TestStopped**: near-zero when stopped (ambient floor 0.2 mm/s), near-zero when press.line_speed absent from store
+- **TestCholeskyCorrelation**: PRD correlation matrix matches expected values (X-Y=0.2, X-Z=0.15, Y-Z=0.2), all axis pairs positively correlated over 2000 samples, custom correlation matrix support works
+- **TestClamping**: values within [0, 50] mm/s bounds, non-negative when stopped
+- **TestQuality**: all signals quality "good" (running and stopped)
+- **TestDeterminism**: same seed → identical output, different seeds → different output
+
+Key design: vibration uses Cholesky decomposition (PRD 4.3.1) for correlated noise across 3 axes. Noise is applied externally via the pipeline, not through SteadyStateModel's internal noise. When stopped, residual floor vibration is N(0.2, 0.05) clamped to >= 0.
+
+Full suite: 3149 passed.

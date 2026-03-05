@@ -110,7 +110,7 @@
             "description": "Create dedicated test file for VibrationGenerator (3 signals: main_drive_x/y/z with Cholesky correlation). Tests: non-zero when Running, near-zero when stopped, axes correlated (sample correlations > 0), Cholesky matrix matches PRD, determinism, signal count (3).",
             "review_ref": "Y19 (review-architecture.md §5.1)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6d.12",
