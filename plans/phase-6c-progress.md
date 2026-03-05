@@ -7,7 +7,7 @@
 - [x] 6c.2: ClockDriftConfig Allow Negative Values (Y10)
 - [x] 6c.3: Fix Calibration Drift Rate Docstring (Y11)
 - [x] 6c.4: Fix Random Walk Docstring (Y12)
-- [ ] 6c.5: Dryer Zone Cholesky Correlation (Y13)
+- [x] 6c.5: Dryer Zone Cholesky Correlation (Y13)
 - [ ] 6c.6: Oven Zone Cholesky Correlation (Y13)
 - [ ] 6c.7: Coil 4 Derivation Fix (Y14)
 - [ ] 6c.8: OPC-UA MinimumSamplingInterval (Y15)
@@ -46,3 +46,22 @@ Suite: 3038 passed, ruff + mypy clean.
 **Completed.** Documentation-only change. Replaced incorrect claim that `drift_rate` is "units per sqrt-second -- scaled by `sqrt(dt)` implicitly" with accurate description: each tick applies `drift_rate * N(0,1) * dt` — linear `dt` scaling per PRD Section 4.2.5. Added note distinguishing this from the steady-state O-U drift model which uses `sqrt(dt)`. No logic change.
 
 Suite: 3032 passed, ruff + mypy clean.
+
+## Task 6c.5 — Dryer Zone Cholesky Correlation
+
+**Completed.** Added PRD 4.3.1 Cholesky noise correlation for dryer zone temperatures in `PressGenerator`.
+
+Changes to `src/factory_simulator/generators/press.py`:
+- Imported `CholeskyCorrelator` from `models.noise`
+- Extracted noise generators for dryer temp zones into `_dryer_temp_noises` list (built separately from models)
+- Added `apply_noise=False` parameter to `_build_first_order_lag()` — dryer temp lag models no longer have internal noise
+- Built `CholeskyCorrelator` with PRD dryer zone matrix: `[[1.0, 0.1, 0.02], [0.1, 1.0, 0.1], [0.02, 0.1, 1.0]]`
+- In `generate()`, replaced individual post-process calls with Cholesky pipeline: generate N(0,1) draws → apply Cholesky L → scale by effective_sigma → add to raw lag values → clamp
+- Custom matrix supported via `dryer_zone_correlation_matrix` in equipment extras
+
+3 new tests in `tests/unit/test_generators/test_press.py`:
+- `test_dryer_zones_positively_correlated`: 5000-tick correlation analysis, verifies positive r12/r23 and weak r13
+- `test_custom_correlation_matrix`: verifies custom matrix override via equipment extras
+- `test_dryer_noise_not_double_applied`: verifies lag models have `_noise is None`
+
+Suite: 3035 passed, ruff + mypy clean.

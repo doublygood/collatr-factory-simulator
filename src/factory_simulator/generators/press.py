@@ -23,7 +23,7 @@ from factory_simulator.models.correlated import CorrelatedFollowerModel
 from factory_simulator.models.counter import CounterModel
 from factory_simulator.models.depletion import DepletionModel
 from factory_simulator.models.first_order_lag import FirstOrderLagModel
-from factory_simulator.models.noise import NoiseGenerator
+from factory_simulator.models.noise import CholeskyCorrelator, NoiseGenerator
 from factory_simulator.models.ramp import RampModel
 from factory_simulator.models.random_walk import RandomWalkModel
 from factory_simulator.models.state import StateMachineModel
@@ -163,9 +163,44 @@ class PressGenerator(EquipmentGenerator):
         self._dryer_sp_3 = self._build_steady_state(sigs.get("dryer_setpoint_zone_3"))
 
         # 7. Dryer temperatures (first-order lag tracking setpoints)
-        self._dryer_temp_1 = self._build_first_order_lag(sigs.get("dryer_temp_zone_1"))
-        self._dryer_temp_2 = self._build_first_order_lag(sigs.get("dryer_temp_zone_2"))
-        self._dryer_temp_3 = self._build_first_order_lag(sigs.get("dryer_temp_zone_3"))
+        #    Noise is extracted and applied externally via Cholesky pipeline
+        #    (PRD 4.3.1) to produce correlated noise across zones.
+        self._dryer_temp_noises: list[NoiseGenerator | None] = []
+        self._dryer_temp_names = [
+            "dryer_temp_zone_1", "dryer_temp_zone_2", "dryer_temp_zone_3",
+        ]
+        for name in self._dryer_temp_names:
+            sig_cfg = sigs.get(name)
+            self._dryer_temp_noises.append(
+                self._make_noise(sig_cfg) if sig_cfg is not None else None,
+            )
+        # Pass noise=None to lag models — all noise applied via Cholesky
+        self._dryer_temp_1 = self._build_first_order_lag(
+            sigs.get("dryer_temp_zone_1"), apply_noise=False,
+        )
+        self._dryer_temp_2 = self._build_first_order_lag(
+            sigs.get("dryer_temp_zone_2"), apply_noise=False,
+        )
+        self._dryer_temp_3 = self._build_first_order_lag(
+            sigs.get("dryer_temp_zone_3"), apply_noise=False,
+        )
+        self._dryer_temp_models = [
+            self._dryer_temp_1, self._dryer_temp_2, self._dryer_temp_3,
+        ]
+
+        # PRD 4.3.1: Cholesky correlator for dryer zone noise
+        dryer_extras = self._config.model_extra or {}
+        custom_matrix = dryer_extras.get("dryer_zone_correlation_matrix")
+        if custom_matrix is not None:
+            dryer_corr = np.array(custom_matrix, dtype=np.float64)
+        else:
+            # PRD Section 4.3.1 dryer zone correlation matrix
+            dryer_corr = np.array([
+                [1.0,  0.1,  0.02],
+                [0.1,  1.0,  0.1],
+                [0.02, 0.1,  1.0],
+            ])
+        self._dryer_cholesky = CholeskyCorrelator(dryer_corr)
 
         # 8. Counters
         self._impression_count = self._build_counter(sigs.get("impression_count"))
@@ -274,9 +309,20 @@ class PressGenerator(EquipmentGenerator):
         return SteadyStateModel(params, self._spawn_rng(), noise=noise)
 
     def _build_first_order_lag(
-        self, sig_cfg: SignalConfig | None,
+        self,
+        sig_cfg: SignalConfig | None,
+        *,
+        apply_noise: bool = True,
     ) -> FirstOrderLagModel:
-        """Build a first-order lag model from config."""
+        """Build a first-order lag model from config.
+
+        Parameters
+        ----------
+        apply_noise:
+            When *False*, the model is created without internal noise.
+            Used for signals whose noise is applied externally via the
+            Cholesky correlation pipeline (PRD 4.3.1).
+        """
         params: dict[str, object] = {
             "setpoint": _AMBIENT_TEMP_C, "tau": 120.0,
             "initial_value": _AMBIENT_TEMP_C,
@@ -284,7 +330,8 @@ class PressGenerator(EquipmentGenerator):
         noise = None
         if sig_cfg is not None:
             params.update(sig_cfg.params)
-            noise = self._make_noise(sig_cfg)
+            if apply_noise:
+                noise = self._make_noise(sig_cfg)
         return FirstOrderLagModel(params, self._spawn_rng(), noise=noise)
 
     def _build_counter(self, sig_cfg: SignalConfig | None) -> CounterModel:
@@ -476,26 +523,26 @@ class PressGenerator(EquipmentGenerator):
         # Update setpoints on dryer lag models based on state
         self._update_dryer_setpoints(current_state, sp1, sp2, sp3)
 
-        raw_t1 = self._dryer_temp_1.generate(sim_time, dt)
-        raw_t2 = self._dryer_temp_2.generate(sim_time, dt)
-        raw_t3 = self._dryer_temp_3.generate(sim_time, dt)
+        # Generate raw (noise-free) dryer temps from lag models
+        raw_temps = [m.generate(sim_time, dt) for m in self._dryer_temp_models]
 
-        t1 = self._post_process("dryer_temp_zone_1", raw_t1)
-        t2 = self._post_process("dryer_temp_zone_2", raw_t2)
-        t3 = self._post_process("dryer_temp_zone_3", raw_t3)
+        # PRD 4.3.1: Apply Cholesky-correlated noise across dryer zones
+        # Pipeline: N(0,1) draws → Cholesky L → scale by effective_sigma
+        sigmas = np.array([
+            ng.effective_sigma() if ng is not None else 0.0
+            for ng in self._dryer_temp_noises
+        ])
+        correlated_noise = self._dryer_cholesky.generate_correlated(
+            self._rng, sigmas,
+        )
 
-        results.append(self._make_sv(
-            "dryer_temp_zone_1", t1, sim_time,
-            self._signal_configs.get("dryer_temp_zone_1"),
-        ))
-        results.append(self._make_sv(
-            "dryer_temp_zone_2", t2, sim_time,
-            self._signal_configs.get("dryer_temp_zone_2"),
-        ))
-        results.append(self._make_sv(
-            "dryer_temp_zone_3", t3, sim_time,
-            self._signal_configs.get("dryer_temp_zone_3"),
-        ))
+        for i, name in enumerate(self._dryer_temp_names):
+            value = raw_temps[i] + float(correlated_noise[i])
+            value = self._post_process(name, value)
+            results.append(self._make_sv(
+                name, value, sim_time,
+                self._signal_configs.get(name),
+            ))
 
         # --- 9. Nip pressure ---
         if current_state in (STATE_RUNNING, STATE_SETUP, STATE_IDLE):

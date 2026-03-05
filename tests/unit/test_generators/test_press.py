@@ -775,6 +775,120 @@ class TestNipPressure:
 
 
 # ---------------------------------------------------------------------------
+# Dryer zone Cholesky correlation (PRD 4.3.1)
+# ---------------------------------------------------------------------------
+
+
+class TestDryerZoneCholesky:
+    """Dryer zone noise is correlated via Cholesky pipeline (PRD 4.3.1)."""
+
+    def test_dryer_zones_positively_correlated(self, press_config: EquipmentConfig) -> None:
+        """Dryer zone noise residuals should be positively correlated.
+
+        Run many ticks in Running state, extract residuals (value - setpoint),
+        and verify that Pearson correlations are positive for adjacent zones.
+        """
+        store = SignalStore()
+        gen = PressGenerator("press", press_config, np.random.default_rng(12345))
+        gen.state_machine.force_state("Running")
+
+        # Collect dryer temps over many ticks after steady-state is reached
+        sim_time = 0.0
+        dt = 0.1
+        # Warm up: let lag models reach setpoints (tau=10s, run 200s)
+        for _ in range(2000):
+            sim_time += dt
+            gen.generate(sim_time, dt, store)
+
+        # Collect residuals
+        residuals_1: list[float] = []
+        residuals_2: list[float] = []
+        residuals_3: list[float] = []
+        for _ in range(5000):
+            sim_time += dt
+            results = gen.generate(sim_time, dt, store)
+            t1 = _find_signal(results, "press.dryer_temp_zone_1").value
+            t2 = _find_signal(results, "press.dryer_temp_zone_2").value
+            t3 = _find_signal(results, "press.dryer_temp_zone_3").value
+            # Setpoints: 75, 80, 85 from test config
+            residuals_1.append(t1 - 75.0)
+            residuals_2.append(t2 - 80.0)
+            residuals_3.append(t3 - 85.0)
+
+        # Compute sample Pearson correlations
+        r12 = np.corrcoef(residuals_1, residuals_2)[0, 1]
+        r13 = np.corrcoef(residuals_1, residuals_3)[0, 1]
+        r23 = np.corrcoef(residuals_2, residuals_3)[0, 1]
+
+        # PRD matrix: r12=0.1, r13=0.02, r23=0.1
+        # Correlations should be positive (exact values vary due to clamping/lag)
+        assert r12 > 0.0, f"Zone 1-2 correlation should be positive, got {r12:.4f}"
+        assert r23 > 0.0, f"Zone 2-3 correlation should be positive, got {r23:.4f}"
+        # Zone 1-3 has very weak correlation (0.02), may not be detectable
+        # Just verify it's not strongly negative
+        assert r13 > -0.1, f"Zone 1-3 correlation should not be negative, got {r13:.4f}"
+
+        # Zone 1-2 and 2-3 should be stronger than 1-3
+        assert r12 > r13, (
+            f"Zone 1-2 ({r12:.4f}) should be more correlated than 1-3 ({r13:.4f})"
+        )
+
+    def test_custom_correlation_matrix(self) -> None:
+        """Custom dryer_zone_correlation_matrix overrides PRD default."""
+        custom_matrix = [
+            [1.0, 0.5, 0.3],
+            [0.5, 1.0, 0.5],
+            [0.3, 0.5, 1.0],
+        ]
+        config = _make_press_config()
+        # Inject custom matrix via model extras
+        config_with_matrix = EquipmentConfig(
+            enabled=True,
+            type="flexographic_press",
+            signals=config.signals,
+            target_speed=200,
+            speed_range=[50, 400],
+            dryer_zone_correlation_matrix=custom_matrix,
+        )
+        gen = PressGenerator("press", config_with_matrix, np.random.default_rng(42))
+        store = SignalStore()
+        gen.state_machine.force_state("Running")
+
+        # Warm up
+        sim_time = 0.0
+        dt = 0.1
+        for _ in range(2000):
+            sim_time += dt
+            gen.generate(sim_time, dt, store)
+
+        # Collect residuals
+        residuals_1: list[float] = []
+        residuals_2: list[float] = []
+        for _ in range(5000):
+            sim_time += dt
+            results = gen.generate(sim_time, dt, store)
+            t1 = _find_signal(results, "press.dryer_temp_zone_1").value
+            t2 = _find_signal(results, "press.dryer_temp_zone_2").value
+            residuals_1.append(t1 - 75.0)
+            residuals_2.append(t2 - 80.0)
+
+        r12 = np.corrcoef(residuals_1, residuals_2)[0, 1]
+        # With stronger correlation matrix (0.5), expect higher correlation
+        assert r12 > 0.1, f"Custom matrix correlation should be stronger, got {r12:.4f}"
+
+    def test_dryer_noise_not_double_applied(self, press_config: EquipmentConfig) -> None:
+        """Lag models should not have internal noise (avoid double-noising).
+
+        Verify that the FirstOrderLagModel instances for dryer temps
+        have noise=None — all noise is applied externally via Cholesky.
+        """
+        gen = PressGenerator("press", press_config, np.random.default_rng(42))
+        assert gen._dryer_temp_1._noise is None
+        assert gen._dryer_temp_2._noise is None
+        assert gen._dryer_temp_3._noise is None
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
