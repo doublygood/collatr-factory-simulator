@@ -1165,15 +1165,27 @@ class ModbusServer:
             devices: dict[int, FactoryDeviceContext] = {}
 
             if self._endpoint is not None:
-                # Realistic mode: map each endpoint UID to the primary context
-                for uid in self._endpoint.unit_ids:
-                    devices[uid] = self._device_context
-            else:
-                # Collapsed mode: primary UID maps to primary context
-                devices[self._modbus_cfg.unit_id] = self._device_context
+                # Realistic mode: apply secondary UID remapping if configured.
+                # secondary_uid_remap maps collapsed-mode slave_ids to the UIDs
+                # they should appear under in realistic mode (e.g. {11:1, 12:2,
+                # 13:3} so Eurotherm zone controllers are reachable at UIDs 1-3
+                # per PRD 03a topology rather than collapsed-mode UIDs 11-13).
+                secondary_remap = self._endpoint.secondary_uid_remap
+                remapped_uids: set[int] = set(secondary_remap.values())
 
-            # Add secondary slave contexts (Eurotherm zones)
-            devices.update(self._secondary_contexts)
+                # Map endpoint UIDs not claimed by secondary remaps to primary
+                for uid in self._endpoint.unit_ids:
+                    if uid not in remapped_uids:
+                        devices[uid] = self._device_context
+
+                # Register secondary contexts under their realistic-mode UIDs
+                for slave_id, ctx in self._secondary_contexts.items():
+                    realistic_uid = secondary_remap.get(slave_id, slave_id)
+                    devices[realistic_uid] = ctx
+            else:
+                # Collapsed mode: primary UID + secondary slaves at their own IDs
+                devices[self._modbus_cfg.unit_id] = self._device_context
+                devices.update(self._secondary_contexts)
 
             server_context = ModbusServerContext(  # type: ignore[no-untyped-call]
                 devices=devices, single=False,

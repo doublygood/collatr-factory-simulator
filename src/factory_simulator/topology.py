@@ -45,6 +45,13 @@ class ModbusEndpointSpec:
     controller_name: str = ""
     equipment_ids: list[str] = field(default_factory=list)
     uid_equipment_map: dict[int, list[str]] = field(default_factory=dict)
+    # Remaps secondary slave IDs to realistic-mode UIDs.  In realistic mode,
+    # a key slave_id is exposed as the value UID instead of the original
+    # slave_id.  Empty dict (default) preserves collapsed-mode behaviour where
+    # secondary slaves are accessible under their configured slave_ids.
+    # Example: {11: 1, 12: 2, 13: 3} maps Eurotherm zone controllers
+    # (slave_ids 11-13) to UIDs 1-3 per PRD 03a oven gateway topology.
+    secondary_uid_remap: dict[int, int] = field(default_factory=dict)
     clock_drift: ClockDriftConfig = field(default_factory=ClockDriftConfig)
     scan_cycle: ScanCycleConfig = field(default_factory=ScanCycleConfig)
     connection_limit: ConnectionLimitConfig = field(
@@ -574,6 +581,8 @@ class NetworkTopologyManager:
                 ),
             ),
             # Oven gateway: UIDs 1,2,3 (zones) + UID 10 (energy meter)
+            # secondary_uid_remap remaps collapsed-mode slave IDs 11/12/13 to
+            # realistic-mode UIDs 1/2/3 per PRD 03a Section 3a.2 topology table.
             ModbusEndpointSpec(
                 port=5031,
                 unit_ids=[1, 2, 3, 10],
@@ -588,6 +597,7 @@ class NetworkTopologyManager:
                     3: ["oven"],
                     10: ["energy"],
                 },
+                secondary_uid_remap={11: 1, 12: 2, 13: 3},
                 clock_drift=self._get_clock_drift("oven_gateway", "Eurotherm"),
                 scan_cycle=self._get_scan_cycle("oven_gateway", "Eurotherm"),
                 connection_limit=self._get_connection_limit(

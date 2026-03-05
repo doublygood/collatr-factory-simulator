@@ -7,7 +7,7 @@
 - [x] 6a.2: Fix Ground Truth Header — Add Missing Scenarios (R2)
 - [x] 6a.3: Dockerfile Hardening (R3 + R4)
 - [x] 6a.4: OPC-UA EngineeringUnits Property (R5)
-- [ ] 6a.5: Fix Oven Gateway UID Routing in Realistic Mode (R6)
+- [x] 6a.5: Fix Oven Gateway UID Routing in Realistic Mode (R6)
 - [ ] 6a.6: Fix Severity Weight Key Mismatch (Y1)
 - [ ] 6a.7: Fix Double-Logging of Ground Truth Events (Y2)
 - [ ] 6a.8: Handle Open Scenarios in Evaluator (Y3)
@@ -75,3 +75,17 @@ Tasks 6a.1-6a.8 are all independent (no dependencies between them). Task 6a.9 de
 **Decisions:**
 - Always create the logger (not only in batch mode) so real-time runs also record events
 - Used `getattr(args, "ground_truth_path", None)` for backward compat with tests that predate the new field
+
+## Task 6a.5 — Fix Oven Gateway UID Routing in Realistic Mode
+
+**What was fixed:**
+- Added `secondary_uid_remap: dict[int, int]` field to `ModbusEndpointSpec` in `topology.py` (default `{}`). Maps collapsed-mode slave IDs to the UIDs they should appear under in realistic mode.
+- In `_foodbev_modbus()`, added `secondary_uid_remap={11: 1, 12: 2, 13: 3}` to the oven gateway `ModbusEndpointSpec`. Eurotherm zone controllers (UIDs 11-13 in collapsed mode) now appear as UIDs 1, 2, 3 in realistic mode per PRD 03a.
+- Updated `ModbusServer.start()` UID routing logic: when `endpoint.secondary_uid_remap` is non-empty, endpoint UIDs claimed by remapped secondaries are NOT mapped to the primary context; instead secondary contexts are registered under their realistic-mode UIDs. Collapsed mode (no endpoint) is unchanged.
+- Added `tests/integration/test_oven_uid_routing_realistic.py` with 13 tests verifying UIDs 1/2/3 return zone PV/SP/output IR data, UID 10 returns energy IR 120-121, and UIDs 1/2/3 are isolated from the primary context.
+
+**Decisions:**
+- `secondary_uid_remap` field placed alongside `uid_equipment_map` in the dataclass since both are UID-related mapping fields.
+- Collapsed mode preserves existing behaviour: secondary slaves remain at UIDs 11/12/13 (tested by `test_modbus_fnb_integration.py`). No behaviour change for existing tests.
+- In realistic mode, when no `secondary_uid_remap` is set (empty dict), all endpoint UIDs map to primary context as before — backward compatible.
+- 2998 tests passed after the change.

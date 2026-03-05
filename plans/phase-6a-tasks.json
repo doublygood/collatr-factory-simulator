@@ -50,7 +50,7 @@
             "description": "In realistic mode, remap oven gateway secondary slaves to UIDs 1/2/3 (not 11/12/13). Keep collapsed mode UIDs 11/12/13 unchanged. UID 10 stays on primary context for energy. Test: realistic mode read IR 0 at UID 1 on port 5031 returns zone 1 PV. Test collapsed mode unaffected.",
             "review_ref": "R6 (review-protocol-fidelity.md)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6a.6",
