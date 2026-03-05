@@ -276,6 +276,131 @@ class OpcuaServer:
 
     # -- Node tree ------------------------------------------------------------
 
+    async def _create_variable_node(
+        self,
+        ns: int,
+        folder_cache: dict[str, Any],
+        parent_root: Any,
+        sig_cfg: Any,
+        tick_interval_ms: float,
+        *,
+        access_level: int | None = None,
+        status_code: ua.StatusCode | None = None,
+    ) -> tuple[Any, Any]:
+        """Create an OPC-UA variable node with standard properties.
+
+        Shared between active and inactive node creation to avoid duplication.
+        Handles: folder hierarchy, variable creation, EURange, EngineeringUnits,
+        MinimumSamplingInterval.
+
+        Parameters
+        ----------
+        ns:
+            OPC-UA namespace index.
+        folder_cache:
+            Cache of already-created folder nodes keyed by accumulated path.
+        parent_root:
+            Root parent node (typically ``server.nodes.objects``).
+        sig_cfg:
+            Signal configuration with ``opcua_node``, ``opcua_type``, etc.
+        tick_interval_ms:
+            Fallback for MinimumSamplingInterval when ``sample_rate_ms`` is None.
+        access_level:
+            If set, override the default AccessLevel (e.g. 0 for inactive nodes).
+        status_code:
+            If set, write this StatusCode on the initial value.
+
+        Returns
+        -------
+        tuple[var_node, vtype]
+            The created variable node and its VariantType.
+        """
+        node_path = sig_cfg.opcua_node
+        parts = node_path.split(".")
+
+        # -- Folder hierarchy for intermediate path segments ------------------
+        parent: Any = parent_root
+        accumulated_path = ""
+        for part in parts[:-1]:
+            accumulated_path = (
+                f"{accumulated_path}.{part}" if accumulated_path else part
+            )
+            if accumulated_path not in folder_cache:
+                folder_node = await parent.add_folder(
+                    ua.NodeId(accumulated_path, ns),
+                    part,
+                )
+                folder_cache[accumulated_path] = folder_node
+            parent = folder_cache[accumulated_path]
+
+        # -- Variable node ----------------------------------------------------
+        var_name = parts[-1]
+        type_str = sig_cfg.opcua_type or "Double"
+        vtype = _VARIANT_TYPE_MAP.get(type_str, ua.VariantType.Double)
+        init_val = _initial_value(vtype)
+
+        var_node = await parent.add_variable(
+            ua.NodeId(node_path, ns),
+            var_name,
+            init_val,
+            varianttype=vtype,
+        )
+
+        # AccessLevel override (e.g. 0 for inactive nodes, PRD 3.2.1)
+        if access_level is not None:
+            await var_node.write_attribute(
+                ua.AttributeIds.AccessLevel,
+                ua.DataValue(ua.Variant(access_level, ua.VariantType.Byte)),
+            )
+
+        # Initial value with custom StatusCode (e.g. BadNotReadable)
+        if status_code is not None:
+            await var_node.write_value(
+                ua.DataValue(
+                    ua.Variant(init_val, vtype),
+                    status_code,
+                )
+            )
+
+        # EURange property (PRD Appendix B attribute convention)
+        eu_low = (
+            float(sig_cfg.min_clamp) if sig_cfg.min_clamp is not None else 0.0
+        )
+        eu_high = (
+            float(sig_cfg.max_clamp) if sig_cfg.max_clamp is not None else 0.0
+        )
+        await var_node.add_property(
+            ua.NodeId(0, 0),
+            "EURange",
+            ua.Range(Low=eu_low, High=eu_high),
+        )
+
+        # EngineeringUnits property (PRD Appendix B)
+        eu_info = ua.EUInformation(
+            NamespaceUri="http://www.opcfoundation.org/UA/units/un/cefact",
+            UnitId=-1,
+            DisplayName=ua.LocalizedText(sig_cfg.units or ""),
+            Description=ua.LocalizedText(sig_cfg.units or ""),
+        )
+        await var_node.add_property(
+            ua.NodeId(0, 0),
+            "EngineeringUnits",
+            eu_info,
+        )
+
+        # MinimumSamplingInterval attribute (PRD Appendix B)
+        min_sampling_ms = float(
+            sig_cfg.sample_rate_ms
+            if sig_cfg.sample_rate_ms is not None
+            else tick_interval_ms
+        )
+        await var_node.write_attribute(
+            ua.AttributeIds.MinimumSamplingInterval,
+            ua.DataValue(ua.Variant(min_sampling_ms, ua.VariantType.Double)),
+        )
+
+        return var_node, vtype
+
     async def _build_node_tree(self, ns: int) -> None:
         """Create all OPC-UA variable nodes from signal config.
 
@@ -317,73 +442,12 @@ class OpcuaServer:
                     continue
 
                 signal_id = f"{equip_key}.{sig_key}"
-                parts = node_path.split(".")
 
-                # -- Folder hierarchy for intermediate path segments ----------
-                parent: Any = objects
-                accumulated_path = ""
-                for part in parts[:-1]:
-                    accumulated_path = (
-                        f"{accumulated_path}.{part}" if accumulated_path else part
-                    )
-                    if accumulated_path not in folder_cache:
-                        folder_node = await parent.add_folder(
-                            ua.NodeId(accumulated_path, ns),
-                            part,
-                        )
-                        folder_cache[accumulated_path] = folder_node
-                    parent = folder_cache[accumulated_path]
-
-                # -- Variable node --------------------------------------------
-                var_name = parts[-1]
-                type_str = sig_cfg.opcua_type or "Double"
-                vtype = _VARIANT_TYPE_MAP.get(type_str, ua.VariantType.Double)
+                var_node, vtype = await self._create_variable_node(
+                    ns, folder_cache, objects, sig_cfg,
+                    self._config.simulation.tick_interval_ms,
+                )
                 init_val = _initial_value(vtype)
-
-                var_node = await parent.add_variable(
-                    ua.NodeId(node_path, ns),
-                    var_name,
-                    init_val,
-                    varianttype=vtype,
-                )
-
-                # EURange property (PRD Appendix B attribute convention)
-                eu_low = (
-                    float(sig_cfg.min_clamp) if sig_cfg.min_clamp is not None else 0.0
-                )
-                eu_high = (
-                    float(sig_cfg.max_clamp) if sig_cfg.max_clamp is not None else 0.0
-                )
-                await var_node.add_property(
-                    ua.NodeId(0, 0),
-                    "EURange",
-                    ua.Range(Low=eu_low, High=eu_high),
-                )
-
-                # EngineeringUnits property (PRD Appendix B, task 6a.4)
-                # UnitId=-1: no standard UNECE code mapping (acceptable for simulator)
-                eu_info = ua.EUInformation(
-                    NamespaceUri="http://www.opcfoundation.org/UA/units/un/cefact",
-                    UnitId=-1,
-                    DisplayName=ua.LocalizedText(sig_cfg.units or ""),
-                    Description=ua.LocalizedText(sig_cfg.units or ""),
-                )
-                await var_node.add_property(
-                    ua.NodeId(0, 0),
-                    "EngineeringUnits",
-                    eu_info,
-                )
-
-                # MinimumSamplingInterval attribute (PRD Appendix B)
-                min_sampling_ms = float(
-                    sig_cfg.sample_rate_ms
-                    if sig_cfg.sample_rate_ms is not None
-                    else self._config.simulation.tick_interval_ms
-                )
-                await var_node.write_attribute(
-                    ua.AttributeIds.MinimumSamplingInterval,
-                    ua.DataValue(ua.Variant(min_sampling_ms, ua.VariantType.Double)),
-                )
 
                 # Writable for setpoints (PRD 3.2)
                 if sig_cfg.modbus_writable:
@@ -442,85 +506,11 @@ class OpcuaServer:
                 if sig_cfg.opcua_node is None:
                     continue
 
-                node_path = sig_cfg.opcua_node
-                parts = node_path.split(".")
-
-                # Folder hierarchy — reuse active folder_cache
-                parent: Any = objects
-                accumulated_path = ""
-                for part in parts[:-1]:
-                    accumulated_path = (
-                        f"{accumulated_path}.{part}" if accumulated_path else part
-                    )
-                    if accumulated_path not in folder_cache:
-                        folder_node = await parent.add_folder(
-                            ua.NodeId(accumulated_path, ns),
-                            part,
-                        )
-                        folder_cache[accumulated_path] = folder_node
-                    parent = folder_cache[accumulated_path]
-
-                var_name = parts[-1]
-                type_str = sig_cfg.opcua_type or "Double"
-                vtype = _VARIANT_TYPE_MAP.get(type_str, ua.VariantType.Double)
-                init_val = _initial_value(vtype)
-
-                var_node = await parent.add_variable(
-                    ua.NodeId(node_path, ns),
-                    var_name,
-                    init_val,
-                    varianttype=vtype,
-                )
-
-                # AccessLevel = 0: not readable, not writable (PRD 3.2.1)
-                await var_node.write_attribute(
-                    ua.AttributeIds.AccessLevel,
-                    ua.DataValue(ua.Variant(0, ua.VariantType.Byte)),
-                )
-
-                # Write initial value with BadNotReadable status
-                await var_node.write_value(
-                    ua.DataValue(
-                        ua.Variant(init_val, vtype),
-                        ua.StatusCode(ua.StatusCodes.BadNotReadable),
-                    )
-                )
-
-                # EURange property
-                eu_low = (
-                    float(sig_cfg.min_clamp) if sig_cfg.min_clamp is not None else 0.0
-                )
-                eu_high = (
-                    float(sig_cfg.max_clamp) if sig_cfg.max_clamp is not None else 0.0
-                )
-                await var_node.add_property(
-                    ua.NodeId(0, 0),
-                    "EURange",
-                    ua.Range(Low=eu_low, High=eu_high),
-                )
-
-                # EngineeringUnits property
-                eu_info = ua.EUInformation(
-                    NamespaceUri="http://www.opcfoundation.org/UA/units/un/cefact",
-                    UnitId=-1,
-                    DisplayName=ua.LocalizedText(sig_cfg.units or ""),
-                    Description=ua.LocalizedText(sig_cfg.units or ""),
-                )
-                await var_node.add_property(
-                    ua.NodeId(0, 0),
-                    "EngineeringUnits",
-                    eu_info,
-                )
-
-                # MinimumSamplingInterval attribute
-                min_sampling_ms = float(
-                    sig_cfg.sample_rate_ms
-                    if sig_cfg.sample_rate_ms is not None
-                    else self._inactive_config.simulation.tick_interval_ms
-                )
-                await var_node.write_attribute(
-                    ua.AttributeIds.MinimumSamplingInterval,
-                    ua.DataValue(ua.Variant(min_sampling_ms, ua.VariantType.Double)),
+                await self._create_variable_node(
+                    ns, folder_cache, objects, sig_cfg,
+                    self._inactive_config.simulation.tick_interval_ms,
+                    access_level=0,
+                    status_code=ua.StatusCode(ua.StatusCodes.BadNotReadable),
                 )
 
                 inactive_count += 1

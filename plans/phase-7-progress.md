@@ -5,7 +5,7 @@
 ## Tasks
 - [x] 7.1: Fix MQTT Retry Delays Tuple (CQ-Y1)
 - [x] 7.2: Extract SIGTERM Handler Context Manager (CQ-Y2)
-- [ ] 7.3: Extract OPC-UA Node Creation Helper (CQ-Y3)
+- [x] 7.3: Extract OPC-UA Node Creation Helper (CQ-Y3)
 - [ ] 7.4: Guard Overlapping OPC-UA Node Paths + Test (CQ-Y4) — depends on 7.3
 - [ ] 7.5: Remove Dead FactoryInfo.timezone Field (G-Arch21)
 - [ ] 7.6: Elevate OPC-UA Error Log Levels (G-Arch23)
@@ -24,6 +24,10 @@ Restructured MQTT retry loop to use all 3 delay values (1s, 2s, 4s) for 4 total 
 ## Task 7.2 Notes
 
 Extracted `_sigterm_cancels_current_task()` context manager in cli.py to eliminate duplicated SIGTERM handler setup between `_run_batch` (was lines 387-397) and `_run_realtime` (was lines 450-461). The context manager registers a SIGTERM handler that cancels the current asyncio task, and removes the handler on exit via `loop.remove_signal_handler`. Platform safety: `NotImplementedError`/`OSError` suppressed on registration (Windows), `NotImplementedError`/`ValueError` suppressed on removal. Both `_run_batch` and `_run_realtime` now use `with _sigterm_cancels_current_task():` wrapping their main logic. Added `test_sigterm_handler_removed_after_context_exit` verifying the handler is cleaned up. Updated existing source inspection test to also check for `remove_signal_handler`. 3168 tests pass, ruff + mypy clean.
+
+## Task 7.3 Notes
+
+Extracted `_create_variable_node()` helper method in `opcua_server.py` that handles all shared node creation logic: folder hierarchy traversal/creation via `folder_cache`, variable node creation with correct data type, EURange property, EngineeringUnits property, and MinimumSamplingInterval attribute. The helper takes optional `access_level` (for inactive nodes' AccessLevel=0) and `status_code` (for BadNotReadable) parameters, plus a `tick_interval_ms` parameter since active and inactive paths use different config objects for the fallback. `_build_node_tree` now calls the helper then handles setpoint writability and node registration. `_build_inactive_nodes` now calls the helper with `access_level=0` and `status_code=BadNotReadable`. Pure refactor — 3168 tests pass, ruff + mypy clean.
 
 ## Notes
 

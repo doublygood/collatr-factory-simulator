@@ -30,7 +30,7 @@
             "description": "_build_inactive_nodes duplicates ~40 lines from _build_node_tree (folder hierarchy, EURange, EngineeringUnits, MinimumSamplingInterval). Extract shared _create_variable_node() helper. Both active and inactive paths call it. Pure refactor — all existing OPC-UA tests must pass.",
             "review_ref": "CQ-Y3 (review-post-phase6-code-quality.md)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "7.4",
