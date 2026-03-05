@@ -14,6 +14,8 @@ PRD Reference: Appendix F (Phase 5 — CLI and Productisation)
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import subprocess
 import sys
 import time
@@ -26,6 +28,7 @@ import pytest
 from factory_simulator.cli import (
     _default_config_path,
     _load_config,
+    _start_server,
     build_parser,
     evaluate_command,
     main,
@@ -629,6 +632,49 @@ class TestSigtermHandling:
         assert proc.returncode == 0, (
             f"Expected exit code 0 after SIGTERM, got {proc.returncode}"
         )
+
+
+# ---------------------------------------------------------------------------
+# _start_server() — Task 6d.4: verify server tasks after startup
+# ---------------------------------------------------------------------------
+
+
+class TestStartServer:
+    @pytest.mark.asyncio
+    async def test_successful_server_returns_task(self) -> None:
+        """A server that starts without error returns a running task."""
+
+        class _GoodServer:
+            async def start(self) -> None:
+                await asyncio.sleep(100)  # stay alive
+
+        task = await _start_server(_GoodServer(), settle_time=0.01)
+        assert not task.done()
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    @pytest.mark.asyncio
+    async def test_failed_server_raises_runtime_error(self) -> None:
+        """A server whose start() raises immediately propagates via RuntimeError."""
+
+        class _BadServer:
+            async def start(self) -> None:
+                raise OSError("Address already in use")
+
+        with pytest.raises(RuntimeError, match=r"failed to start.*Address already in use"):
+            await _start_server(_BadServer(), settle_time=0.01)
+
+    @pytest.mark.asyncio
+    async def test_failed_server_error_includes_class_name(self) -> None:
+        """The RuntimeError message should include the server class name."""
+
+        class _MyBrokenServer:
+            async def start(self) -> None:
+                raise ValueError("bad config")
+
+        with pytest.raises(RuntimeError, match="_MyBrokenServer"):
+            await _start_server(_MyBrokenServer(), settle_time=0.01)
 
 
 class TestMainModule:

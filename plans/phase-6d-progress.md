@@ -6,7 +6,7 @@
 - [x] 6d.1: Shared Reference Epoch Constant (Y18)
 - [x] 6d.2: _format_time() Performance Fix (Y17) — depends on 6d.1
 - [x] 6d.3: Configurable Health Server Port (Y16)
-- [ ] 6d.4: Server Task Verification After Startup (Y20)
+- [x] 6d.4: Server Task Verification After Startup (Y20)
 - [ ] 6d.5: Narrow Exception Suppression During Shutdown (Y27)
 - [ ] 6d.6: Dead Config Cleanup — sparkplug_b, retain (Y22+Y23)
 - [ ] 6d.7: Generator Tests: Coder (Y19)
@@ -64,3 +64,23 @@ Tests added to `tests/unit/test_config.py`:
 - Env override: `SIM_HEALTH_PORT=9090`
 
 Full suite: 3060 passed.
+
+## Task 6d.4 — Server Task Verification After Startup
+
+Extracted `_start_server(srv, *, settle_time=0.05)` helper in `cli.py` that:
+1. Creates an asyncio task for `srv.start()`
+2. Sleeps for `settle_time` to let the server bind
+3. Checks `task.done()` — if the task completed with an exception, raises `RuntimeError` with the server class name and original error
+
+Applied to all 4 server startup sites in `_run_realtime()`:
+- Health server
+- Modbus servers (loop)
+- OPC-UA servers (loop)
+- MQTT publishers (loop)
+
+Tests added to `TestStartServer` in `tests/unit/test_cli.py`:
+- `test_successful_server_returns_task` — good server returns running task
+- `test_failed_server_raises_runtime_error` — OSError during start propagates as RuntimeError
+- `test_failed_server_error_includes_class_name` — error message includes server class name
+
+Full suite: 3063 passed.

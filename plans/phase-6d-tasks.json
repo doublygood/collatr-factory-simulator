@@ -40,7 +40,7 @@
             "description": "After each asyncio.create_task(srv.start()) + sleep(0.05), check task.done() and raise RuntimeError if the task failed. Extract a _start_server() helper to avoid repetition. Apply to health server, Modbus servers, OPC-UA servers, and MQTT publishers. Test: mock server that fails start → RuntimeError propagated.",
             "review_ref": "Y20 (review-architecture.md §3.2)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6d.5",

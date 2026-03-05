@@ -413,6 +413,26 @@ async def _run_batch(engine: Any, sim_duration_s: float | None) -> int:
     return 0
 
 
+async def _start_server(
+    srv: Any, *, settle_time: float = 0.05
+) -> asyncio.Task[None]:
+    """Create an asyncio task for *srv.start()* and verify it didn't fail.
+
+    After a brief ``settle_time`` sleep the task is checked: if it has already
+    completed with an exception the error is propagated immediately instead of
+    being silently swallowed until much later.
+    """
+    task: asyncio.Task[None] = asyncio.create_task(srv.start())
+    await asyncio.sleep(settle_time)
+    if task.done() and not task.cancelled():
+        exc = task.exception()
+        if exc is not None:
+            raise RuntimeError(
+                f"Server {type(srv).__name__} failed to start: {exc}"
+            ) from exc
+    return task
+
+
 async def _run_realtime(config: FactoryConfig, engine: Any) -> int:
     """Run engine with live Modbus / OPC-UA / MQTT protocol servers.
 
@@ -445,29 +465,26 @@ async def _run_realtime(config: FactoryConfig, engine: Any) -> int:
 
     health = HealthServer(port=config.simulation.health_port, store=engine.store)
     health.update(profile=config.factory.name)
-    health_task: asyncio.Task[None] = asyncio.create_task(health.start())
-    await asyncio.sleep(0.05)  # allow health server to bind
+    health_task = await _start_server(health)
 
     try:
         if config.protocols.modbus.enabled:
             for srv in engine.create_modbus_servers():
-                task: asyncio.Task[None] = asyncio.create_task(srv.start())
+                task = await _start_server(srv)
                 tasks.append(task)
                 servers.append(srv)
-                await asyncio.sleep(0.05)  # allow server to bind
             health.update(modbus="up")
 
         if config.protocols.opcua.enabled:
             for srv in engine.create_opcua_servers():
-                task = asyncio.create_task(srv.start())
+                task = await _start_server(srv)
                 tasks.append(task)
                 servers.append(srv)
-                await asyncio.sleep(0.05)
             health.update(opcua="up")
 
         if config.protocols.mqtt.enabled:
             for mqtt in engine.create_mqtt_publishers():
-                task = asyncio.create_task(mqtt.start())
+                task = await _start_server(mqtt)
                 tasks.append(task)
                 servers.append(mqtt)
             health.update(mqtt="up")
