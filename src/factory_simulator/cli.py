@@ -30,6 +30,7 @@ import argparse
 import asyncio
 import contextlib
 import logging
+import os
 import signal
 import sys
 from collections.abc import Iterator
@@ -324,7 +325,7 @@ def _load_config(args: argparse.Namespace) -> FactoryConfig:
     """Load and patch a FactoryConfig from CLI arguments."""
     from factory_simulator.config import BatchOutputConfig, NetworkConfig, load_config
 
-    config_path_str: str | None = getattr(args, "config", None)
+    config_path_str: str | None = getattr(args, "config", None) or os.environ.get("SIM_CONFIG_PATH")
     profile: str = getattr(args, "profile", "packaging")
 
     config_path = Path(config_path_str) if config_path_str else _default_config_path(profile)
@@ -564,7 +565,8 @@ async def _async_run(args: argparse.Namespace) -> int:
     elif config.batch_output.format != "none":
         gt_path = Path(config.batch_output.path) / "ground_truth.jsonl"
     else:
-        gt_path = Path("ground_truth.jsonl")
+        output_dir = os.environ.get("SIM_OUTPUT_DIR", ".")
+        gt_path = Path(output_dir) / "ground_truth.jsonl"
 
     ground_truth = GroundTruthLogger(gt_path)
     ground_truth.open()
