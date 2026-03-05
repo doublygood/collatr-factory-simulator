@@ -32,7 +32,6 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -40,16 +39,12 @@ import paho.mqtt.client as mqtt
 from paho.mqtt.enums import CallbackAPIVersion
 
 from factory_simulator.protocols.comm_drop import CommDropScheduler
+from factory_simulator.time_utils import sim_time_to_iso
 
 if TYPE_CHECKING:
     from factory_simulator.config import FactoryConfig
     from factory_simulator.store import SignalStore, SignalValue
     from factory_simulator.topology import ClockDriftModel
-
-# Reference epoch for converting sim_time to ISO 8601 timestamps.
-# Matches the reference epoch in GroundTruthLogger._format_time().
-# Rule 6: all signal-related timestamps use simulated time, not wall clock.
-_REFERENCE_EPOCH_TS: float = datetime(2026, 1, 1, tzinfo=UTC).timestamp()
 
 logger = logging.getLogger(__name__)
 
@@ -147,29 +142,6 @@ def _is_event_driven(relative: str) -> bool:
     return relative in _EVENT_DRIVEN_SUFFIXES
 
 
-def _sim_time_to_iso(sim_time: float, offset_hours: float = 0.0) -> str:
-    """Convert sim_time (seconds from simulation start) to ISO 8601 UTC.
-
-    Uses the same reference epoch (2026-01-01T00:00:00Z) as the ground
-    truth logger, ensuring cross-protocol timestamp consistency.
-
-    Parameters
-    ----------
-    sim_time:
-        Simulated time in seconds from simulation start.
-    offset_hours:
-        Timezone offset to apply to the timestamp (PRD 10.7).  A non-zero
-        value simulates a device reporting timestamps in a wrong timezone.
-        The string still ends in 'Z' (looks like UTC) but the underlying
-        time is shifted, replicating the Site B / camera clock bug.
-
-    Rule 6: all timestamps in signal payloads use simulated time.
-    """
-    effective_ts = _REFERENCE_EPOCH_TS + sim_time + offset_hours * 3600.0
-    dt_obj = datetime.fromtimestamp(effective_ts, tz=UTC)
-    return dt_obj.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt_obj.microsecond // 1000:03d}Z"
-
-
 def make_payload(
     value: float | str, quality: str, unit: str, sim_time: float,
     offset_hours: float = 0.0,
@@ -197,7 +169,7 @@ def make_payload(
         UTF-8 encoded JSON with fields: ``timestamp``, ``value``,
         ``unit``, ``quality``.
     """
-    ts = _sim_time_to_iso(sim_time, offset_hours)
+    ts = sim_time_to_iso(sim_time, offset_hours * 3600.0)
     payload_dict = {
         "timestamp": ts,
         "value": value,
@@ -234,7 +206,7 @@ def make_batch_vibration_payload(
         UTF-8 encoded JSON with fields: ``timestamp``, ``x``, ``y``, ``z``,
         ``unit``, ``quality``.
     """
-    ts = _sim_time_to_iso(sim_time, offset_hours)
+    ts = sim_time_to_iso(sim_time, offset_hours * 3600.0)
     payload_dict = {
         "timestamp": ts,
         "x": x,

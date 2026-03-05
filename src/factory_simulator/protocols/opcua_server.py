@@ -24,13 +24,14 @@ import asyncio
 import contextlib
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from asyncua import Server, ua
 
 from factory_simulator.protocols.comm_drop import CommDropScheduler
+from factory_simulator.time_utils import sim_time_to_datetime
 
 if TYPE_CHECKING:
     from factory_simulator.config import FactoryConfig
@@ -48,18 +49,6 @@ NAMESPACE_INDEX = 2  # PRD specifies ns=2
 
 # PRD 3.2: minimum server-side publishing interval
 MIN_PUBLISHING_INTERVAL_MS = 500
-
-# Reference epoch for converting sim_time → datetime (same as MQTT/ground truth)
-_REFERENCE_EPOCH_TS: float = datetime(2026, 1, 1, tzinfo=UTC).timestamp()
-
-
-def _sim_time_to_datetime(sim_time: float) -> datetime:
-    """Convert sim_time (seconds from simulation start) to datetime.
-
-    Uses the same reference epoch (2026-01-01T00:00:00Z) as MQTT and
-    ground truth loggers.  Rule 6: signal timestamps use simulated time.
-    """
-    return datetime.fromtimestamp(_REFERENCE_EPOCH_TS + sim_time, tz=UTC)
 
 # Config opcua_type string → asyncua VariantType
 _VARIANT_TYPE_MAP: dict[str, Any] = {
@@ -544,7 +533,7 @@ class OpcuaServer:
             source_ts: datetime | None = None
             if self._clock_drift is not None:
                 drifted = self._clock_drift.drifted_time(sv.timestamp)
-                source_ts = _sim_time_to_datetime(drifted)
+                source_ts = sim_time_to_datetime(drifted)
 
             try:
                 # Determine StatusCode from quality

@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from factory_simulator.time_utils import sim_time_to_iso
 
 if TYPE_CHECKING:
     from factory_simulator.config import FactoryConfig
@@ -432,14 +433,7 @@ class GroundTruthLogger:
     def _format_time(sim_time: float) -> str:
         """Convert sim_time to ISO 8601 string.
 
-        Always treats sim_time as seconds from the reference epoch
-        (2026-01-01T00:00:00Z).  All simulation times are relative
-        offsets from simulation start.
+        Delegates to :func:`factory_simulator.time_utils.sim_time_to_iso`
+        which uses a module-level epoch constant (no per-call allocation).
         """
-        # Simulation typically uses relative seconds from start.
-        # Use a fixed reference epoch for consistent output.
-        _REFERENCE_EPOCH = datetime(2026, 1, 1, tzinfo=UTC)
-        dt_obj = _REFERENCE_EPOCH.timestamp() + sim_time
-        return datetime.fromtimestamp(dt_obj, tz=UTC).strftime(
-            "%Y-%m-%dT%H:%M:%S.%f"
-        )[:-3] + "Z"
+        return sim_time_to_iso(sim_time)

@@ -1,9 +1,9 @@
 # Phase 6d: Maintenance & CI — Progress
 
-## Status: NOT STARTED
+## Status: IN PROGRESS
 
 ## Tasks
-- [ ] 6d.1: Shared Reference Epoch Constant (Y18)
+- [x] 6d.1: Shared Reference Epoch Constant (Y18)
 - [ ] 6d.2: _format_time() Performance Fix (Y17) — depends on 6d.1
 - [ ] 6d.3: Configurable Health Server Port (Y16)
 - [ ] 6d.4: Server Task Verification After Startup (Y20)
@@ -27,3 +27,23 @@ Y25 (inactive profile nodes) and Y26 (LWT topic) moved to Phase 6e.
 
 Generator test files (6d.7-6d.11) follow the existing pattern in test_mixer.py, test_press.py:
 helpers to create minimal config, run N ticks, assert expected behaviour.
+
+## Task 6d.1 — Shared Reference Epoch Constant
+
+Created `src/factory_simulator/time_utils.py` with:
+- `REFERENCE_EPOCH` (datetime) and `REFERENCE_EPOCH_TS` (float) constants
+- `sim_time_to_datetime(sim_time, offset_s)` — returns tz-aware datetime
+- `sim_time_to_iso(sim_time, offset_s)` — returns ISO 8601 string with ms precision
+
+Updated 4 source files to import from time_utils:
+- `mqtt_publisher.py`: removed `_REFERENCE_EPOCH_TS` and `_sim_time_to_iso()`; callers now use `sim_time_to_iso(sim_time, offset_hours * 3600.0)` (hours→seconds conversion at call site)
+- `opcua_server.py`: removed `_REFERENCE_EPOCH_TS` and `_sim_time_to_datetime()`; callers use `sim_time_to_datetime()`
+- `health/server.py`: removed `_REFERENCE_EPOCH_TS`; uses `REFERENCE_EPOCH_TS` from time_utils
+- `engine/ground_truth.py`: `_format_time()` now delegates to `sim_time_to_iso()` (also fixes Y17 per-call allocation)
+
+Updated 2 test files that imported old private functions:
+- `test_clock_drift_opcua.py`: `_sim_time_to_datetime` → `sim_time_to_datetime`
+- `test_protocols/test_duplicate_timestamps.py`: `_sim_time_to_iso` → `sim_time_to_iso` (with offset_hours→offset_s conversion)
+
+New test file: `tests/unit/test_time_utils.py` (9 tests).
+Full suite: 3054 passed.

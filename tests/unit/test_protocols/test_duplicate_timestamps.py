@@ -30,11 +30,11 @@ from factory_simulator.config import load_config
 from factory_simulator.protocols.modbus_server import ModbusServer
 from factory_simulator.protocols.mqtt_publisher import (
     MqttPublisher,
-    _sim_time_to_iso,
     make_batch_vibration_payload,
     make_payload,
 )
 from factory_simulator.store import SignalStore
+from factory_simulator.time_utils import sim_time_to_iso
 
 _CONFIG_PATH = Path(__file__).resolve().parents[3] / "config" / "factory.yaml"
 
@@ -60,52 +60,52 @@ def mock_client():
 
 
 # ---------------------------------------------------------------------------
-# _sim_time_to_iso — timezone offset
+# sim_time_to_iso — timezone offset (offset_s in seconds)
 # ---------------------------------------------------------------------------
 
 
 class TestSimTimeToIso:
-    """_sim_time_to_iso applies timezone offset correctly (PRD 10.7)."""
+    """sim_time_to_iso applies timezone offset correctly (PRD 10.7)."""
 
     def test_zero_offset_unchanged(self):
-        ts_no_offset = _sim_time_to_iso(0.0, offset_hours=0.0)
-        ts_default = _sim_time_to_iso(0.0)
+        ts_no_offset = sim_time_to_iso(0.0, offset_s=0.0)
+        ts_default = sim_time_to_iso(0.0)
         assert ts_no_offset == ts_default
 
     def test_reference_epoch_with_no_offset(self):
         # sim_time=0 → 2026-01-01T00:00:00.000Z
-        ts = _sim_time_to_iso(0.0)
+        ts = sim_time_to_iso(0.0)
         assert ts == "2026-01-01T00:00:00.000Z"
 
     def test_positive_offset_shifts_forward(self):
         # +1 hour offset: 2026-01-01T01:00:00.000Z
-        ts = _sim_time_to_iso(0.0, offset_hours=1.0)
+        ts = sim_time_to_iso(0.0, offset_s=3600.0)
         assert ts == "2026-01-01T01:00:00.000Z"
 
     def test_negative_offset_shifts_backward(self):
         # sim_time=3600 (1 hour) with -1 hour offset → 2026-01-01T00:00:00.000Z
-        ts = _sim_time_to_iso(3600.0, offset_hours=-1.0)
+        ts = sim_time_to_iso(3600.0, offset_s=-3600.0)
         assert ts == "2026-01-01T00:00:00.000Z"
 
     def test_bst_offset(self):
         # BST = UTC+1: timestamp 00:00 local → reported as 01:00Z (wrong timezone)
-        ts = _sim_time_to_iso(0.0, offset_hours=1.0)
+        ts = sim_time_to_iso(0.0, offset_s=3600.0)
         assert "01:00:00" in ts
         assert ts.endswith("Z")
 
     def test_us_eastern_offset(self):
-        # US Eastern = UTC-5: offset = -5.0
+        # US Eastern = UTC-5: offset = -5.0 hours = -18000 seconds
         # sim_time=0 (midnight UTC) → 2025-12-31T19:00:00.000Z
-        ts = _sim_time_to_iso(0.0, offset_hours=-5.0)
+        ts = sim_time_to_iso(0.0, offset_s=-18000.0)
         assert ts == "2025-12-31T19:00:00.000Z"
 
     def test_string_always_ends_with_z(self):
-        for offset in (-5.0, -1.0, 0.0, 1.0, 5.5):
-            ts = _sim_time_to_iso(0.0, offset_hours=offset)
-            assert ts.endswith("Z"), f"Expected 'Z' suffix for offset {offset}"
+        for offset_hours in (-5.0, -1.0, 0.0, 1.0, 5.5):
+            ts = sim_time_to_iso(0.0, offset_s=offset_hours * 3600.0)
+            assert ts.endswith("Z"), f"Expected 'Z' suffix for offset {offset_hours}h"
 
     def test_fractional_seconds_preserved(self):
-        ts = _sim_time_to_iso(0.5, offset_hours=0.0)
+        ts = sim_time_to_iso(0.5, offset_s=0.0)
         # 0.5 s = 500 ms
         assert "500" in ts
 
@@ -116,7 +116,7 @@ class TestSimTimeToIso:
 
 
 class TestMakePayloadOffset:
-    """make_payload passes offset_hours to _sim_time_to_iso."""
+    """make_payload passes offset_hours to sim_time_to_iso."""
 
     def test_default_offset_zero(self):
         data = json.loads(make_payload(42.7, "good", "C", sim_time=0.0))
@@ -146,7 +146,7 @@ class TestMakePayloadOffset:
 
 
 class TestMakeBatchVibrationPayloadOffset:
-    """make_batch_vibration_payload passes offset_hours to _sim_time_to_iso."""
+    """make_batch_vibration_payload passes offset_hours to sim_time_to_iso."""
 
     def test_default_offset_zero(self):
         data = json.loads(

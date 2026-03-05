@@ -33,9 +33,9 @@ from factory_simulator.protocols.mqtt_publisher import MqttPublisher
 from factory_simulator.protocols.opcua_server import (
     NAMESPACE_INDEX,
     OpcuaServer,
-    _sim_time_to_datetime,
 )
 from factory_simulator.store import SignalStore
+from factory_simulator.time_utils import sim_time_to_datetime
 from factory_simulator.topology import (
     ClockDriftModel,
     NetworkTopologyManager,
@@ -137,17 +137,17 @@ class TestClockDriftModel:
 
 
 # ---------------------------------------------------------------------------
-# _sim_time_to_datetime helper
+# sim_time_to_datetime helper
 # ---------------------------------------------------------------------------
 
 
 class TestSimTimeToDatetime:
     def test_zero_returns_reference_epoch(self) -> None:
-        dt = _sim_time_to_datetime(0.0)
+        dt = sim_time_to_datetime(0.0)
         assert dt == datetime(2026, 1, 1, tzinfo=UTC)
 
     def test_one_hour(self) -> None:
-        dt = _sim_time_to_datetime(3600.0)
+        dt = sim_time_to_datetime(3600.0)
         assert dt == datetime(2026, 1, 1, 1, 0, 0, tzinfo=UTC)
 
 
@@ -425,7 +425,7 @@ async def test_source_timestamp_has_drift(
     # Expected: reference_epoch + drifted_time(3600.0)
     # drifted_time = 3600 + 5.0 + 5.0 * 1.0 / 24.0
     expected_drifted = drift.drifted_time(sim_time)
-    expected_dt = _sim_time_to_datetime(expected_drifted)
+    expected_dt = sim_time_to_datetime(expected_drifted)
 
     # Allow 1 second tolerance for timing (sync cycle granularity)
     actual_ts = dv.SourceTimestamp.replace(tzinfo=UTC)

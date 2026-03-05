@@ -10,7 +10,7 @@
             "description": "Create time_utils.py with REFERENCE_EPOCH, REFERENCE_EPOCH_TS, sim_time_to_datetime(), and sim_time_to_iso(). Remove _REFERENCE_EPOCH_TS from mqtt_publisher.py, opcua_server.py, health/server.py. Remove _sim_time_to_iso() from mqtt_publisher.py and _sim_time_to_datetime() from opcua_server.py. Update all callers to use shared functions. Update ground_truth.py _format_time() to delegate to sim_time_to_iso(). Test: new module with epoch value, conversion, and format tests.",
             "review_ref": "Y18 (review-architecture.md §6.2)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6d.2",

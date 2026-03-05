@@ -23,6 +23,8 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from factory_simulator.time_utils import REFERENCE_EPOCH_TS
+
 if TYPE_CHECKING:
     from factory_simulator.store import SignalStore
 
@@ -37,9 +39,6 @@ _DEFAULT_STATE: dict[str, Any] = {
     "opcua": "down",
     "mqtt": "down",
 }
-
-# Simulation wall-clock reference: sim_time=0 corresponds to 2026-01-01T00:00:00Z
-_REFERENCE_EPOCH_TS: float = datetime(2026, 1, 1, tzinfo=UTC).timestamp()
 
 
 class HealthServer:
@@ -138,7 +137,7 @@ class HealthServer:
             if all_signals:
                 max_ts = max(sv.timestamp for sv in all_signals.values())
                 payload["sim_time"] = datetime.fromtimestamp(
-                    _REFERENCE_EPOCH_TS + max_ts, tz=UTC
+                    REFERENCE_EPOCH_TS + max_ts, tz=UTC
                 ).strftime("%Y-%m-%dT%H:%M:%SZ")
         return payload
 
