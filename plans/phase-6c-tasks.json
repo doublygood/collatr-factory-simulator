@@ -1,0 +1,96 @@
+{
+    "phase": "6c",
+    "name": "Validation & Protocol Polish",
+    "tasks": [
+        {
+            "id": "6c.1",
+            "name": "SignalConfig min_clamp <= max_clamp Validator",
+            "group": "Config Validation",
+            "file": "src/factory_simulator/config.py",
+            "description": "Add model_validator(mode='after') to SignalConfig that raises ValueError when both min_clamp and max_clamp are set and min_clamp > max_clamp. Single-sided clamp (only one set) and equal values are valid. Test: reversed clamps raise, equal pass, single-sided pass, neither pass.",
+            "review_ref": "Y9 (review-architecture.md §4.1)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6c.2",
+            "name": "ClockDriftConfig Allow Negative Values",
+            "group": "Config Validation",
+            "file": "src/factory_simulator/config.py",
+            "description": "Remove non-negative validators on initial_offset_ms and drift_rate_s_per_day in ClockDriftConfig. Negative values are valid (clock behind, clock losing time). Optionally guard against NaN/Inf. Test: negative offset and drift rate accepted without error.",
+            "review_ref": "Y10 (review-architecture.md §4.1)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6c.3",
+            "name": "Fix Calibration Drift Rate Docstring",
+            "group": "Documentation",
+            "file": "src/factory_simulator/models/steady_state.py",
+            "description": "Clarify SteadyStateModel docstring: calibration_drift_rate is in units/second internally, PRD specifies units/hour, callers must divide by 3600. Add inline comment at the application line. No code logic change.",
+            "review_ref": "Y11 (review-signal-integrity.md §2.1)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6c.4",
+            "name": "Fix Random Walk Docstring",
+            "group": "Documentation",
+            "file": "src/factory_simulator/models/random_walk.py",
+            "description": "Replace misleading docstring claiming sqrt(dt) scaling with correct description: innovation = drift_rate * N(0,1), delta scaled by linear dt per PRD 4.2.5. Note difference from steady-state O-U drift which uses sqrt(dt).",
+            "review_ref": "Y12 (review-signal-integrity.md §2.8)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6c.5",
+            "name": "Dryer Zone Cholesky Correlation",
+            "group": "Signal Integrity",
+            "file": "src/factory_simulator/generators/press.py",
+            "description": "Add PRD 4.3.1 Cholesky noise correlation for dryer zones (3x3 matrix: 1-2=0.1, 1-3=0.02, 2-3=0.1). Pattern: import CholeskyCorrelator, build noise generators separately from FirstOrderLagModel (avoid double-noising), generate 3 N(0,1) draws per tick, apply Cholesky factor, scale by effective_sigma, add to raw temps. Allow custom matrix via dryer_zone_correlation_matrix in equipment extras. Test: positive sample correlation between zones with known seed.",
+            "review_ref": "Y13 (review-signal-integrity.md §4.5)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6c.6",
+            "name": "Oven Zone Cholesky Correlation",
+            "group": "Signal Integrity",
+            "file": "src/factory_simulator/generators/oven.py",
+            "description": "Add PRD 4.3.1 Cholesky noise correlation for oven zones (3x3 matrix: 1-2=0.15, 1-3=0.05, 2-3=0.15). Same pattern as 6c.5 but in OvenGenerator. Thermal coupling (physical model) and Cholesky (noise correlation) are independent — both should coexist. Allow custom matrix via oven_zone_correlation_matrix. Test: positive sample correlation, higher than dryer correlation.",
+            "review_ref": "Y13 (review-signal-integrity.md §4.5)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6c.7",
+            "name": "Coil 4 Derivation Fix",
+            "group": "Protocol Correctness",
+            "file": "src/factory_simulator/protocols/modbus_server.py",
+            "description": "Change Coil 4 (laminator.running) from CoilDefinition(4, 'press.machine_state', derive_value=2) to CoilDefinition(4, 'laminator.web_speed', mode='gt_zero'). Matches Coil 5 pattern and derives from laminator's own signal. Test: coil True when laminator speed > 0, False when 0, independent of press state.",
+            "review_ref": "Y14 (review-protocol-fidelity.md §2.8)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6c.8",
+            "name": "OPC-UA MinimumSamplingInterval",
+            "group": "Protocol Correctness",
+            "file": "src/factory_simulator/protocols/opcua_server.py",
+            "description": "Set MinimumSamplingInterval attribute on all OPC-UA variable nodes. Use sig_cfg.sample_rate_ms if set, else config.simulation.tick_interval_ms. In asyncua use write_attribute(AttributeIds.MinimumSamplingInterval, DataValue(Variant(ms, VariantType.Double))). Test: read attribute from node, verify equals expected ms value.",
+            "review_ref": "Y15 (review-protocol-fidelity.md §3.4)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6c.9",
+            "name": "Validate All Fixes — Full Suite",
+            "group": "Validation",
+            "file": null,
+            "description": "Run ruff + mypy + pytest full suite. Run batch sim with both profiles (packaging + F&B). Verify no regressions. Fix any failures.",
+            "review_ref": "All",
+            "depends_on": ["6c.1", "6c.2", "6c.3", "6c.4", "6c.5", "6c.6", "6c.7", "6c.8"],
+            "passes": false
+        }
+    ]
+}
