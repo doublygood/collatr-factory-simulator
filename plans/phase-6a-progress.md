@@ -6,7 +6,7 @@
 - [x] 6a.1: Wire Ground Truth Logger into CLI (R1)
 - [x] 6a.2: Fix Ground Truth Header — Add Missing Scenarios (R2)
 - [x] 6a.3: Dockerfile Hardening (R3 + R4)
-- [ ] 6a.4: OPC-UA EngineeringUnits Property (R5)
+- [x] 6a.4: OPC-UA EngineeringUnits Property (R5)
 - [ ] 6a.5: Fix Oven Gateway UID Routing in Realistic Mode (R6)
 - [ ] 6a.6: Fix Severity Weight Key Mismatch (Y1)
 - [ ] 6a.7: Fix Double-Logging of Ground Truth Events (Y2)
@@ -44,6 +44,19 @@ Tasks 6a.1-6a.8 are all independent (no dependencies between them). Task 6a.9 de
 - Used `is not None` guard for all optional fields (Phase 4 + F&B) since they default to `None` in `ScenariosConfig` when not present in the YAML
 - The packaging profile test verifies none of the optional scenario names appear when fields are `None`
 - The F&B config file test (`test_fb_config_produces_complete_scenario_list`) loads the real YAML to verify end-to-end
+
+## Task 6a.4 — OPC-UA EngineeringUnits Property
+
+**What was fixed:**
+- Added `EngineeringUnits` property to every OPC-UA variable node in `_build_node_tree()` in `opcua_server.py`
+- Uses `ua.EUInformation` with `NamespaceUri="http://www.opcfoundation.org/UA/units/un/cefact"`, `UnitId=-1`, and `DisplayName`/`Description` from `sig_cfg.units or ""`
+- Property added immediately after the existing `EURange` property
+- Added `TestEngineeringUnitsAttribute` class to `test_opcua.py` with 4 tests: presence on all nodes, namespace URI, UnitId=-1, and key unit string values
+- Note: `press.ink_viscosity` unit is `"seconds"` (Zahn cup efflux time) per PRD Section 02 — not cP
+
+**Decisions:**
+- `UnitId=-1` as specified in the plan (no UNECE code mapping needed for simulator)
+- Helper `_read_engineering_units()` follows same pattern as existing `_read_eurange()` helper
 
 ## Task 6a.1 — Wire Ground Truth Logger into CLI
 

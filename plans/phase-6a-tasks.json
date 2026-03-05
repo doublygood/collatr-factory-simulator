@@ -40,7 +40,7 @@
             "description": "Add EngineeringUnits property (EUInformation type) to all OPC-UA variable nodes using signal config units field. Use OPC Foundation UNECE namespace. UnitId=-1. Test: asyncua client browse verifies EngineeringUnits present with correct unit string.",
             "review_ref": "R5 (review-protocol-fidelity.md)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6a.5",

@@ -370,6 +370,90 @@ class TestEURangeAttribute:
 
 
 # ---------------------------------------------------------------------------
+# Tests: EngineeringUnits attribute (task 6a.4)
+# ---------------------------------------------------------------------------
+
+
+async def _read_engineering_units(client: Client, node_id: ua.NodeId) -> ua.EUInformation:
+    """Read the EngineeringUnits property of a variable node."""
+    node = client.get_node(node_id)
+    children = await node.get_children()
+    for child in children:
+        bname = await child.read_browse_name()
+        if bname.Name == "EngineeringUnits":
+            return await child.read_value()  # type: ignore[no-any-return]
+    raise AssertionError(f"EngineeringUnits property not found on node {node_id}")
+
+
+class TestEngineeringUnitsAttribute:
+    """Verify EngineeringUnits property is set correctly on variable nodes (task 6a.4)."""
+
+    async def test_engineering_units_present_on_all_nodes(
+        self,
+        opcua_system: tuple[OpcuaServer, Client, int],
+    ) -> None:
+        """Every leaf node has an EngineeringUnits property child."""
+        _server, client, ns = opcua_system
+        errors: list[str] = []
+        for node_path, _type_str, _writable in EXPECTED_NODES:
+            node = client.get_node(ua.NodeId(node_path, ns))
+            children = await node.get_children()
+            browse_names = [
+                (await child.read_browse_name()).Name for child in children
+            ]
+            if "EngineeringUnits" not in browse_names:
+                errors.append(
+                    f"{node_path}: EngineeringUnits missing; children={browse_names}"
+                )
+        assert not errors, "Missing EngineeringUnits:\n" + "\n".join(errors)
+
+    async def test_engineering_units_namespace_uri(
+        self,
+        opcua_system: tuple[OpcuaServer, Client, int],
+    ) -> None:
+        """EngineeringUnits NamespaceUri is the OPC Foundation UNECE namespace."""
+        _server, client, ns = opcua_system
+        eu = await _read_engineering_units(
+            client, ua.NodeId("PackagingLine.Press1.LineSpeed", ns)
+        )
+        assert eu.NamespaceUri == "http://www.opcfoundation.org/UA/units/un/cefact"
+
+    async def test_engineering_units_unit_id_is_minus_one(
+        self,
+        opcua_system: tuple[OpcuaServer, Client, int],
+    ) -> None:
+        """EngineeringUnits UnitId is -1 (no standard UNECE code mapping)."""
+        _server, client, ns = opcua_system
+        eu = await _read_engineering_units(
+            client, ua.NodeId("PackagingLine.Press1.LineSpeed", ns)
+        )
+        assert eu.UnitId == -1
+
+    async def test_key_engineering_units_display_names(
+        self,
+        opcua_system: tuple[OpcuaServer, Client, int],
+    ) -> None:
+        """EngineeringUnits DisplayName.Text matches signal config units field."""
+        _server, client, ns = opcua_system
+        checks = [
+            ("PackagingLine.Press1.LineSpeed",       "m/min"),
+            ("PackagingLine.Press1.WebTension",      "N"),
+            ("PackagingLine.Press1.Ink.Viscosity",   "seconds"),
+            ("PackagingLine.Laminator1.NipTemperature", "C"),
+            ("PackagingLine.Energy.LinePower",       "kW"),
+        ]
+        errors: list[str] = []
+        for node_path, expected_unit in checks:
+            eu = await _read_engineering_units(client, ua.NodeId(node_path, ns))
+            actual = eu.DisplayName.Text if eu.DisplayName else ""
+            if actual != expected_unit:
+                errors.append(
+                    f"{node_path}: expected unit {expected_unit!r}, got {actual!r}"
+                )
+        assert not errors, "EngineeringUnits mismatches:\n" + "\n".join(errors)
+
+
+# ---------------------------------------------------------------------------
 # Tests: AccessLevel (read-only vs read-write)
 # ---------------------------------------------------------------------------
 

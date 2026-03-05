@@ -363,6 +363,20 @@ class OpcuaServer:
                     ua.Range(Low=eu_low, High=eu_high),
                 )
 
+                # EngineeringUnits property (PRD Appendix B, task 6a.4)
+                # UnitId=-1: no standard UNECE code mapping (acceptable for simulator)
+                eu_info = ua.EUInformation(
+                    NamespaceUri="http://www.opcfoundation.org/UA/units/un/cefact",
+                    UnitId=-1,
+                    DisplayName=ua.LocalizedText(sig_cfg.units or ""),
+                    Description=ua.LocalizedText(sig_cfg.units or ""),
+                )
+                await var_node.add_property(
+                    ua.NodeId(0, 0),
+                    "EngineeringUnits",
+                    eu_info,
+                )
+
                 # Writable for setpoints (PRD 3.2)
                 if sig_cfg.modbus_writable:
                     await var_node.set_writable()
