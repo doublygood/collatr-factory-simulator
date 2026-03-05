@@ -4,7 +4,7 @@
 
 ## Tasks
 - [x] 6d.1: Shared Reference Epoch Constant (Y18)
-- [ ] 6d.2: _format_time() Performance Fix (Y17) — depends on 6d.1
+- [x] 6d.2: _format_time() Performance Fix (Y17) — depends on 6d.1
 - [ ] 6d.3: Configurable Health Server Port (Y16)
 - [ ] 6d.4: Server Task Verification After Startup (Y20)
 - [ ] 6d.5: Narrow Exception Suppression During Shutdown (Y27)
@@ -47,3 +47,7 @@ Updated 2 test files that imported old private functions:
 
 New test file: `tests/unit/test_time_utils.py` (9 tests).
 Full suite: 3054 passed.
+
+## Task 6d.2 — _format_time() Performance Fix
+
+Verify-and-mark-done: Task 6d.1 already resolved Y17. `_format_time()` (ground_truth.py:433) delegates to `sim_time_to_iso()` from `time_utils`, which uses the module-level `REFERENCE_EPOCH_TS` constant. No per-call `datetime(2026, 1, 1, ...)` allocation remains anywhere in the file. No code changes needed.

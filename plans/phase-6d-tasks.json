@@ -20,7 +20,7 @@
             "description": "Verify that _format_time() delegates to time_utils.sim_time_to_iso() after 6d.1 (no per-call datetime creation). If 6d.1 already handled it, just verify and mark done. If not, replace the per-call datetime(2026,1,1) with the shared constant.",
             "review_ref": "Y17 (review-architecture.md §6.7)",
             "depends_on": ["6d.1"],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6d.3",
