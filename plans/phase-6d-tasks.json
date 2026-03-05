@@ -90,7 +90,7 @@
             "description": "Create dedicated test file for LaminatorGenerator (5 signals: nip_temp, nip_pressure, tunnel_temp, web_speed, adhesive_weight). Tests: web_speed tracks press, nip_temp tracks setpoint, adhesive depletes, off state zeros, determinism, signal count (5).",
             "review_ref": "Y19 (review-architecture.md §5.1)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6d.10",

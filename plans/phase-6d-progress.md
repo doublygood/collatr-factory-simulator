@@ -11,7 +11,7 @@
 - [x] 6d.6: Dead Config Cleanup — sparkplug_b, retain (Y22+Y23)
 - [x] 6d.7: Generator Tests: Coder (Y19)
 - [x] 6d.8: Generator Tests: Energy (Y19)
-- [ ] 6d.9: Generator Tests: Laminator (Y19)
+- [x] 6d.9: Generator Tests: Laminator (Y19)
 - [ ] 6d.10: Generator Tests: Slitter (Y19)
 - [ ] 6d.11: Generator Tests: Vibration (Y19)
 - [ ] 6d.12: CI Matrix: Python 3.13 + Integration Tests (Y21)
@@ -149,3 +149,17 @@ Created `tests/unit/test_generators/test_energy.py` with 14 tests covering the E
 - **TestDeterminism**: same seed → identical output
 
 Full suite: 3104 passed.
+
+## Task 6d.9 — Generator Tests: Laminator
+
+Created `tests/unit/test_generators/test_laminator.py` with 16 tests covering the LaminatorGenerator's 5 signals (nip_temp, nip_pressure, tunnel_temp, web_speed, adhesive_weight):
+
+- **TestSignalIds**: signal count (5) and signal names
+- **TestOffState**: web_speed near zero when stopped, nip_pressure and adhesive_weight zero when stopped, nip_temp and tunnel_temp cool toward ambient (20C) when stopped
+- **TestActiveState**: web_speed tracks press line_speed via correlated follower, higher press speed → higher web speed, nip_temp and tunnel_temp approach setpoints when active, nip_pressure and adhesive_weight near targets when running
+- **TestAllSignals**: 5 signals per tick, all quality "good"
+- **TestDeterminism**: same seed → identical output
+
+Key design: laminator uses `press.line_speed > 0` as its active condition (not press state enum). Thermal signals (nip_temp, tunnel_temp) use FirstOrderLagModel with setpoint tracking when active and ambient cool-down when stopped. nip_pressure and adhesive_weight use SteadyStateModel but return raw 0.0 when inactive.
+
+Full suite: 3120 passed.
