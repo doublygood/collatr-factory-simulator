@@ -430,6 +430,11 @@ class MqttPublisher:
 
         # paho client (injected for unit testing, else created fresh)
         self._client: mqtt.Client = client or self._create_client()
+        # Visibility callbacks: log connect/disconnect events (paho v2 signatures).
+        # Paho's loop_start() already handles mid-run reconnection automatically;
+        # these callbacks are for observability only.
+        self._client.on_connect = self._on_connect
+        self._client.on_disconnect = self._on_disconnect
 
         # Async task handle
         self._publish_task: asyncio.Task[None] | None = None
@@ -590,11 +595,103 @@ class MqttPublisher:
                     entry.last_published = now
                     entry.last_value = sv.value
 
+    # -- Connection callbacks -------------------------------------------------
+
+    def _on_connect(
+        self,
+        client: mqtt.Client,
+        userdata: object,
+        flags: object,
+        reason_code: object,
+        properties: object,
+    ) -> None:
+        """Log MQTT connection result (paho v2 on_connect callback).
+
+        Called by paho after each connection attempt.  Registered for
+        observability only; paho's loop_start() handles reconnection.
+
+        Paho v2 signature: ``on_connect(client, userdata, connect_flags,
+        reason_code, properties)``.
+        """
+        if getattr(reason_code, "is_failure", False):
+            logger.error(
+                "MQTT connection failed: %s (broker=%s:%d)",
+                reason_code, self._host, self._port,
+            )
+        else:
+            logger.info(
+                "MQTT connected: %s (broker=%s:%d)",
+                reason_code, self._host, self._port,
+            )
+
+    def _on_disconnect(
+        self,
+        client: mqtt.Client,
+        userdata: object,
+        flags: object,
+        reason_code: object,
+        properties: object,
+    ) -> None:
+        """Log MQTT disconnection (paho v2 on_disconnect callback).
+
+        Called by paho when the connection drops.  Registered for
+        observability only; paho's loop_start() handles reconnection.
+
+        Paho v2 signature: ``on_disconnect(client, userdata, disconnect_flags,
+        reason_code, properties)``.
+        """
+        logger.warning(
+            "MQTT disconnected: %s (broker=%s:%d)",
+            reason_code, self._host, self._port,
+        )
+
     # -- Async lifecycle ------------------------------------------------------
 
     async def start(self) -> None:
-        """Connect to broker and start the publish loop."""
-        self._client.connect(self._host, self._port, keepalive=60)
+        """Connect to broker and start the publish loop.
+
+        Retries the initial ``connect()`` call up to 3 times with
+        exponential backoff (delays: 1 s, 2 s, 4 s) to tolerate Docker
+        Compose startup ordering where the Mosquitto sidecar may not be
+        ready when the simulator starts.
+
+        Paho's ``loop_start()`` handles reconnection for mid-run drops
+        automatically; no additional reconnection logic is added here.
+
+        Raises
+        ------
+        Exception
+            If all 3 connection attempts fail, the last exception is re-raised.
+        """
+        _max_attempts = 3
+        _delays = (1.0, 2.0, 4.0)
+        last_exc: Exception | None = None
+
+        for attempt in range(_max_attempts):
+            try:
+                self._client.connect(self._host, self._port, keepalive=60)
+                break
+            except Exception as exc:
+                last_exc = exc
+                if attempt < _max_attempts - 1:
+                    delay = _delays[attempt]
+                    logger.warning(
+                        "MQTT connect attempt %d/%d failed (%s); retrying in %.0f s",
+                        attempt + 1,
+                        _max_attempts,
+                        exc,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        "MQTT connect failed after %d attempts: %s",
+                        _max_attempts,
+                        exc,
+                    )
+        else:
+            raise last_exc  # type: ignore[misc]
+
         self._client.loop_start()
         self._publish_task = asyncio.create_task(self._publish_loop())
         logger.info(

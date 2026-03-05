@@ -10,7 +10,7 @@
             "description": "Wrap initial connect() in retry loop with exponential backoff (3 attempts, 1s/2s/4s). Register on_connect and on_disconnect callbacks for visibility. Do not add custom reconnection beyond paho's built-in loop_start() reconnect. Test: mock connect to fail once then succeed; verify 3 consecutive failures raise.",
             "review_ref": "Y4 (review-architecture.md §2.6)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6b.2",

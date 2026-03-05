@@ -10,10 +10,11 @@ PRD Reference: Section 3.3, Appendix C (MQTT Topic Map)
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -546,6 +547,87 @@ async def test_start_and_stop(config, store, mock_client):
     mock_client.loop_stop.assert_called_once()
     mock_client.disconnect.assert_called_once()
     assert pub._publish_task is None
+
+
+# ---------------------------------------------------------------------------
+# Startup retry behaviour (Task 6b.1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_start_retries_on_first_failure(config, store, mock_client):
+    """start() retries connect() when first attempt raises; succeeds on second."""
+    mock_client.connect.side_effect = [ConnectionRefusedError("refused"), None]
+    pub = MqttPublisher(config, store, client=mock_client)
+    with patch.object(asyncio, "sleep", AsyncMock()):
+        await pub.start()
+    assert mock_client.connect.call_count == 2
+    mock_client.loop_start.assert_called_once()
+    assert pub._publish_task is not None
+    await pub.stop()
+
+
+@pytest.mark.asyncio
+async def test_start_raises_after_all_retries_exhausted(config, store, mock_client):
+    """start() raises ConnectionRefusedError when all 3 attempts fail."""
+    mock_client.connect.side_effect = ConnectionRefusedError("broker unavailable")
+    pub = MqttPublisher(config, store, client=mock_client)
+    with patch.object(asyncio, "sleep", AsyncMock()), pytest.raises(ConnectionRefusedError):
+        await pub.start()
+    assert mock_client.connect.call_count == 3
+    # loop_start must NOT be called if connect never succeeded
+    mock_client.loop_start.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_start_succeeds_on_third_attempt(config, store, mock_client):
+    """start() retries up to 3 times; succeeds on the third attempt."""
+    mock_client.connect.side_effect = [
+        ConnectionRefusedError("refused"),
+        ConnectionRefusedError("refused"),
+        None,
+    ]
+    pub = MqttPublisher(config, store, client=mock_client)
+    with patch.object(asyncio, "sleep", AsyncMock()):
+        await pub.start()
+    assert mock_client.connect.call_count == 3
+    mock_client.loop_start.assert_called_once()
+    await pub.stop()
+
+
+def test_on_connect_callback_is_callable(config, store, mock_client):
+    """MqttPublisher has a callable _on_connect method (paho v2 callback)."""
+    pub = MqttPublisher(config, store, client=mock_client)
+    assert callable(pub._on_connect)
+
+
+def test_on_disconnect_callback_is_callable(config, store, mock_client):
+    """MqttPublisher has a callable _on_disconnect method (paho v2 callback)."""
+    pub = MqttPublisher(config, store, client=mock_client)
+    assert callable(pub._on_disconnect)
+
+
+def test_on_connect_callback_registered_on_created_client(config, store):
+    """on_connect and on_disconnect are set on the paho client at construction."""
+    class _ClientSpy:
+        """Minimal spy to capture attribute assignment."""
+        on_connect = None
+        on_disconnect = None
+
+        def will_set(self, *a: object, **kw: object) -> None: ...
+        def max_queued_messages_set(self, *a: object, **kw: object) -> None: ...
+        def username_pw_set(self, *a: object, **kw: object) -> None: ...
+
+    spy = _ClientSpy()
+    with patch(
+        "factory_simulator.protocols.mqtt_publisher.mqtt.Client",
+        return_value=spy,
+    ):
+        pub = MqttPublisher(config, store)
+
+    # Bound method equality: compares __func__ and __self__, not identity
+    assert spy.on_connect == pub._on_connect
+    assert spy.on_disconnect == pub._on_disconnect
 
 
 # ---------------------------------------------------------------------------
