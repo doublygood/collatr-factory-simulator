@@ -13,7 +13,7 @@
 - [x] 7.8: Add I/O Error Handling in Ground Truth _write_line (G-Arch26)
 - [x] 7.9: Rename float32_hr_addresses to dual_register_hr_addresses (G-Proto8)
 - [x] 7.10: Derive Modbus Update Interval from Config (G-Proto10)
-- [ ] 7.11: Improve _compute_block_size Documentation (G-Proto13)
+- [x] 7.11: Improve _compute_block_size Documentation (G-Proto13)
 - [ ] 7.12: Explicit line_id + ShiftChange HH:MM Validator (G-Proto14 + G-Arch-ShiftChange)
 - [ ] 7.13: CI fail-fast: false + Validate All Fixes
 
@@ -61,6 +61,10 @@ Renamed `float32_hr_addresses` to `dual_register_hr_addresses` in `RegisterMap` 
 ## Task 7.10 Notes
 
 Replaced hardcoded `asyncio.sleep(0.05)` (50ms) in Modbus sync loop with `self._config.simulation.tick_interval_ms / 2000.0`, deriving the update interval from config. For the default 100ms tick this evaluates to the same 0.05s. Added comment explaining the rationale: "Sync at half the tick interval to minimise staleness." No test changes needed — no tests asserted on the specific sleep value. 3172 tests pass, ruff + mypy clean.
+
+## Task 7.11 Notes
+
+Improved `_compute_block_size` docstring and added inline comment per G-Proto13. Docstring now explains the three components clearly: pymodbus 1-based indexing (address → index = address+1), 32-bit values spanning 2 registers (indices N+1 and N+2), therefore block needs max(address)+3 entries. Added inline comment on the return line: `# +3: pymodbus 1-based indexing (+1) + 32-bit value spans 2 registers (+2)`. Documentation-only change — 3172 tests pass, ruff + mypy clean.
 
 ## Notes
 

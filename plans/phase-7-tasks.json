@@ -110,7 +110,7 @@
             "description": "Improve docstring and inline comment for the +3 safety margin in _compute_block_size. Explain: pymodbus 1-based indexing (+1) + 32-bit value spans 2 registers (+2) = +3.",
             "review_ref": "G-Proto13 (review-protocol-fidelity.md #13)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "7.12",

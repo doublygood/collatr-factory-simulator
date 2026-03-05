@@ -647,12 +647,13 @@ def _connection_drop_to_comm_drop(conn_drop: ConnectionDropConfig) -> CommDropCo
 def _compute_block_size(addresses: list[int], min_size: int = 16) -> int:
     """Compute the data block size needed to hold all register addresses.
 
-    ModbusDeviceContext adds +1 to addresses (Modbus PDU address 0 -> block
-    index 1).  A float32/uint32 entry at address N uses block indices N+1
-    and N+2.  Adding 3 to the maximum start address covers this safely.
+    pymodbus DataBlock stores values at index = address + 1 (1-based).
+    A 32-bit value at address N occupies indices N+1 and N+2.
+    Therefore the block needs at least max(address) + 3 entries.
     """
     if not addresses:
         return min_size
+    # +3: pymodbus 1-based indexing (+1) + 32-bit value spans 2 registers (+2)
     return max(max(addresses) + 3, min_size)
 
 
