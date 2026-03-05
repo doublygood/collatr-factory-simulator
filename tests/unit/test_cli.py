@@ -28,6 +28,7 @@ import pytest
 from factory_simulator.cli import (
     _default_config_path,
     _load_config,
+    _sigterm_cancels_current_task,
     _start_server,
     build_parser,
     evaluate_command,
@@ -589,7 +590,7 @@ class TestMainDispatcher:
 
 class TestSigtermHandling:
     def test_sigterm_referenced_in_cli_source(self) -> None:
-        """cli.py must import signal and register a SIGTERM handler."""
+        """cli.py must import signal and register/remove a SIGTERM handler."""
         import inspect
 
         import factory_simulator.cli as cli_module
@@ -599,6 +600,9 @@ class TestSigtermHandling:
         assert "signal.SIGTERM" in source, "cli.py must reference signal.SIGTERM"
         assert "add_signal_handler" in source, (
             "cli.py must use loop.add_signal_handler for SIGTERM"
+        )
+        assert "remove_signal_handler" in source, (
+            "cli.py must remove the SIGTERM handler on exit"
         )
 
     @pytest.mark.skipif(sys.platform == "win32", reason="SIGTERM not supported on Windows")
@@ -631,6 +635,28 @@ class TestSigtermHandling:
 
         assert proc.returncode == 0, (
             f"Expected exit code 0 after SIGTERM, got {proc.returncode}"
+        )
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="SIGTERM not supported on Windows")
+    @pytest.mark.asyncio
+    async def test_sigterm_handler_removed_after_context_exit(self) -> None:
+        """The SIGTERM handler is removed when the context manager exits."""
+        import signal as signal_mod
+
+        loop = asyncio.get_running_loop()
+
+        # Ensure no SIGTERM handler before entering
+        loop.remove_signal_handler(signal_mod.SIGTERM)
+
+        with _sigterm_cancels_current_task():
+            # Inside the context, a handler should be registered
+            # (remove returns True if a handler was registered)
+            pass
+
+        # After exiting, the handler should have been removed.
+        # remove_signal_handler returns False if no handler is registered.
+        assert loop.remove_signal_handler(signal_mod.SIGTERM) is False, (
+            "SIGTERM handler was not removed after context manager exit"
         )
 
 

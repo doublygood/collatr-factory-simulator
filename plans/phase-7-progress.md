@@ -4,7 +4,7 @@
 
 ## Tasks
 - [x] 7.1: Fix MQTT Retry Delays Tuple (CQ-Y1)
-- [ ] 7.2: Extract SIGTERM Handler Context Manager (CQ-Y2)
+- [x] 7.2: Extract SIGTERM Handler Context Manager (CQ-Y2)
 - [ ] 7.3: Extract OPC-UA Node Creation Helper (CQ-Y3)
 - [ ] 7.4: Guard Overlapping OPC-UA Node Paths + Test (CQ-Y4) — depends on 7.3
 - [ ] 7.5: Remove Dead FactoryInfo.timezone Field (G-Arch21)
@@ -20,6 +20,10 @@
 ## Task 7.1 Notes
 
 Restructured MQTT retry loop to use all 3 delay values (1s, 2s, 4s) for 4 total connection attempts, up from 3. Changed `_max_attempts` to derive from `len(_delays) + 1` and sleep condition to `attempt < len(_delays)`. Updated existing exhausted-retry test to expect 4 attempts. Added `test_start_succeeds_on_fourth_attempt` verifying all 3 delays are used. 3167 tests pass, ruff + mypy clean.
+
+## Task 7.2 Notes
+
+Extracted `_sigterm_cancels_current_task()` context manager in cli.py to eliminate duplicated SIGTERM handler setup between `_run_batch` (was lines 387-397) and `_run_realtime` (was lines 450-461). The context manager registers a SIGTERM handler that cancels the current asyncio task, and removes the handler on exit via `loop.remove_signal_handler`. Platform safety: `NotImplementedError`/`OSError` suppressed on registration (Windows), `NotImplementedError`/`ValueError` suppressed on removal. Both `_run_batch` and `_run_realtime` now use `with _sigterm_cancels_current_task():` wrapping their main logic. Added `test_sigterm_handler_removed_after_context_exit` verifying the handler is cleaned up. Updated existing source inspection test to also check for `remove_signal_handler`. 3168 tests pass, ruff + mypy clean.
 
 ## Notes
 

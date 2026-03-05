@@ -32,6 +32,7 @@ import contextlib
 import logging
 import signal
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -373,6 +374,34 @@ def _load_config(args: argparse.Namespace) -> FactoryConfig:
 # ---------------------------------------------------------------------------
 
 
+@contextlib.contextmanager
+def _sigterm_cancels_current_task() -> Iterator[None]:
+    """Register a SIGTERM handler that cancels the current asyncio task.
+
+    On exit the handler is removed so it does not outlive the caller.
+    Gracefully handles platforms without signal support (Windows).
+    """
+    loop = asyncio.get_running_loop()
+    this_task = asyncio.current_task()
+
+    def _handle() -> None:
+        logger.info("Received SIGTERM, initiating graceful shutdown")
+        if this_task is not None and not this_task.done():
+            this_task.cancel()
+
+    try:
+        loop.add_signal_handler(signal.SIGTERM, _handle)
+    except (NotImplementedError, OSError):
+        # Windows does not support add_signal_handler; Docker targets Linux.
+        logger.debug("SIGTERM signal handler not available on this platform")
+
+    try:
+        yield
+    finally:
+        with contextlib.suppress(NotImplementedError, ValueError):
+            loop.remove_signal_handler(signal.SIGTERM)
+
+
 async def _run_batch(engine: Any, sim_duration_s: float | None) -> int:
     """Run engine at high speed without live protocol servers.
 
@@ -380,36 +409,20 @@ async def _run_batch(engine: Any, sim_duration_s: float | None) -> int:
     with a finite duration).  Runs ticks as fast as possible.  Stops when
     ``sim_duration_s`` is reached (or the process is interrupted).
     """
-    # Register SIGTERM handler so Docker stop triggers graceful shutdown.
-    # asyncio.run() only installs a SIGINT handler by default; without this,
-    # SIGTERM kills the process immediately without running finally-block cleanup.
-    loop = asyncio.get_running_loop()
-    _this_task = asyncio.current_task()
-
-    def _handle_sigterm() -> None:
-        logger.info("Received SIGTERM, initiating graceful shutdown")
-        if _this_task is not None and not _this_task.done():
-            _this_task.cancel()
-
-    try:
-        loop.add_signal_handler(signal.SIGTERM, _handle_sigterm)
-    except (NotImplementedError, OSError):
-        # Windows does not support add_signal_handler; Docker targets Linux.
-        logger.debug("SIGTERM signal handler not available on this platform")
-
-    try:
-        while True:
-            sim_time: float = engine.tick()
-            if sim_duration_s is not None and sim_time >= sim_duration_s:
-                logger.info("Batch run complete: simulated %.1fs", sim_time)
-                break
-            # Yield control to the event loop between ticks so Ctrl-C is responsive
-            await asyncio.sleep(0)
-    except asyncio.CancelledError:
-        pass
-    finally:
-        if engine.batch_writer is not None:
-            engine.batch_writer.close()
+    with _sigterm_cancels_current_task():
+        try:
+            while True:
+                sim_time: float = engine.tick()
+                if sim_duration_s is not None and sim_time >= sim_duration_s:
+                    logger.info("Batch run complete: simulated %.1fs", sim_time)
+                    break
+                # Yield control to the event loop between ticks so Ctrl-C is responsive
+                await asyncio.sleep(0)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if engine.batch_writer is not None:
+                engine.batch_writer.close()
     return 0
 
 
@@ -443,23 +456,6 @@ async def _run_realtime(config: FactoryConfig, engine: Any) -> int:
     """
     from factory_simulator.health.server import HealthServer
 
-    # Register SIGTERM handler so Docker stop triggers graceful shutdown.
-    # asyncio.run() only installs a SIGINT handler by default; without this,
-    # SIGTERM kills the process immediately without running finally-block cleanup.
-    loop = asyncio.get_running_loop()
-    _this_task = asyncio.current_task()
-
-    def _handle_sigterm() -> None:
-        logger.info("Received SIGTERM, initiating graceful shutdown")
-        if _this_task is not None and not _this_task.done():
-            _this_task.cancel()
-
-    try:
-        loop.add_signal_handler(signal.SIGTERM, _handle_sigterm)
-    except (NotImplementedError, OSError):
-        # Windows does not support add_signal_handler; Docker targets Linux.
-        logger.debug("SIGTERM signal handler not available on this platform")
-
     servers: list[Any] = []
     tasks: list[asyncio.Task[None]] = []
 
@@ -467,51 +463,52 @@ async def _run_realtime(config: FactoryConfig, engine: Any) -> int:
     health.update(profile=config.factory.name)
     health_task = await _start_server(health)
 
-    try:
-        if config.protocols.modbus.enabled:
-            for srv in engine.create_modbus_servers():
-                task = await _start_server(srv)
-                tasks.append(task)
-                servers.append(srv)
-            health.update(modbus="up")
+    with _sigterm_cancels_current_task():
+        try:
+            if config.protocols.modbus.enabled:
+                for srv in engine.create_modbus_servers():
+                    task = await _start_server(srv)
+                    tasks.append(task)
+                    servers.append(srv)
+                health.update(modbus="up")
 
-        if config.protocols.opcua.enabled:
-            for srv in engine.create_opcua_servers():
-                task = await _start_server(srv)
-                tasks.append(task)
-                servers.append(srv)
-            health.update(opcua="up")
+            if config.protocols.opcua.enabled:
+                for srv in engine.create_opcua_servers():
+                    task = await _start_server(srv)
+                    tasks.append(task)
+                    servers.append(srv)
+                health.update(opcua="up")
 
-        if config.protocols.mqtt.enabled:
-            for mqtt in engine.create_mqtt_publishers():
-                task = await _start_server(mqtt)
-                tasks.append(task)
-                servers.append(mqtt)
-            health.update(mqtt="up")
+            if config.protocols.mqtt.enabled:
+                for mqtt in engine.create_mqtt_publishers():
+                    task = await _start_server(mqtt)
+                    tasks.append(task)
+                    servers.append(mqtt)
+                health.update(mqtt="up")
 
-        health.update(status="running")
+            health.update(status="running")
 
-        logger.info(
-            "Simulator running: profile=%s time_scale=%.1fx",
-            config.factory.name,
-            config.simulation.time_scale,
-        )
-        await engine.run()
+            logger.info(
+                "Simulator running: profile=%s time_scale=%.1fx",
+                config.factory.name,
+                config.simulation.time_scale,
+            )
+            await engine.run()
 
-    except asyncio.CancelledError:
-        pass
-    finally:
-        health.update(status="stopping")
-        engine.stop()
-        for srv in reversed(servers):
-            with contextlib.suppress(asyncio.CancelledError, OSError, ConnectionError):
-                await srv.stop()
-        for task in tasks:
-            if not task.done():
-                task.cancel()
-        health_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await health_task
+        except asyncio.CancelledError:
+            pass
+        finally:
+            health.update(status="stopping")
+            engine.stop()
+            for srv in reversed(servers):
+                with contextlib.suppress(asyncio.CancelledError, OSError, ConnectionError):
+                    await srv.stop()
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            health_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await health_task
 
     return 0
 

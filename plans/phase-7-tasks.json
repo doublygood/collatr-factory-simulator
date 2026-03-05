@@ -20,7 +20,7 @@
             "description": "SIGTERM handler code is duplicated between _run_batch and _run_realtime. Extract into a _sigterm_cancels_current_task() context manager. Handler should be removed on exit. Test handler removal.",
             "review_ref": "CQ-Y2 (review-post-phase6-code-quality.md)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "7.3",
