@@ -9,7 +9,7 @@
 - [x] 7.4: Guard Overlapping OPC-UA Node Paths + Test (CQ-Y4) — depends on 7.3
 - [x] 7.5: Remove Dead FactoryInfo.timezone Field (G-Arch21)
 - [x] 7.6: Elevate OPC-UA Error Log Levels (G-Arch23)
-- [ ] 7.7: Return Defensive Copy from store.get_all() (G-Arch24)
+- [x] 7.7: Return Defensive Copy from store.get_all() (G-Arch24)
 - [ ] 7.8: Add I/O Error Handling in Ground Truth _write_line (G-Arch26)
 - [ ] 7.9: Rename float32_hr_addresses to dual_register_hr_addresses (G-Proto8)
 - [ ] 7.10: Derive Modbus Update Interval from Config (G-Proto10)
@@ -45,6 +45,10 @@ Elevated three OPC-UA error log levels from `logger.debug` to `logger.warning` f
 3. `_sync_values` write failed (line 695): `logger.debug` → `logger.warning`
 
 These are genuine error conditions (OPC-UA node operations failing) that should be visible in production logs, not hidden at DEBUG level. 3170 tests pass, ruff + mypy clean.
+
+## Task 7.7 Notes
+
+Changed `store.get_all()` to return `types.MappingProxyType` wrapping the internal `_signals` dict instead of returning it directly. This provides a zero-copy, read-only view — callers can iterate and read but cannot accidentally mutate the store. Return type changed from `dict[str, SignalValue]` to `Mapping[str, SignalValue]` (from `collections.abc`). All callers (modbus_server, opcua_server, mqtt_publisher, health/server, output/writer, tests) only iterate/read, so no caller changes needed. Added `test_get_all_not_mutable` verifying that `__setitem__` and `__delitem__` raise `TypeError`. 3171 tests pass, ruff + mypy clean.
 
 ## Notes
 

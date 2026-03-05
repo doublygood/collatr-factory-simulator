@@ -10,8 +10,9 @@ CLAUDE.md Rule 9: Single Writer, No Locks
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType as _MappingProxyType
 
 # Valid quality flag values per PRD Section 8.4
 QUALITY_FLAGS = frozenset({"good", "uncertain", "bad"})
@@ -107,13 +108,14 @@ class SignalStore:
         entry = self._signals.get(signal_id)
         return entry.value if entry is not None else default
 
-    def get_all(self) -> dict[str, SignalValue]:
-        """Return a snapshot dict of all signal values.
+    def get_all(self) -> Mapping[str, SignalValue]:
+        """Return a read-only view of all signal values.
 
-        Protocol adapters use this for bulk reads.  Returns the internal
-        dict directly (no copy) for performance -- callers must not mutate.
+        Protocol adapters use this for bulk reads.  Returns a
+        :class:`~types.MappingProxyType` wrapping the internal dict --
+        zero-copy and read-only, so callers cannot accidentally mutate.
         """
-        return self._signals
+        return _MappingProxyType(self._signals)
 
     def signal_ids(self) -> list[str]:
         """Return a sorted list of all registered signal IDs."""

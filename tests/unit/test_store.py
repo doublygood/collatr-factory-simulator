@@ -232,6 +232,16 @@ class TestGetAll:
         all_signals = store.get_all()
         assert all_signals["s1"].value == 99.0
 
+    def test_get_all_not_mutable(self) -> None:
+        """get_all() returns a read-only view; mutation raises TypeError."""
+        store = SignalStore()
+        store.set("s1", 1.0, timestamp=0.0)
+        view = store.get_all()
+        with pytest.raises(TypeError):
+            view["s2"] = SignalValue(signal_id="s2", value=2.0, timestamp=0.0)  # type: ignore[index]
+        with pytest.raises(TypeError):
+            del view["s1"]  # type: ignore[arg-type]
+
 
 # ---------------------------------------------------------------------------
 # signal_ids

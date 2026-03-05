@@ -70,7 +70,7 @@
             "description": "store.get_all() returns internal dict directly. Use types.MappingProxyType for a zero-copy read-only view. Update return type to Mapping[str, SignalValue]. Add test_get_all_not_mutable. Check all callers work with read-only view.",
             "review_ref": "G-Arch24 (review-architecture.md #24)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "7.8",
