@@ -5,7 +5,7 @@
 ## Tasks
 - [x] 6d.1: Shared Reference Epoch Constant (Y18)
 - [x] 6d.2: _format_time() Performance Fix (Y17) — depends on 6d.1
-- [ ] 6d.3: Configurable Health Server Port (Y16)
+- [x] 6d.3: Configurable Health Server Port (Y16)
 - [ ] 6d.4: Server Task Verification After Startup (Y20)
 - [ ] 6d.5: Narrow Exception Suppression During Shutdown (Y27)
 - [ ] 6d.6: Dead Config Cleanup — sparkplug_b, retain (Y22+Y23)
@@ -51,3 +51,16 @@ Full suite: 3054 passed.
 ## Task 6d.2 — _format_time() Performance Fix
 
 Verify-and-mark-done: Task 6d.1 already resolved Y17. `_format_time()` (ground_truth.py:433) delegates to `sim_time_to_iso()` from `time_utils`, which uses the module-level `REFERENCE_EPOCH_TS` constant. No per-call `datetime(2026, 1, 1, ...)` allocation remains anywhere in the file. No code changes needed.
+
+## Task 6d.3 — Configurable Health Server Port
+
+Added `health_port: int = 8080` to `SimulationConfig` with validator (0-65535). Added `SIM_HEALTH_PORT` to env override map in `_apply_env_overrides()`. Updated `cli.py:446` to use `config.simulation.health_port` instead of hardcoded `8080`.
+
+Tests added to `tests/unit/test_config.py`:
+- Default value (8080) in `test_defaults`
+- Custom port (9090)
+- Boundary: port 0 valid, port 65535 valid
+- Validation: negative port rejected, port > 65535 rejected
+- Env override: `SIM_HEALTH_PORT=9090`
+
+Full suite: 3060 passed.

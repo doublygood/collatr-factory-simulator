@@ -41,6 +41,7 @@ class SimulationConfig(BaseModel):
     start_time: str | None = None
     log_level: str = "info"
     sim_duration_s: float | None = None
+    health_port: int = 8080
 
     @field_validator("time_scale")
     @classmethod
@@ -63,6 +64,13 @@ class SimulationConfig(BaseModel):
         if v.lower() not in allowed:
             raise ValueError(f"log_level must be one of {sorted(allowed)}")
         return v.lower()
+
+    @field_validator("health_port")
+    @classmethod
+    def _valid_health_port(cls, v: int) -> int:
+        if not (0 <= v <= 65535):
+            raise ValueError("health_port must be between 0 and 65535")
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -1427,6 +1435,7 @@ def _apply_env_overrides(data: dict[str, Any]) -> dict[str, Any]:
         ("SIM_TIME_SCALE", ["simulation", "time_scale"], float),
         ("SIM_RANDOM_SEED", ["simulation", "random_seed"], int),
         ("SIM_LOG_LEVEL", ["simulation", "log_level"], str),
+        ("SIM_HEALTH_PORT", ["simulation", "health_port"], int),
         # Protocol overrides (no SIM_ prefix per PRD table)
         ("MODBUS_ENABLED", ["protocols", "modbus", "enabled"], bool),
         ("MODBUS_PORT", ["protocols", "modbus", "port"], int),

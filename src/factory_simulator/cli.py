@@ -443,7 +443,7 @@ async def _run_realtime(config: FactoryConfig, engine: Any) -> int:
     servers: list[Any] = []
     tasks: list[asyncio.Task[None]] = []
 
-    health = HealthServer(port=8080, store=engine.store)
+    health = HealthServer(port=config.simulation.health_port, store=engine.store)
     health.update(profile=config.factory.name)
     health_task: asyncio.Task[None] = asyncio.create_task(health.start())
     await asyncio.sleep(0.05)  # allow health server to bind

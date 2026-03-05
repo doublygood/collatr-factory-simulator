@@ -30,7 +30,7 @@
             "description": "Add health_port field to SimulationConfig (default 8080, validator 0-65535). Add SIM_HEALTH_PORT env override. Update cli.py _run_realtime() to use config.simulation.health_port instead of hardcoded 8080. Test: default 8080, custom port, invalid port raises.",
             "review_ref": "Y16 (review-architecture.md §6.3)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6d.4",

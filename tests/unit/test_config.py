@@ -98,6 +98,7 @@ class TestSimulationConfig:
         assert cfg.tick_interval_ms == 100
         assert cfg.start_time is None
         assert cfg.log_level == "info"
+        assert cfg.health_port == 8080
 
     def test_valid_time_scale(self) -> None:
         cfg = SimulationConfig(time_scale=10.0)
@@ -130,6 +131,26 @@ class TestSimulationConfig:
     def test_random_seed_integer(self) -> None:
         cfg = SimulationConfig(random_seed=42)
         assert cfg.random_seed == 42
+
+    def test_custom_health_port(self) -> None:
+        cfg = SimulationConfig(health_port=9090)
+        assert cfg.health_port == 9090
+
+    def test_health_port_zero_valid(self) -> None:
+        cfg = SimulationConfig(health_port=0)
+        assert cfg.health_port == 0
+
+    def test_health_port_max_valid(self) -> None:
+        cfg = SimulationConfig(health_port=65535)
+        assert cfg.health_port == 65535
+
+    def test_health_port_negative_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="health_port must be between 0 and 65535"):
+            SimulationConfig(health_port=-1)
+
+    def test_health_port_too_large_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="health_port must be between 0 and 65535"):
+            SimulationConfig(health_port=65536)
 
 
 # ===================================================================
@@ -631,6 +652,12 @@ class TestEnvOverrides:
         monkeypatch.setenv("SIM_LOG_LEVEL", "debug")
         cfg = load_config(p, apply_env=True)
         assert cfg.simulation.log_level == "debug"
+
+    def test_sim_health_port(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        p = _write_yaml(tmp_path, _minimal_config())
+        monkeypatch.setenv("SIM_HEALTH_PORT", "9090")
+        cfg = load_config(p, apply_env=True)
+        assert cfg.simulation.health_port == 9090
 
     def test_modbus_enabled_false(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         p = _write_yaml(tmp_path, _minimal_config())
