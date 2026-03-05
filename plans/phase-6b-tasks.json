@@ -30,7 +30,7 @@
             "description": "Register SIGTERM handler via loop.add_signal_handler in _run_realtime(). Handler cancels current task to flow through existing finally cleanup. Apply to batch mode path too. Test: verify signal handler is registered (code-level check).",
             "review_ref": "Y6 (review-architecture.md §2.4)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6b.4",

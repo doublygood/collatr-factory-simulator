@@ -7,6 +7,7 @@ Validates:
 - Evaluate subcommand delegation
 - Run subcommand config loading and overrides
 - python -m factory_simulator (__main__.py) importable
+- SIGTERM handler registered for graceful Docker shutdown (Task 6b.3)
 
 PRD Reference: Appendix F (Phase 5 — CLI and Productisation)
 """
@@ -15,6 +16,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -572,6 +574,58 @@ class TestMainDispatcher:
 # ---------------------------------------------------------------------------
 # __main__.py — python -m factory_simulator
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# SIGTERM graceful shutdown (Task 6b.3)
+# ---------------------------------------------------------------------------
+
+
+class TestSigtermHandling:
+    def test_sigterm_referenced_in_cli_source(self) -> None:
+        """cli.py must import signal and register a SIGTERM handler."""
+        import inspect
+
+        import factory_simulator.cli as cli_module
+
+        source = inspect.getsource(cli_module)
+        assert "import signal" in source, "cli.py must import the signal module"
+        assert "signal.SIGTERM" in source, "cli.py must reference signal.SIGTERM"
+        assert "add_signal_handler" in source, (
+            "cli.py must use loop.add_signal_handler for SIGTERM"
+        )
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="SIGTERM not supported on Windows")
+    def test_sigterm_exits_cleanly_in_batch_mode(self, tmp_path: Path) -> None:
+        """Sending SIGTERM during a batch run causes a clean exit (returncode 0).
+
+        Without the SIGTERM handler, the OS default terminates the process with
+        exit code 143 (128 + SIGTERM signal number 15).
+        """
+        import signal as signal_mod
+
+        proc = subprocess.Popen(
+            [
+                sys.executable, "-m", "factory_simulator", "run",
+                "--batch-output", str(tmp_path),
+                "--batch-duration", "100000s",
+                "--seed", "42",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        try:
+            time.sleep(1.5)  # allow simulator to initialise
+            proc.send_signal(signal_mod.SIGTERM)
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            pytest.fail("Process did not exit within 10 s after SIGTERM")
+
+        assert proc.returncode == 0, (
+            f"Expected exit code 0 after SIGTERM, got {proc.returncode}"
+        )
 
 
 class TestMainModule:

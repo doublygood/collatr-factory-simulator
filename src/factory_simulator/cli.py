@@ -30,6 +30,7 @@ import argparse
 import asyncio
 import contextlib
 import logging
+import signal
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -369,6 +370,23 @@ async def _run_batch(engine: Any, sim_duration_s: float | None) -> int:
     with a finite duration).  Runs ticks as fast as possible.  Stops when
     ``sim_duration_s`` is reached (or the process is interrupted).
     """
+    # Register SIGTERM handler so Docker stop triggers graceful shutdown.
+    # asyncio.run() only installs a SIGINT handler by default; without this,
+    # SIGTERM kills the process immediately without running finally-block cleanup.
+    loop = asyncio.get_running_loop()
+    _this_task = asyncio.current_task()
+
+    def _handle_sigterm() -> None:
+        logger.info("Received SIGTERM, initiating graceful shutdown")
+        if _this_task is not None and not _this_task.done():
+            _this_task.cancel()
+
+    try:
+        loop.add_signal_handler(signal.SIGTERM, _handle_sigterm)
+    except (NotImplementedError, OSError):
+        # Windows does not support add_signal_handler; Docker targets Linux.
+        logger.debug("SIGTERM signal handler not available on this platform")
+
     try:
         while True:
             sim_time: float = engine.tick()
@@ -394,6 +412,23 @@ async def _run_realtime(config: FactoryConfig, engine: Any) -> int:
     started on port 8080 for Docker health checks.
     """
     from factory_simulator.health.server import HealthServer
+
+    # Register SIGTERM handler so Docker stop triggers graceful shutdown.
+    # asyncio.run() only installs a SIGINT handler by default; without this,
+    # SIGTERM kills the process immediately without running finally-block cleanup.
+    loop = asyncio.get_running_loop()
+    _this_task = asyncio.current_task()
+
+    def _handle_sigterm() -> None:
+        logger.info("Received SIGTERM, initiating graceful shutdown")
+        if _this_task is not None and not _this_task.done():
+            _this_task.cancel()
+
+    try:
+        loop.add_signal_handler(signal.SIGTERM, _handle_sigterm)
+    except (NotImplementedError, OSError):
+        # Windows does not support add_signal_handler; Docker targets Linux.
+        logger.debug("SIGTERM signal handler not available on this platform")
 
     servers: list[Any] = []
     tasks: list[asyncio.Task[None]] = []
@@ -542,6 +577,9 @@ def run_command(args: argparse.Namespace) -> int:
         return asyncio.run(_async_run(args))
     except KeyboardInterrupt:
         print("\nSimulator stopped.", file=sys.stderr)
+        return 0
+    except asyncio.CancelledError:
+        # SIGTERM triggered graceful shutdown; cleanup ran in finally blocks.
         return 0
 
 

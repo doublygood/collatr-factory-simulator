@@ -5,7 +5,7 @@
 ## Tasks
 - [x] 6b.1: MQTT Publisher Startup Retry and Disconnect Monitoring (Y4)
 - [x] 6b.2: CsvWriter Idempotent Close (Y5)
-- [ ] 6b.3: SIGTERM Handler for Graceful Docker Shutdown (Y6)
+- [x] 6b.3: SIGTERM Handler for Graceful Docker Shutdown (Y6)
 - [ ] 6b.4: Profile-Aware 0x06 Device Busy Exception (Y7)
 - [ ] 6b.5: Wire EvaluationConfig into FactoryConfig (Y8)
 - [ ] 6b.6: Validate All Fixes — Full Suite
@@ -52,3 +52,24 @@ Tasks 6b.1-6b.5 are all independent (no dependencies between them). Task 6b.6 de
 **Decisions:**
 - Chose `raise RuntimeError` over silent skip for `write_tick()` after close. This makes programming errors visible rather than silently losing data. Documented in docstring.
 - `CsvWriter` uses `self._file.closed` (built-in Python file attribute); `ParquetWriter` uses an explicit `_closed` flag since `pq.ParquetWriter` has no `.closed` attribute.
+
+---
+
+## Task 6b.3: SIGTERM Handler for Graceful Docker Shutdown (DONE)
+
+**Files changed:**
+- `src/factory_simulator/cli.py`
+- `tests/unit/test_cli.py`
+
+**What was done:**
+1. Added `import signal` to top-level imports.
+2. In `_run_batch()`: before the `try` block, registers a SIGTERM handler via `loop.add_signal_handler(signal.SIGTERM, _handle_sigterm)`. The handler captures `asyncio.current_task()` at registration time and calls `task.cancel()` when SIGTERM arrives. Guarded with `try/except (NotImplementedError, OSError)` for platform safety (Windows).
+3. In `_run_realtime()`: same pattern registered before the `servers`/`tasks` lists are created.
+4. In `run_command()`: added `except asyncio.CancelledError: return 0`. When SIGTERM cancels the task, the existing `finally` blocks run cleanup, then `asyncio.run()` raises `CancelledError` (with `_interrupt_count == 0`). This catch converts it to exit code 0.
+5. Added `TestSigtermHandling` class with two tests: source-code check for `signal.SIGTERM` and `add_signal_handler`; subprocess test that sends SIGTERM during a batch run and verifies exit code 0.
+
+**Decisions:**
+- SIGTERM handler registered in both `_run_batch` and `_run_realtime` (not in `_async_run`) so the intent is explicit in each execution path, matching the plan's description.
+- Task captured at registration time (closure over `_this_task`) rather than using `asyncio.current_task()` inside the handler itself — handlers run as event-loop callbacks where `current_task()` returns `None`.
+- Added `except asyncio.CancelledError` in `run_command()` because when `task.cancel()` is called and the coroutine suppresses `CancelledError` internally (returning normally), Python 3.12's Task marks itself as cancelled on StopIteration (since `_must_cancel` stays True). `asyncio.run()` then raises `CancelledError`. This is different from the SIGINT path where `asyncio.run()` converts it to `KeyboardInterrupt`.
+- The existing `finally` block cleanup in `_run_realtime` may be partially interrupted at `await srv.stop()` (a CancelledError is re-thrown there by the task machinery) — this is a pre-existing limitation with the same behaviour as SIGINT. The important thing is that `engine.stop()` and `health.update(status="stopping")` still run before the interrupt.
