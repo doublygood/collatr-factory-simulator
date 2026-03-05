@@ -20,7 +20,7 @@
             "description": "Guard CsvWriter.close() with self._file.closed check before flush/close. Apply same to ParquetWriter if needed. Test: double-close produces no exception. Test: write_tick after close is handled cleanly.",
             "review_ref": "Y5 (review-architecture.md §3.9)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6b.3",

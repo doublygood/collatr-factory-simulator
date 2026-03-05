@@ -112,7 +112,14 @@ class CsvWriter(BatchWriter):
 
         Flushes the buffer to disk automatically when ``buffer_size`` is
         reached.
+
+        Raises
+        ------
+        RuntimeError
+            If called after ``close()`` has been called.
         """
+        if self._file.closed:
+            raise RuntimeError("CsvWriter is closed; write_tick() cannot be called")
         for sv in store.get_all().values():
             # Drop NaN / Inf (Rule: no invalid floats in batch output)
             if isinstance(sv.value, float) and (
@@ -138,7 +145,13 @@ class CsvWriter(BatchWriter):
         self._buffer.clear()
 
     def close(self) -> None:
-        """Flush any remaining buffered rows and close the output file."""
+        """Flush any remaining buffered rows and close the output file.
+
+        Idempotent: calling ``close()`` more than once is safe and has no
+        effect after the first call.
+        """
+        if self._file.closed:
+            return
         if self._buffer:
             self._flush()
         self._file.close()
@@ -200,13 +213,21 @@ class ParquetWriter(BatchWriter):
         self._file_path = path / "signals.parquet"
         # Opened on first flush (schema determined from first batch).
         self._pq_writer: Any = None
+        self._closed: bool = False
 
     def write_tick(self, sim_time: float, store: SignalStore) -> None:
         """Buffer one tick's worth of signal values.
 
         Flushes the buffer to disk automatically when ``buffer_size`` is
         reached.
+
+        Raises
+        ------
+        RuntimeError
+            If called after ``close()`` has been called.
         """
+        if self._closed:
+            raise RuntimeError("ParquetWriter is closed; write_tick() cannot be called")
         row: dict[str, float | str | bool | None] = {"timestamp": sim_time}
 
         for sv in store.get_all().values():
@@ -260,7 +281,14 @@ class ParquetWriter(BatchWriter):
         self._buffer.clear()
 
     def close(self) -> None:
-        """Flush any remaining buffered rows and close the Parquet file."""
+        """Flush any remaining buffered rows and close the Parquet file.
+
+        Idempotent: calling ``close()`` more than once is safe and has no
+        effect after the first call.
+        """
+        if self._closed:
+            return
+        self._closed = True
         self._flush()
         if self._pq_writer is not None:
             self._pq_writer.close()

@@ -4,7 +4,7 @@
 
 ## Tasks
 - [x] 6b.1: MQTT Publisher Startup Retry and Disconnect Monitoring (Y4)
-- [ ] 6b.2: CsvWriter Idempotent Close (Y5)
+- [x] 6b.2: CsvWriter Idempotent Close (Y5)
 - [ ] 6b.3: SIGTERM Handler for Graceful Docker Shutdown (Y6)
 - [ ] 6b.4: Profile-Aware 0x06 Device Busy Exception (Y7)
 - [ ] 6b.5: Wire EvaluationConfig into FactoryConfig (Y8)
@@ -32,3 +32,23 @@ Tasks 6b.1-6b.5 are all independent (no dependencies between them). Task 6b.6 de
 - Used `getattr(reason_code, "is_failure", False)` to avoid hard dependency on paho `ReasonCode` type.
 - `# type: ignore[assignment]` not needed — mypy accepts the assignment without it.
 - Test for callback registration used `_ClientSpy` (plain object) + `==` comparison (bound method equality, not identity, since Python creates new bound method objects on each attribute access).
+
+---
+
+## Task 6b.2: CsvWriter Idempotent Close (DONE)
+
+**Files changed:**
+- `src/factory_simulator/output/writer.py`
+- `tests/unit/test_batch_output.py`
+
+**What was done:**
+1. `CsvWriter.close()`: added `if self._file.closed: return` guard at the top — second call is a no-op.
+2. `CsvWriter.write_tick()`: added `if self._file.closed: raise RuntimeError(...)` guard — calling after close raises with a clear message.
+3. `ParquetWriter.__init__()`: added `self._closed: bool = False` flag (pyarrow's writer object has no `.closed` attribute).
+4. `ParquetWriter.close()`: added `if self._closed: return` + `self._closed = True` — idempotent.
+5. `ParquetWriter.write_tick()`: added `if self._closed: raise RuntimeError(...)` guard.
+6. Added 5 new tests: `TestCsvIdempotentClose` (3 tests) and 2 Parquet tests in `TestParquetWriter`.
+
+**Decisions:**
+- Chose `raise RuntimeError` over silent skip for `write_tick()` after close. This makes programming errors visible rather than silently losing data. Documented in docstring.
+- `CsvWriter` uses `self._file.closed` (built-in Python file attribute); `ParquetWriter` uses an explicit `_closed` flag since `pq.ParquetWriter` has no `.closed` attribute.

@@ -347,6 +347,45 @@ class TestCsvDataEngineIntegration:
 
 
 # ---------------------------------------------------------------------------
+# CsvWriter — idempotent close and write-after-close behaviour
+# ---------------------------------------------------------------------------
+
+
+class TestCsvIdempotentClose:
+    def test_double_close_no_exception(self, tmp_path: pathlib.Path) -> None:
+        """Calling close() twice must not raise."""
+        config = _csv_config(tmp_path, buffer_size=1000)
+        store = _make_store(("s1", 1.0, "good"))
+        writer = CsvWriter(tmp_path, config)
+        writer.write_tick(1.0, store)
+        writer.close()
+        writer.close()  # must be a no-op
+
+    def test_write_tick_after_close_raises(self, tmp_path: pathlib.Path) -> None:
+        """write_tick() after close() must raise RuntimeError."""
+        config = _csv_config(tmp_path, buffer_size=1000)
+        store = _make_store(("s1", 1.0, "good"))
+        writer = CsvWriter(tmp_path, config)
+        writer.write_tick(1.0, store)
+        writer.close()
+        with pytest.raises(RuntimeError, match="closed"):
+            writer.write_tick(2.0, store)
+
+    def test_double_close_data_intact(self, tmp_path: pathlib.Path) -> None:
+        """Data written before first close is preserved after double-close."""
+        config = _csv_config(tmp_path, buffer_size=1000)
+        store = _make_store(("s1", 42.0, "good"))
+        writer = CsvWriter(tmp_path, config)
+        writer.write_tick(1.0, store)
+        writer.close()
+        writer.close()
+
+        rows = _read_csv_rows(tmp_path)
+        assert len(rows) == 1
+        assert float(rows[0]["value"]) == pytest.approx(42.0)
+
+
+# ---------------------------------------------------------------------------
 # BatchOutputConfig validation
 # ---------------------------------------------------------------------------
 
@@ -546,3 +585,32 @@ class TestParquetWriter:
         writer.close()
 
         assert not (tmp_path / "signals.parquet").exists()
+
+    def test_double_close_no_exception(self, tmp_path: pathlib.Path) -> None:
+        """Calling close() twice must not raise."""
+        import pyarrow.parquet as pq
+
+        config = BatchOutputConfig(
+            format="parquet", path=str(tmp_path), buffer_size=1000
+        )
+        store = _make_store(("s1", 1.0, "good"))
+        writer = ParquetWriter(tmp_path, config)
+        writer.write_tick(1.0, store)
+        writer.close()
+        writer.close()  # must be a no-op
+
+        # Data still intact
+        table = pq.read_table(str(tmp_path / "signals.parquet"))
+        assert table.num_rows == 1
+
+    def test_write_tick_after_close_raises(self, tmp_path: pathlib.Path) -> None:
+        """write_tick() after close() must raise RuntimeError."""
+        config = BatchOutputConfig(
+            format="parquet", path=str(tmp_path), buffer_size=1000
+        )
+        store = _make_store(("s1", 1.0, "good"))
+        writer = ParquetWriter(tmp_path, config)
+        writer.write_tick(1.0, store)
+        writer.close()
+        with pytest.raises(RuntimeError, match="closed"):
+            writer.write_tick(2.0, store)
