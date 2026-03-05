@@ -19,7 +19,7 @@ Current state:
 - **Config validation**: min_clamp <= max_clamp, negative clock drift allowed
 - 3050+ tests passing, ruff + mypy clean
 
-**Phase 6d addresses 12 lower-priority YELLOW issues (Y16-Y24, Y27) — maintenance, test coverage, and CI improvements.**
+**Phase 6d addresses the remaining YELLOW issues (Y16-Y27) — maintenance, test coverage, CI, and protocol polish. Y24 already fixed in 6a.**
 
 The full review reports are in:
 - `plans/review-architecture.md`
@@ -136,6 +136,28 @@ Update `.github/workflows/ci.yml`:
 4. Keep lint and typecheck on 3.12 only.
 
 **Check which integration tests need an MQTT broker** — look for `pytest.importorskip("paho")` or broker connectivity checks at module level. `test_mqtt_integration.py` and `test_fnb_opcua_mqtt_integration.py` likely need a broker. Exclude both if so.
+
+### OPC-UA Inactive Profile Nodes (Task 6d.13)
+
+PRD 3.2.1 says inactive profile nodes should exist with `AccessLevel=0` and `StatusCode.BadNotReadable`. Currently, in collapsed mode, only active profile nodes are created.
+
+**Scope:** Collapsed mode only. In realistic mode, each OPC-UA server is scoped to its own equipment and there is no inactive concept.
+
+**Approach:** Add `inactive_config: FactoryConfig | None` parameter to `OpcuaServer`. In `_build_node_tree()`, after building active nodes, iterate inactive config's equipment/signals and create nodes with:
+- `AccessLevel = 0` (no read, no write)
+- StatusCode `BadNotReadable`
+- EURange, EngineeringUnits, MinimumSamplingInterval as for active nodes
+- NOT added to `self._nodes` / `self._node_to_signal` (no sync)
+
+In `cli.py` / `data_engine.py`, when creating OPC-UA servers in collapsed mode, load the other profile's config and pass as `inactive_config`.
+
+### Profile-Specific LWT Topic (Task 6d.14)
+
+Both profiles use `lwt_topic: "collatr/factory/status"`. If both ran simultaneously, they'd conflict.
+
+**Fix:** Change `MqttProtocolConfig.lwt_topic` default to empty string `""`. When empty, auto-generate from `{topic_prefix}/{line_id}/status` (e.g. `collatr/factory/packaging1/status`). When explicitly set, use as-is (backward compat).
+
+Update both YAML configs to remove the explicit `lwt_topic` (or update to profile-specific paths).
 
 ## STOPPING RULES
 

@@ -15,7 +15,9 @@
 - [ ] 6d.10: Generator Tests: Slitter (Y19)
 - [ ] 6d.11: Generator Tests: Vibration (Y19)
 - [ ] 6d.12: CI Matrix: Python 3.13 + Integration Tests (Y21)
-- [ ] 6d.13: Validate All Fixes — Full Suite
+- [ ] 6d.13: OPC-UA AccessLevel=0 for Inactive Profile Nodes (Y25)
+- [ ] 6d.14: Profile-Specific LWT Topic (Y26)
+- [ ] 6d.15: Validate All Fixes — Full Suite
 
 ## Notes
 
@@ -23,7 +25,6 @@ Only dependency: 6d.2 depends on 6d.1 (shared epoch must exist before ground_tru
 All other tasks are fully independent.
 
 Y24 (Dockerfile editable install) was already fixed in Phase 6a — skipped.
-Y25 (AccessLevel=0 inactive profile) and Y26 (LWT topic) deferred to post-MVP.
 
 Generator test files (6d.7-6d.11) follow the existing pattern in test_mixer.py, test_press.py:
 helpers to create minimal config, run N ticks, assert expected behaviour.
