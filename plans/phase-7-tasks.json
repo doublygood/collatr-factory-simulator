@@ -100,7 +100,7 @@
             "description": "Modbus sync loop hardcodes 50ms sleep. Derive from tick_interval_ms / 2 (half-tick for freshness). Add comment explaining the rationale. Uses self._config.simulation.tick_interval_ms.",
             "review_ref": "G-Proto10 (review-protocol-fidelity.md #10)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "7.11",

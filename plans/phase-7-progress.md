@@ -12,7 +12,7 @@
 - [x] 7.7: Return Defensive Copy from store.get_all() (G-Arch24)
 - [x] 7.8: Add I/O Error Handling in Ground Truth _write_line (G-Arch26)
 - [x] 7.9: Rename float32_hr_addresses to dual_register_hr_addresses (G-Proto8)
-- [ ] 7.10: Derive Modbus Update Interval from Config (G-Proto10)
+- [x] 7.10: Derive Modbus Update Interval from Config (G-Proto10)
 - [ ] 7.11: Improve _compute_block_size Documentation (G-Proto13)
 - [ ] 7.12: Explicit line_id + ShiftChange HH:MM Validator (G-Proto14 + G-Arch-ShiftChange)
 - [ ] 7.13: CI fail-fast: false + Validate All Fixes
@@ -57,6 +57,10 @@ Wrapped the body of `_write_line` in `ground_truth.py` with `try/except OSError`
 ## Task 7.9 Notes
 
 Renamed `float32_hr_addresses` to `dual_register_hr_addresses` in `RegisterMap` dataclass and all `.add()` calls in `build_register_map()`. Renamed `float32_addresses` parameter/attribute in `FactoryDeviceContext` to `dual_register_addresses` — this is the constructor param, internal `_dual_register_addresses` attr, and all pass-through sites (main context at line 799, secondary contexts at line 828). Updated `setValues` docstring to "Reject FC06 on dual-register (float32/uint32) pairs." Updated all test references in `test_modbus.py` (field access, param name, test name/docstring), `test_modbus_exceptions.py` (param name, comment), and `tests/spikes/test_spike_modbus.py` (standalone copy of the class). The set correctly tracks both words of float32 AND uint32 register pairs — the old name was misleading since it only mentioned float32. 3172 tests pass, ruff + mypy clean.
+
+## Task 7.10 Notes
+
+Replaced hardcoded `asyncio.sleep(0.05)` (50ms) in Modbus sync loop with `self._config.simulation.tick_interval_ms / 2000.0`, deriving the update interval from config. For the default 100ms tick this evaluates to the same 0.05s. Added comment explaining the rationale: "Sync at half the tick interval to minimise staleness." No test changes needed — no tests asserted on the specific sleep value. 3172 tests pass, ruff + mypy clean.
 
 ## Notes
 

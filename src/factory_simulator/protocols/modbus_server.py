@@ -1267,6 +1267,9 @@ class ModbusServer:
                         default=0.0,
                     )
                     self.sync_registers(sim_time)
-                await asyncio.sleep(0.05)  # 50ms update interval
+                # Sync at half the tick interval to minimise staleness
+                await asyncio.sleep(
+                    self._config.simulation.tick_interval_ms / 2000.0
+                )
         except asyncio.CancelledError:
             pass
