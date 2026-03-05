@@ -10,7 +10,7 @@
 - [x] 7.5: Remove Dead FactoryInfo.timezone Field (G-Arch21)
 - [x] 7.6: Elevate OPC-UA Error Log Levels (G-Arch23)
 - [x] 7.7: Return Defensive Copy from store.get_all() (G-Arch24)
-- [ ] 7.8: Add I/O Error Handling in Ground Truth _write_line (G-Arch26)
+- [x] 7.8: Add I/O Error Handling in Ground Truth _write_line (G-Arch26)
 - [ ] 7.9: Rename float32_hr_addresses to dual_register_hr_addresses (G-Proto8)
 - [ ] 7.10: Derive Modbus Update Interval from Config (G-Proto10)
 - [ ] 7.11: Improve _compute_block_size Documentation (G-Proto13)
@@ -49,6 +49,10 @@ These are genuine error conditions (OPC-UA node operations failing) that should 
 ## Task 7.7 Notes
 
 Changed `store.get_all()` to return `types.MappingProxyType` wrapping the internal `_signals` dict instead of returning it directly. This provides a zero-copy, read-only view — callers can iterate and read but cannot accidentally mutate the store. Return type changed from `dict[str, SignalValue]` to `Mapping[str, SignalValue]` (from `collections.abc`). All callers (modbus_server, opcua_server, mqtt_publisher, health/server, output/writer, tests) only iterate/read, so no caller changes needed. Added `test_get_all_not_mutable` verifying that `__setitem__` and `__delitem__` raise `TypeError`. 3171 tests pass, ruff + mypy clean.
+
+## Task 7.8 Notes
+
+Wrapped the body of `_write_line` in `ground_truth.py` with `try/except OSError`. On I/O failure (disk full, permission error, etc.), the logger logs a warning ("Ground truth write failed — disabling logger") and sets `self._fh = None`, which causes all subsequent `_write_line` calls to return early via the existing `if self._fh is None: return` guard. This degrades gracefully — the simulation continues running but stops writing ground truth events. Added `test_write_line_io_error_disables_logger` which mocks `_fh.write` to raise `OSError`, verifies the warning is logged, confirms `_fh` is set to `None`, and verifies subsequent calls are no-ops. 3172 tests pass, ruff + mypy clean.
 
 ## Notes
 

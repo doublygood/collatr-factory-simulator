@@ -481,6 +481,33 @@ class TestLifecycle:
         records = _read_lines(nested)
         assert len(records) == 1
 
+    def test_write_line_io_error_disables_logger(
+        self, tmp_log: Path, caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """OSError during write disables further writes and logs a warning."""
+        import logging
+        from unittest.mock import MagicMock
+
+        gt = GroundTruthLogger(tmp_log)
+        gt.open()
+
+        # Replace the real file handle with one that raises on write
+        mock_fh = MagicMock()
+        mock_fh.write.side_effect = OSError("disk full")
+        gt._fh = mock_fh
+
+        with caplog.at_level(logging.WARNING, logger="factory_simulator.engine.ground_truth"):
+            gt.log_scenario_end(sim_time=1.0, scenario_name="Test")
+
+        # Should have logged a warning
+        assert any("Ground truth write failed" in msg for msg in caplog.messages)
+
+        # File handle should be disabled
+        assert gt._fh is None
+
+        # Subsequent writes should be no-ops (no error raised)
+        gt.log_scenario_end(sim_time=2.0, scenario_name="Test2")
+
 
 # ---------------------------------------------------------------------------
 # ScenarioEngine integration with ground truth

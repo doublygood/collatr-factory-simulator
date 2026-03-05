@@ -80,7 +80,7 @@
             "description": "_write_line has no I/O error handling. Wrap in try/except OSError: log warning, set self._fh = None to disable further writes. Test: mock write to raise OSError, verify subsequent calls are no-ops and warning logged.",
             "review_ref": "G-Arch26 (review-architecture.md #26)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "7.9",

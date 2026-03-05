@@ -425,9 +425,13 @@ class GroundTruthLogger:
         """Serialize and write one JSON line."""
         if self._fh is None:
             return
-        line = json.dumps(record, separators=(",", ":"))
-        self._fh.write(line + "\n")
-        self._fh.flush()
+        try:
+            line = json.dumps(record, separators=(",", ":"))
+            self._fh.write(line + "\n")
+            self._fh.flush()
+        except OSError:
+            logger.warning("Ground truth write failed — disabling logger")
+            self._fh = None
 
     @staticmethod
     def _format_time(sim_time: float) -> str:
