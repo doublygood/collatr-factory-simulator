@@ -43,8 +43,6 @@ protocols:
     broker_host: "mqtt-broker"
     broker_port: 1883
     topic_prefix: "collatr/factory"
-    sparkplug_b: false
-    retain: true
     client_id: "factory-simulator"
     username: null
     password: null

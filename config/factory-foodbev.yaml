@@ -44,8 +44,6 @@ protocols:
     broker_port: 1883
     topic_prefix: "collatr/factory"
     line_id: "foodbev1"        # F&B line identifier (packaging uses "packaging1")
-    sparkplug_b: false
-    retain: true
     client_id: "factory-simulator"
     username: null
     password: null

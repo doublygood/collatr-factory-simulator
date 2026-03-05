@@ -249,6 +249,16 @@ class TestMqttProtocolConfig:
         with pytest.raises(ValidationError, match="buffer_overflow must be"):
             MqttProtocolConfig(buffer_overflow="block")
 
+    def test_no_sparkplug_b_field(self) -> None:
+        """sparkplug_b was removed — not implemented, not in MVP."""
+        cfg = MqttProtocolConfig()
+        assert not hasattr(cfg, "sparkplug_b")
+
+    def test_no_global_retain_field(self) -> None:
+        """Global retain was removed — per-topic retain via TopicEntry is used instead."""
+        cfg = MqttProtocolConfig()
+        assert not hasattr(cfg, "retain")
+
 
 # ===================================================================
 # SignalConfig

@@ -8,7 +8,7 @@
 - [x] 6d.3: Configurable Health Server Port (Y16)
 - [x] 6d.4: Server Task Verification After Startup (Y20)
 - [x] 6d.5: Narrow Exception Suppression During Shutdown (Y27)
-- [ ] 6d.6: Dead Config Cleanup — sparkplug_b, retain (Y22+Y23)
+- [x] 6d.6: Dead Config Cleanup — sparkplug_b, retain (Y22+Y23)
 - [ ] 6d.7: Generator Tests: Coder (Y19)
 - [ ] 6d.8: Generator Tests: Energy (Y19)
 - [ ] 6d.9: Generator Tests: Laminator (Y19)
@@ -97,3 +97,21 @@ Tests added to `TestShutdownExceptionSuppression` in `tests/unit/test_cli.py`:
 - `test_shutdown_propagates_type_error` — TypeError NOT suppressed
 
 Full suite: 3068 passed.
+
+## Task 6d.6 — Dead Config Cleanup (sparkplug_b, retain)
+
+Removed two dead fields from `MqttProtocolConfig`:
+- `sparkplug_b: bool = False` — Sparkplug B is not implemented and deferred beyond MVP
+- `retain: bool = True` — global retain flag, never read by any code. Per-topic retain via `TopicEntry.retain` and `_retain_for_topic()` is the actual mechanism and is preserved.
+
+Also removed `sparkplug_b: false` and `retain: true` keys from:
+- `config/factory.yaml`
+- `config/factory-foodbev.yaml`
+
+No code in `src/` referenced `config.sparkplug_b` or `config.retain` — confirmed via grep.
+
+Tests added to `TestMqttProtocolConfig` in `tests/unit/test_config.py`:
+- `test_no_sparkplug_b_field` — verifies attribute doesn't exist
+- `test_no_global_retain_field` — verifies attribute doesn't exist
+
+Full suite: 3070 passed.

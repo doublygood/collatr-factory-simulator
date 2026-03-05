@@ -60,7 +60,7 @@
             "description": "Remove sparkplug_b and retain fields from MqttProtocolConfig. Remove these keys from both YAML config files if present. Grep for any references and remove. The per-topic _retain_for_topic() and TopicEntry.retain are separate and must be preserved. Test: config loads without these fields, MQTT publisher still works.",
             "review_ref": "Y22 + Y23 (review-architecture.md §6.1)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6d.7",
