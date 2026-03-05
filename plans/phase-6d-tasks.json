@@ -1,0 +1,136 @@
+{
+    "phase": "6d",
+    "name": "Maintenance & CI",
+    "tasks": [
+        {
+            "id": "6d.1",
+            "name": "Shared Reference Epoch Constant",
+            "group": "Code Quality",
+            "file": "src/factory_simulator/time_utils.py",
+            "description": "Create time_utils.py with REFERENCE_EPOCH, REFERENCE_EPOCH_TS, sim_time_to_datetime(), and sim_time_to_iso(). Remove _REFERENCE_EPOCH_TS from mqtt_publisher.py, opcua_server.py, health/server.py. Remove _sim_time_to_iso() from mqtt_publisher.py and _sim_time_to_datetime() from opcua_server.py. Update all callers to use shared functions. Update ground_truth.py _format_time() to delegate to sim_time_to_iso(). Test: new module with epoch value, conversion, and format tests.",
+            "review_ref": "Y18 (review-architecture.md §6.2)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6d.2",
+            "name": "_format_time() Performance Fix",
+            "group": "Performance",
+            "file": "src/factory_simulator/engine/ground_truth.py",
+            "description": "Verify that _format_time() delegates to time_utils.sim_time_to_iso() after 6d.1 (no per-call datetime creation). If 6d.1 already handled it, just verify and mark done. If not, replace the per-call datetime(2026,1,1) with the shared constant.",
+            "review_ref": "Y17 (review-architecture.md §6.7)",
+            "depends_on": ["6d.1"],
+            "passes": false
+        },
+        {
+            "id": "6d.3",
+            "name": "Configurable Health Server Port",
+            "group": "Config",
+            "file": "src/factory_simulator/config.py",
+            "description": "Add health_port field to SimulationConfig (default 8080, validator 0-65535). Add SIM_HEALTH_PORT env override. Update cli.py _run_realtime() to use config.simulation.health_port instead of hardcoded 8080. Test: default 8080, custom port, invalid port raises.",
+            "review_ref": "Y16 (review-architecture.md §6.3)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6d.4",
+            "name": "Server Task Verification After Startup",
+            "group": "Error Handling",
+            "file": "src/factory_simulator/cli.py",
+            "description": "After each asyncio.create_task(srv.start()) + sleep(0.05), check task.done() and raise RuntimeError if the task failed. Extract a _start_server() helper to avoid repetition. Apply to health server, Modbus servers, OPC-UA servers, and MQTT publishers. Test: mock server that fails start → RuntimeError propagated.",
+            "review_ref": "Y20 (review-architecture.md §3.2)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6d.5",
+            "name": "Narrow Exception Suppression During Shutdown",
+            "group": "Error Handling",
+            "file": "src/factory_simulator/cli.py",
+            "description": "Change contextlib.suppress(Exception) to contextlib.suppress(asyncio.CancelledError, OSError, ConnectionError) in the server shutdown loop. Unexpected exceptions (RuntimeError, TypeError, etc.) should propagate. Test: CancelledError/OSError suppressed, RuntimeError propagates.",
+            "review_ref": "Y27 (review-architecture.md §2.2)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6d.6",
+            "name": "Dead Config Cleanup (sparkplug_b, retain)",
+            "group": "Code Quality",
+            "file": "src/factory_simulator/config.py",
+            "description": "Remove sparkplug_b and retain fields from MqttProtocolConfig. Remove these keys from both YAML config files if present. Grep for any references and remove. The per-topic _retain_for_topic() and TopicEntry.retain are separate and must be preserved. Test: config loads without these fields, MQTT publisher still works.",
+            "review_ref": "Y22 + Y23 (review-architecture.md §6.1)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6d.7",
+            "name": "Generator Tests: Coder",
+            "group": "Test Coverage",
+            "file": "tests/unit/test_generators/test_coder.py",
+            "description": "Create dedicated test file for CoderGenerator (11 signals, state machine, counter, depletion, random walk). Tests: off state (zeros), printing state (active signals), prints counter increments, ink depletion, viscosity mean reversion, determinism (same seed = same output), signal count (11).",
+            "review_ref": "Y19 (review-architecture.md §5.1)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6d.8",
+            "name": "Generator Tests: Energy",
+            "group": "Test Coverage",
+            "file": "tests/unit/test_generators/test_energy.py",
+            "description": "Create dedicated test file for EnergyGenerator (2 signals: line_power, cumulative_kwh). Tests: power correlates with press speed, cumulative increases during Running, low power when Idle, determinism, signal count (2).",
+            "review_ref": "Y19 (review-architecture.md §5.1)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6d.9",
+            "name": "Generator Tests: Laminator",
+            "group": "Test Coverage",
+            "file": "tests/unit/test_generators/test_laminator.py",
+            "description": "Create dedicated test file for LaminatorGenerator (5 signals: nip_temp, nip_pressure, tunnel_temp, web_speed, adhesive_weight). Tests: web_speed tracks press, nip_temp tracks setpoint, adhesive depletes, off state zeros, determinism, signal count (5).",
+            "review_ref": "Y19 (review-architecture.md §5.1)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6d.10",
+            "name": "Generator Tests: Slitter",
+            "group": "Test Coverage",
+            "file": "tests/unit/test_generators/test_slitter.py",
+            "description": "Create dedicated test file for SlitterGenerator (3 signals: speed, web_tension, reel_count). Tests: speed follows press with lag, tension correlates with speed, reel count increments, off state zeros, determinism, signal count (3).",
+            "review_ref": "Y19 (review-architecture.md §5.1)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6d.11",
+            "name": "Generator Tests: Vibration",
+            "group": "Test Coverage",
+            "file": "tests/unit/test_generators/test_vibration.py",
+            "description": "Create dedicated test file for VibrationGenerator (3 signals: main_drive_x/y/z with Cholesky correlation). Tests: non-zero when Running, near-zero when stopped, axes correlated (sample correlations > 0), Cholesky matrix matches PRD, determinism, signal count (3).",
+            "review_ref": "Y19 (review-architecture.md §5.1)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6d.12",
+            "name": "CI Matrix: Python 3.13 + Integration Tests",
+            "group": "CI",
+            "file": ".github/workflows/ci.yml",
+            "description": "Add Python 3.13 to unit test matrix. Expand integration test job to run all tests/integration/ files except test_mqtt_integration.py (needs broker) and slow-marked tests. Add cache-dependency-path for pip caching. Keep lint/typecheck on 3.12 only.",
+            "review_ref": "Y21 (review-architecture.md §5.5)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6d.13",
+            "name": "Validate All Fixes — Full Suite",
+            "group": "Validation",
+            "file": null,
+            "description": "Run ruff + mypy + pytest full suite. Run batch sim with both profiles (packaging + F&B). Verify no regressions. Fix any failures.",
+            "review_ref": "All",
+            "depends_on": ["6d.1", "6d.2", "6d.3", "6d.4", "6d.5", "6d.6", "6d.7", "6d.8", "6d.9", "6d.10", "6d.11", "6d.12"],
+            "passes": false
+        }
+    ]
+}
