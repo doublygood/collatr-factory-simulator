@@ -52,10 +52,11 @@ class SteadyStateModel(SignalModel):
         Maximum absolute drift offset.  Defaults to 3% of ``|target|``
         (or 0.03 if target is zero).
     calibration_drift_rate : float, optional
-        Persistent drift in signal units per simulated second (default 0.0).
-        PRD specifies units per hour; the config loader should convert or
-        the caller should pass seconds.  We accept per-second here for
-        consistency with the engine's dt (seconds).
+        Persistent drift in signal units **per simulated second** (default 0.0).
+        The PRD (Section 4.2.1, Appendix D) specifies drift rates in units per
+        simulated **hour**.  Callers must divide by 3600 before passing to this
+        model.  Internally the bias accumulates as ``rate * dt`` where *dt* is
+        in seconds, so per-second units are required here.
     """
 
     def __init__(
@@ -138,7 +139,8 @@ class SteadyStateModel(SignalModel):
         if self._noise is not None:
             value += self._noise.sample()
 
-        # Calibration drift (persistent, non-reverting)
+        # Calibration drift (persistent, non-reverting).
+        # Rate is in units/second (caller converts from PRD's units/hour ÷ 3600).
         if self._calibration_drift_rate != 0.0:
             self._calibration_bias += self._calibration_drift_rate * dt
             value += self._calibration_bias

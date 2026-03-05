@@ -5,7 +5,7 @@
 ## Tasks
 - [x] 6c.1: SignalConfig min_clamp <= max_clamp Validator (Y9)
 - [x] 6c.2: ClockDriftConfig Allow Negative Values (Y10)
-- [ ] 6c.3: Fix Calibration Drift Rate Docstring (Y11)
+- [x] 6c.3: Fix Calibration Drift Rate Docstring (Y11)
 - [ ] 6c.4: Fix Random Walk Docstring (Y12)
 - [ ] 6c.5: Dryer Zone Cholesky Correlation (Y13)
 - [ ] 6c.6: Oven Zone Cholesky Correlation (Y13)
@@ -36,3 +36,7 @@ Suite: 3030 passed, ruff + mypy clean.
 Updated `tests/unit/test_topology.py`: replaced `test_rejects_negative_offset` and `test_rejects_negative_drift_rate` with `test_accepts_negative_offset`, `test_accepts_negative_drift_rate`, `test_rejects_nan_offset`, and `test_rejects_inf_drift_rate`.
 
 Suite: 3038 passed, ruff + mypy clean.
+
+## Task 6c.3 — Fix Calibration Drift Rate Docstring
+
+**Completed.** Documentation-only change. Clarified `SteadyStateModel` docstring for `calibration_drift_rate`: explicitly states units are per simulated **second** internally, PRD specifies per **hour**, callers must divide by 3600. Added inline comment at the application line (line 143) noting the unit convention. No logic change.

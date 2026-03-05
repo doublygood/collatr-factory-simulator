@@ -30,7 +30,7 @@
             "description": "Clarify SteadyStateModel docstring: calibration_drift_rate is in units/second internally, PRD specifies units/hour, callers must divide by 3600. Add inline comment at the application line. No code logic change.",
             "review_ref": "Y11 (review-signal-integrity.md §2.1)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6c.4",
