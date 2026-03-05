@@ -130,7 +130,7 @@ Each phase follows this pattern. See `plans/WORKFLOW.md` for the full workflow.
 2. **Find the first failing task** in `plans/phase-N-tasks.json`
 3. **Implement one task**: code + tests + commit
 4. **Run the new test file alone first**: `ruff check src tests && pytest tests/path/to/new_test.py -v --tb=short` -- catches import errors, wrong fixtures, and lint issues in seconds before the expensive full suite
-5. **Run ALL tests** (`pytest` via sub-agent, 15-min timeout) -- every test must pass
+5. **Run ALL tests** (`pytest` via sub-agent, 20-min timeout) -- every test must pass
 6. **Update progress** in `plans/phase-N-progress.md`
 7. **Output TASK_COMPLETE and STOP**
 8. When all tasks pass: spawn internal review sub-agent, fix findings, then PHASE_COMPLETE
@@ -178,7 +178,7 @@ pytest tests/unit/test_steady_state.py -v
 
 ### Running the Full Test Suite
 
-The full test suite takes **up to 15 minutes**. Follow these rules every time:
+The full test suite takes **up to 20 minutes** (2998 tests as of phase 6a; grew past the original 15-min estimate). Follow these rules every time:
 
 **Rule: Always run the full test suite via a sub-agent.**
 
@@ -186,12 +186,12 @@ Never run `pytest` (the full suite) inline in the main agent — the log volume 
 
 ```
 Run: ruff check src tests && mypy src && pytest --tb=short -q
-Timeout: 900000ms (15 minutes — increase if the suite grows further)
+Timeout: 1200000ms (20 minutes — increase if the suite grows further)
 Report: on SUCCESS print only the summary line (N passed, N warnings, time).
         on FAILURE print the full failure output verbatim so the error is visible.
 ```
 
-- Increase the timeout if the suite consistently approaches 15 minutes.
+- Increase the timeout if the suite consistently approaches 20 minutes.
 - Never skip the full suite before committing. ruff + mypy + pytest must all pass.
 
 ### Project Structure
