@@ -20,7 +20,7 @@
             "description": "Make LWT topic profile-specific. Change MqttProtocolConfig.lwt_topic default to empty string. In MQTT publisher startup, auto-generate from topic_prefix/line_id/status when empty. Explicit lwt_topic in config used as-is for backward compat. Update both YAML configs to remove explicit lwt_topic or set profile-specific paths. Test: auto-generated LWT includes line_id, explicit config preserved, profiles produce different topics.",
             "review_ref": "Y26 (review-protocol-fidelity.md §4.5)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6e.3",

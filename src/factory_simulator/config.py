@@ -176,7 +176,7 @@ class MqttProtocolConfig(BaseModel):
     qos_default: int = 1
     buffer_limit: int = 1000
     buffer_overflow: str = "drop_oldest"
-    lwt_topic: str = "collatr/factory/status"
+    lwt_topic: str = ""  # Empty = auto-generated: {topic_prefix}/{line_id}/status
     lwt_payload: str = '{"status": "offline"}'
     vibration_per_axis_enabled: bool = True
 

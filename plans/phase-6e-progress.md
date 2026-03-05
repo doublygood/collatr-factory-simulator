@@ -4,7 +4,7 @@
 
 ## Tasks
 - [x] 6e.1: OPC-UA AccessLevel=0 for Inactive Profile Nodes (Y25)
-- [ ] 6e.2: Profile-Specific LWT Topic (Y26)
+- [x] 6e.2: Profile-Specific LWT Topic (Y26)
 - [ ] 6e.3: Validate All Fixes — Full Suite
 
 ## Task 6e.1 Notes
@@ -17,6 +17,17 @@
 - Updated `cli.py _async_run()` to determine inactive profile from `--profile` arg, load its config, pass to `DataEngine`.
 - Tests: 11 tests in `tests/unit/test_protocols/test_opcua_inactive.py` covering: node existence, AccessLevel=0, BadNotReadable status, no sync (not in `server.nodes`), no inactive when `inactive_config=None`, realistic mode skips, both profiles have different OPC-UA roots.
 - Full suite: 3160 passed.
+
+## Task 6e.2 Notes
+
+**What was done:**
+- Changed `MqttProtocolConfig.lwt_topic` default from `"collatr/factory/status"` to `""` (empty).
+- Added `resolve_lwt_topic(mqtt_cfg)` pure function to `mqtt_publisher.py`: returns explicit topic if set, else auto-generates `{topic_prefix}/{line_id}/status`.
+- Updated `_create_client()` to call `resolve_lwt_topic(self._mqtt_cfg)` instead of using `lwt_topic` directly.
+- Removed explicit `lwt_topic: "collatr/factory/status"` lines from both `config/factory.yaml` and `config/factory-foodbev.yaml`; auto-generation now produces profile-specific topics (`collatr/factory/packaging1/status`, `collatr/factory/foodbev1/status`).
+- Added `MqttProtocolConfig` to the `TYPE_CHECKING` import block for the type hint on `resolve_lwt_topic`.
+- 6 tests in `tests/unit/test_protocols/test_mqtt_lwt.py` covering auto-generation, explicit override, both configs differing, and YAML configs having empty defaults.
+- Full suite: 3166 passed.
 
 ## Notes
 

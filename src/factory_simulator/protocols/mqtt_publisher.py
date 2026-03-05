@@ -42,7 +42,7 @@ from factory_simulator.protocols.comm_drop import CommDropScheduler
 from factory_simulator.time_utils import sim_time_to_iso
 
 if TYPE_CHECKING:
-    from factory_simulator.config import FactoryConfig
+    from factory_simulator.config import FactoryConfig, MqttProtocolConfig
     from factory_simulator.store import SignalStore, SignalValue
     from factory_simulator.topology import ClockDriftModel
 
@@ -140,6 +140,19 @@ def _retain_for_topic(relative: str) -> bool:
 def _is_event_driven(relative: str) -> bool:
     """Return True if the topic should publish on value change (not timer)."""
     return relative in _EVENT_DRIVEN_SUFFIXES
+
+
+def resolve_lwt_topic(mqtt_cfg: MqttProtocolConfig) -> str:
+    """Return the resolved LWT topic (PRD 3.3, Y26 fix).
+
+    When ``mqtt_cfg.lwt_topic`` is empty (the default), the topic is
+    auto-generated as ``{topic_prefix}/{line_id}/status``, making it
+    profile-specific.  An explicit non-empty value is returned unchanged
+    for backward compatibility.
+    """
+    if mqtt_cfg.lwt_topic:
+        return mqtt_cfg.lwt_topic
+    return f"{mqtt_cfg.topic_prefix}/{mqtt_cfg.line_id}/status"
 
 
 def make_payload(
@@ -457,7 +470,7 @@ class MqttPublisher:
         )
         # Last Will and Testament (PRD 3.3)
         client.will_set(
-            self._mqtt_cfg.lwt_topic,
+            resolve_lwt_topic(self._mqtt_cfg),
             payload=self._mqtt_cfg.lwt_payload,
             qos=1,
             retain=True,

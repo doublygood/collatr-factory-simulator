@@ -49,7 +49,6 @@ protocols:
     qos_default: 1
     buffer_limit: 1000
     buffer_overflow: "drop_oldest"
-    lwt_topic: "collatr/factory/status"
     lwt_payload: '{"status": "offline"}'
 
 # ---------------------------------------------------------------------------
