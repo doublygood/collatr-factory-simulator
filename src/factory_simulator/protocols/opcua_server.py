@@ -506,6 +506,14 @@ class OpcuaServer:
                 if sig_cfg.opcua_node is None:
                     continue
 
+                node_path = sig_cfg.opcua_node
+                if node_path in self._node_to_signal:
+                    logger.warning(
+                        "Inactive node %s conflicts with active node — skipping",
+                        node_path,
+                    )
+                    continue
+
                 await self._create_variable_node(
                     ns, folder_cache, objects, sig_cfg,
                     self._inactive_config.simulation.tick_interval_ms,

@@ -40,7 +40,7 @@
             "description": "If custom config uses same opcua_node path in both profiles, _build_inactive_nodes crashes. Add guard to skip nodes already in self._node_to_signal with a warning log. Add test for overlapping path (skipped) and test for warning logged.",
             "review_ref": "CQ-Y4 (review-post-phase6-code-quality.md)",
             "depends_on": ["7.3"],
-            "passes": false
+            "passes": true
         },
         {
             "id": "7.5",

@@ -6,7 +6,7 @@
 - [x] 7.1: Fix MQTT Retry Delays Tuple (CQ-Y1)
 - [x] 7.2: Extract SIGTERM Handler Context Manager (CQ-Y2)
 - [x] 7.3: Extract OPC-UA Node Creation Helper (CQ-Y3)
-- [ ] 7.4: Guard Overlapping OPC-UA Node Paths + Test (CQ-Y4) — depends on 7.3
+- [x] 7.4: Guard Overlapping OPC-UA Node Paths + Test (CQ-Y4) — depends on 7.3
 - [ ] 7.5: Remove Dead FactoryInfo.timezone Field (G-Arch21)
 - [ ] 7.6: Elevate OPC-UA Error Log Levels (G-Arch23)
 - [ ] 7.7: Return Defensive Copy from store.get_all() (G-Arch24)
@@ -28,6 +28,10 @@ Extracted `_sigterm_cancels_current_task()` context manager in cli.py to elimina
 ## Task 7.3 Notes
 
 Extracted `_create_variable_node()` helper method in `opcua_server.py` that handles all shared node creation logic: folder hierarchy traversal/creation via `folder_cache`, variable node creation with correct data type, EURange property, EngineeringUnits property, and MinimumSamplingInterval attribute. The helper takes optional `access_level` (for inactive nodes' AccessLevel=0) and `status_code` (for BadNotReadable) parameters, plus a `tick_interval_ms` parameter since active and inactive paths use different config objects for the fallback. `_build_node_tree` now calls the helper then handles setpoint writability and node registration. `_build_inactive_nodes` now calls the helper with `access_level=0` and `status_code=BadNotReadable`. Pure refactor — 3168 tests pass, ruff + mypy clean.
+
+## Task 7.4 Notes
+
+Added overlap guard in `_build_inactive_nodes` (`opcua_server.py`): before creating each inactive node, check if `sig_cfg.opcua_node` already exists in `self._node_to_signal` (populated by active node creation). If so, log a warning and `continue` — the active node is preserved, the duplicate inactive node is skipped. Added two tests in `test_opcua_inactive.py` using synthetic configs with a shared `opcua_node` path: `test_overlapping_opcua_node_skipped` (server starts OK, active node remains readable) and `test_overlapping_opcua_node_logged` (warning logged with node path). 3170 tests pass, ruff + mypy clean.
 
 ## Notes
 

@@ -267,3 +267,124 @@ class TestBothConfigsDifferent:
         assert pkg_roots.isdisjoint(fnb_roots), (
             f"Profiles share OPC-UA roots: {pkg_roots & fnb_roots}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Overlapping node path guard (task 7.4)
+# ---------------------------------------------------------------------------
+
+_OVERLAP_NODE = "PackagingLine.Press1.LineSpeed"  # same path in both configs
+
+
+def _make_overlapping_configs() -> tuple:
+    """Create active + inactive configs where one signal shares an opcua_node."""
+    from factory_simulator.config import (
+        EquipmentConfig,
+        FactoryConfig,
+        SignalConfig,
+    )
+
+    shared_signal = SignalConfig(
+        model="steady_state",
+        opcua_node=_OVERLAP_NODE,
+        opcua_type="Float",
+        min_clamp=0.0,
+        max_clamp=100.0,
+        units="m/min",
+        params={"base": 50.0},
+    )
+
+    active_cfg = FactoryConfig(
+        equipment={
+            "press1": EquipmentConfig(
+                enabled=True,
+                type="press",
+                signals={"line_speed": shared_signal},
+            ),
+        },
+    )
+
+    # Inactive config has a signal with the SAME opcua_node path
+    inactive_cfg = FactoryConfig(
+        equipment={
+            "mixer1": EquipmentConfig(
+                enabled=True,
+                type="mixer",
+                signals={
+                    "speed": SignalConfig(
+                        model="steady_state",
+                        opcua_node=_OVERLAP_NODE,  # <-- overlap
+                        opcua_type="Float",
+                        min_clamp=0.0,
+                        max_clamp=200.0,
+                        units="rpm",
+                        params={"base": 100.0},
+                    ),
+                },
+            ),
+        },
+    )
+
+    return active_cfg, inactive_cfg
+
+
+class TestOverlappingNodeGuard:
+    """Task 7.4: overlapping opcua_node paths are skipped with a warning."""
+
+    @pytest.mark.asyncio
+    async def test_overlapping_opcua_node_skipped(self) -> None:
+        """Server starts OK; the active node remains, inactive duplicate is skipped."""
+        active_cfg, inactive_cfg = _make_overlapping_configs()
+        store = SignalStore()
+        server = OpcuaServer(
+            active_cfg, store,
+            host=_HOST, port=0,
+            inactive_config=inactive_cfg,
+        )
+        await server.start()
+        try:
+            port = server.actual_port
+            assert port > 0
+
+            client = Client(f"opc.tcp://{_HOST}:{port}/")
+            await client.connect()
+            try:
+                # The node exists and is active (readable)
+                node = client.get_node(_node_id(_OVERLAP_NODE))
+                bname = await node.read_browse_name()
+                assert bname.Name == "LineSpeed"
+
+                level = await _read_access_level(client, _OVERLAP_NODE)
+                assert level >= 1  # active, not overwritten by inactive
+            finally:
+                await client.disconnect()
+        finally:
+            await server.stop()
+
+    @pytest.mark.asyncio
+    async def test_overlapping_opcua_node_logged(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A warning is logged when an inactive node overlaps an active node."""
+        import logging
+
+        active_cfg, inactive_cfg = _make_overlapping_configs()
+        store = SignalStore()
+        server = OpcuaServer(
+            active_cfg, store,
+            host=_HOST, port=0,
+            inactive_config=inactive_cfg,
+        )
+
+        with caplog.at_level(logging.WARNING, logger="factory_simulator.protocols.opcua_server"):
+            await server.start()
+
+        try:
+            assert any(
+                "conflicts with active node" in rec.message
+                and _OVERLAP_NODE in rec.message
+                for rec in caplog.records
+            ), (
+                "Expected warning about overlapping node, got: "
+                f"{[r.message for r in caplog.records]}"
+            )
+        finally:
+            await server.stop()
