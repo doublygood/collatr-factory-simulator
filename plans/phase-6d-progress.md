@@ -14,7 +14,7 @@
 - [x] 6d.9: Generator Tests: Laminator (Y19)
 - [x] 6d.10: Generator Tests: Slitter (Y19)
 - [x] 6d.11: Generator Tests: Vibration (Y19)
-- [ ] 6d.12: CI Matrix: Python 3.13 + Integration Tests (Y21)
+- [x] 6d.12: CI Matrix: Python 3.13 + Integration Tests (Y21)
 - [ ] 6d.13: Validate All Fixes — Full Suite
 
 ## Notes
@@ -194,3 +194,19 @@ Created `tests/unit/test_generators/test_vibration.py` with 15 tests covering th
 Key design: vibration uses Cholesky decomposition (PRD 4.3.1) for correlated noise across 3 axes. Noise is applied externally via the pipeline, not through SteadyStateModel's internal noise. When stopped, residual floor vibration is N(0.2, 0.05) clamped to >= 0.
 
 Full suite: 3149 passed.
+
+## Task 6d.12 — CI Matrix: Python 3.13 + Integration Tests
+
+Updated `.github/workflows/ci.yml` with 4 changes:
+
+1. **Python 3.13 in unit test matrix**: `python-version: ["3.12", "3.13"]` — validates forward compatibility.
+
+2. **Expanded integration tests**: Changed from running only `test_acceptance.py` to running all `tests/integration/` with `--ignore=tests/integration/test_mqtt_integration.py`. The `-m "not slow"` filter excludes long-running tests. MQTT-dependent tests (`test_fnb_opcua_mqtt_integration.py`, `test_cross_protocol.py`, `test_fnb_cross_protocol.py`) all have `skipif` markers that self-skip when no broker is available — safe to include. Only `test_mqtt_integration.py` is explicitly excluded per the plan. Timeout increased from 5 to 10 minutes for the larger integration scope.
+
+3. **Lint and typecheck stay on 3.12 only**: No need to lint/typecheck twice.
+
+4. **`cache-dependency-path: "requirements-dev.txt"`**: Added to all 4 jobs for proper pip cache keying.
+
+No new tests — CI changes verified by the workflow on next push.
+
+Full suite: 3149 passed (no regressions).

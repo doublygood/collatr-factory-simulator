@@ -120,7 +120,7 @@
             "description": "Add Python 3.13 to unit test matrix. Expand integration test job to run all tests/integration/ files except test_mqtt_integration.py (needs broker) and slow-marked tests. Add cache-dependency-path for pip caching. Keep lint/typecheck on 3.12 only.",
             "review_ref": "Y21 (review-architecture.md §5.5)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6d.13",
