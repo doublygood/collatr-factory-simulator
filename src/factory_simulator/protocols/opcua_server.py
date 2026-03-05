@@ -377,6 +377,17 @@ class OpcuaServer:
                     eu_info,
                 )
 
+                # MinimumSamplingInterval attribute (PRD Appendix B)
+                min_sampling_ms = float(
+                    sig_cfg.sample_rate_ms
+                    if sig_cfg.sample_rate_ms is not None
+                    else self._config.simulation.tick_interval_ms
+                )
+                await var_node.write_attribute(
+                    ua.AttributeIds.MinimumSamplingInterval,
+                    ua.DataValue(ua.Variant(min_sampling_ms, ua.VariantType.Double)),
+                )
+
                 # Writable for setpoints (PRD 3.2)
                 if sig_cfg.modbus_writable:
                     await var_node.set_writable()

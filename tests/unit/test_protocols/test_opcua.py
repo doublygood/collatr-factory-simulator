@@ -515,6 +515,80 @@ class TestAccessLevel:
 
 
 # ---------------------------------------------------------------------------
+# Tests: MinimumSamplingInterval attribute (task 6c.8)
+# ---------------------------------------------------------------------------
+
+
+class TestMinimumSamplingInterval:
+    """Verify MinimumSamplingInterval attribute on all variable nodes (PRD Appendix B)."""
+
+    async def test_minimum_sampling_interval_on_all_nodes(
+        self,
+        opcua_system: tuple[OpcuaServer, Client, int],
+    ) -> None:
+        """Every leaf node has a MinimumSamplingInterval > 0."""
+        _server, client, ns = opcua_system
+        errors: list[str] = []
+        for node_path, _type_str, _writable in EXPECTED_NODES:
+            node = client.get_node(ua.NodeId(node_path, ns))
+            result = await node.read_attribute(
+                ua.AttributeIds.MinimumSamplingInterval,
+            )
+            ms_val = result.Value.Value
+            if ms_val is None or ms_val <= 0:
+                errors.append(
+                    f"{node_path}: MinimumSamplingInterval={ms_val}, expected > 0"
+                )
+        assert not errors, (
+            "MinimumSamplingInterval errors:\n" + "\n".join(errors)
+        )
+
+    async def test_signal_specific_sample_rate(
+        self,
+        opcua_system: tuple[OpcuaServer, Client, int],
+    ) -> None:
+        """Nodes with explicit sample_rate_ms use that value."""
+        _server, client, ns = opcua_system
+        # press.line_speed has sample_rate_ms=1000 in factory.yaml
+        node = client.get_node(
+            ua.NodeId("PackagingLine.Press1.LineSpeed", ns),
+        )
+        result = await node.read_attribute(
+            ua.AttributeIds.MinimumSamplingInterval,
+        )
+        assert result.Value.Value == pytest.approx(1000.0)
+
+    async def test_default_tick_interval_fallback(
+        self,
+        opcua_system: tuple[OpcuaServer, Client, int],
+    ) -> None:
+        """Nodes without sample_rate_ms fall back to tick_interval_ms (100ms)."""
+        _server, client, ns = opcua_system
+        # dryer setpoints have no sample_rate_ms → default 100ms
+        node = client.get_node(
+            ua.NodeId("PackagingLine.Press1.Dryer.Zone1.Setpoint", ns),
+        )
+        result = await node.read_attribute(
+            ua.AttributeIds.MinimumSamplingInterval,
+        )
+        assert result.Value.Value == pytest.approx(100.0)
+
+    async def test_web_tension_sample_rate(
+        self,
+        opcua_system: tuple[OpcuaServer, Client, int],
+    ) -> None:
+        """press.web_tension has sample_rate_ms=500."""
+        _server, client, ns = opcua_system
+        node = client.get_node(
+            ua.NodeId("PackagingLine.Press1.WebTension", ns),
+        )
+        result = await node.read_attribute(
+            ua.AttributeIds.MinimumSamplingInterval,
+        )
+        assert result.Value.Value == pytest.approx(500.0)
+
+
+# ---------------------------------------------------------------------------
 # Tests: server properties and namespace
 # ---------------------------------------------------------------------------
 

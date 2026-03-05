@@ -80,7 +80,7 @@
             "description": "Set MinimumSamplingInterval attribute on all OPC-UA variable nodes. Use sig_cfg.sample_rate_ms if set, else config.simulation.tick_interval_ms. In asyncua use write_attribute(AttributeIds.MinimumSamplingInterval, DataValue(Variant(ms, VariantType.Double))). Test: read attribute from node, verify equals expected ms value.",
             "review_ref": "Y15 (review-protocol-fidelity.md §3.4)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6c.9",

@@ -10,7 +10,7 @@
 - [x] 6c.5: Dryer Zone Cholesky Correlation (Y13)
 - [x] 6c.6: Oven Zone Cholesky Correlation (Y13)
 - [x] 6c.7: Coil 4 Derivation Fix (Y14)
-- [ ] 6c.8: OPC-UA MinimumSamplingInterval (Y15)
+- [x] 6c.8: OPC-UA MinimumSamplingInterval (Y15)
 - [ ] 6c.9: Validate All Fixes — Full Suite
 
 ## Notes
@@ -95,3 +95,20 @@ Suite: 3038 passed, ruff + mypy clean.
 - `test_laminator_running_independent_of_press_state`: Coil 4 False when press is running but laminator speed is 0
 
 Suite: 3041 passed, ruff + mypy clean.
+
+## Task 6c.8 — OPC-UA MinimumSamplingInterval
+
+**Completed.** Set `MinimumSamplingInterval` attribute on all OPC-UA variable nodes per PRD Appendix B.
+
+Changes to `src/factory_simulator/protocols/opcua_server.py`:
+- After creating each variable node (and its EURange/EngineeringUnits properties), write the `MinimumSamplingInterval` attribute using `write_attribute(ua.AttributeIds.MinimumSamplingInterval, ...)`
+- Value priority: `sig_cfg.sample_rate_ms` if set, else `self._config.simulation.tick_interval_ms` (default 100ms)
+- Value is a `Double` variant (OPC-UA Duration type)
+
+4 new tests in `tests/unit/test_protocols/test_opcua.py::TestMinimumSamplingInterval`:
+- `test_minimum_sampling_interval_on_all_nodes`: all 32 leaf nodes have MinimumSamplingInterval > 0
+- `test_signal_specific_sample_rate`: LineSpeed reads 1000.0ms (from `sample_rate_ms=1000`)
+- `test_default_tick_interval_fallback`: dryer setpoints read 100.0ms (no `sample_rate_ms`, falls back to `tick_interval_ms`)
+- `test_web_tension_sample_rate`: WebTension reads 500.0ms (from `sample_rate_ms=500`)
+
+Suite: 3045 passed, ruff + mypy clean.
