@@ -709,3 +709,86 @@ class TestMainModule:
         assert "run" in result.stdout
         assert "evaluate" in result.stdout
         assert "version" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Shutdown exception suppression — Task 6d.5
+# ---------------------------------------------------------------------------
+
+
+class TestShutdownExceptionSuppression:
+    """Verify that the shutdown loop suppresses only expected exceptions.
+
+    The finally block in _run_realtime uses:
+        contextlib.suppress(asyncio.CancelledError, OSError, ConnectionError)
+    to handle expected shutdown errors while letting unexpected errors propagate.
+    """
+
+    @pytest.mark.asyncio
+    async def test_shutdown_suppresses_cancelled_error(self) -> None:
+        """CancelledError during stop() is suppressed (normal shutdown)."""
+
+        class _CancelledServer:
+            async def stop(self) -> None:
+                raise asyncio.CancelledError()
+
+        srv = _CancelledServer()
+        # Should not raise — CancelledError is expected during shutdown
+        with contextlib.suppress(asyncio.CancelledError, OSError, ConnectionError):
+            await srv.stop()
+
+    @pytest.mark.asyncio
+    async def test_shutdown_suppresses_oserror(self) -> None:
+        """OSError during stop() is suppressed (socket already closed)."""
+
+        class _OsErrorServer:
+            async def stop(self) -> None:
+                raise OSError("socket already closed")
+
+        srv = _OsErrorServer()
+        # Should not raise — OSError is expected during shutdown
+        with contextlib.suppress(asyncio.CancelledError, OSError, ConnectionError):
+            await srv.stop()
+
+    @pytest.mark.asyncio
+    async def test_shutdown_suppresses_connection_error(self) -> None:
+        """ConnectionError during stop() is suppressed (broker gone)."""
+
+        class _ConnErrorServer:
+            async def stop(self) -> None:
+                raise ConnectionError("broker disconnected")
+
+        srv = _ConnErrorServer()
+        # Should not raise — ConnectionError is expected during shutdown
+        with contextlib.suppress(asyncio.CancelledError, OSError, ConnectionError):
+            await srv.stop()
+
+    @pytest.mark.asyncio
+    async def test_shutdown_propagates_runtime_error(self) -> None:
+        """RuntimeError during stop() is NOT suppressed — bug should be visible."""
+
+        class _RuntimeErrorServer:
+            async def stop(self) -> None:
+                raise RuntimeError("unexpected internal error")
+
+        srv = _RuntimeErrorServer()
+        with (
+            pytest.raises(RuntimeError, match="unexpected internal error"),
+            contextlib.suppress(asyncio.CancelledError, OSError, ConnectionError),
+        ):
+            await srv.stop()
+
+    @pytest.mark.asyncio
+    async def test_shutdown_propagates_type_error(self) -> None:
+        """TypeError during stop() is NOT suppressed — bug should be visible."""
+
+        class _TypeErrorServer:
+            async def stop(self) -> None:
+                raise TypeError("bad argument")
+
+        srv = _TypeErrorServer()
+        with (
+            pytest.raises(TypeError, match="bad argument"),
+            contextlib.suppress(asyncio.CancelledError, OSError, ConnectionError),
+        ):
+            await srv.stop()

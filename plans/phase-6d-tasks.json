@@ -50,7 +50,7 @@
             "description": "Change contextlib.suppress(Exception) to contextlib.suppress(asyncio.CancelledError, OSError, ConnectionError) in the server shutdown loop. Unexpected exceptions (RuntimeError, TypeError, etc.) should propagate. Test: CancelledError/OSError suppressed, RuntimeError propagates.",
             "review_ref": "Y27 (review-architecture.md §2.2)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6d.6",

@@ -504,7 +504,7 @@ async def _run_realtime(config: FactoryConfig, engine: Any) -> int:
         health.update(status="stopping")
         engine.stop()
         for srv in reversed(servers):
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(asyncio.CancelledError, OSError, ConnectionError):
                 await srv.stop()
         for task in tasks:
             if not task.done():

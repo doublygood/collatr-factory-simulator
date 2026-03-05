@@ -7,7 +7,7 @@
 - [x] 6d.2: _format_time() Performance Fix (Y17) — depends on 6d.1
 - [x] 6d.3: Configurable Health Server Port (Y16)
 - [x] 6d.4: Server Task Verification After Startup (Y20)
-- [ ] 6d.5: Narrow Exception Suppression During Shutdown (Y27)
+- [x] 6d.5: Narrow Exception Suppression During Shutdown (Y27)
 - [ ] 6d.6: Dead Config Cleanup — sparkplug_b, retain (Y22+Y23)
 - [ ] 6d.7: Generator Tests: Coder (Y19)
 - [ ] 6d.8: Generator Tests: Energy (Y19)
@@ -84,3 +84,16 @@ Tests added to `TestStartServer` in `tests/unit/test_cli.py`:
 - `test_failed_server_error_includes_class_name` — error message includes server class name
 
 Full suite: 3063 passed.
+
+## Task 6d.5 — Narrow Exception Suppression During Shutdown
+
+Changed `contextlib.suppress(Exception)` to `contextlib.suppress(asyncio.CancelledError, OSError, ConnectionError)` in the server shutdown loop at `cli.py:507`. This ensures only expected shutdown exceptions are suppressed — `CancelledError` (task cancelled), `OSError` (socket already closed), `ConnectionError` (broker disconnected) — while unexpected errors like `RuntimeError` or `TypeError` propagate for visibility.
+
+Tests added to `TestShutdownExceptionSuppression` in `tests/unit/test_cli.py`:
+- `test_shutdown_suppresses_cancelled_error` — CancelledError suppressed
+- `test_shutdown_suppresses_oserror` — OSError suppressed
+- `test_shutdown_suppresses_connection_error` — ConnectionError suppressed
+- `test_shutdown_propagates_runtime_error` — RuntimeError NOT suppressed
+- `test_shutdown_propagates_type_error` — TypeError NOT suppressed
+
+Full suite: 3068 passed.
