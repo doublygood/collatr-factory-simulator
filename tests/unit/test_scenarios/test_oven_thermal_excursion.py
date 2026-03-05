@@ -120,7 +120,7 @@ class TestOvenThermalExcursionLifecycle:
         assert not sc.is_completed
 
     def test_activates_at_start_time(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         oven = _get_oven(engine)
         oven.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -133,7 +133,7 @@ class TestOvenThermalExcursionLifecycle:
 
     def test_completes_after_drift_duration(self) -> None:
         """Scenario completes once drift_duration has elapsed."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         oven = _get_oven(engine)
         oven.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -258,7 +258,7 @@ class TestOvenThermalExcursionTemperature:
 
     def test_drift_capped_at_max_drift(self) -> None:
         """Drift should not exceed max_drift."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         oven = _get_oven(engine)
         oven.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -293,7 +293,7 @@ class TestOvenThermalExcursionTemperature:
 
     def test_no_fault_state_during_drift(self) -> None:
         """PRD 5.14.2: drift does not trigger a fault state."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         oven = _get_oven(engine)
         oven.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -354,7 +354,7 @@ class TestOvenThermalExcursionTemperature:
 
     def test_zone_2_affects_only_target_zone_model(self) -> None:
         """Zone 2 drift should elevate zone_2_temp model; zones 1 & 3 minimal."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         oven = _get_oven(engine)
         oven.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -404,7 +404,7 @@ class TestOvenThermalExcursionRecovery:
 
     def test_temperature_recovers_toward_setpoint(self) -> None:
         """After completion, the lag model should pull temp back toward sp."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         oven = _get_oven(engine)
         oven.state_machine.force_state("Running")
         _run_ticks(engine, 10)

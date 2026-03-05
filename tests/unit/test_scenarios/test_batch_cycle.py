@@ -123,7 +123,7 @@ class TestBatchCycleLifecycle:
         assert not sc.is_completed
 
     def test_activates_at_start_time(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         rng = _make_rng()
         sc = BatchCycle(start_time=0.0, rng=rng, params=_FAST_PARAMS)
 
@@ -134,7 +134,7 @@ class TestBatchCycleLifecycle:
 
     def test_completes_after_all_phases(self) -> None:
         """Scenario completes once all phases have elapsed."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         rng = _make_rng()
         sc = BatchCycle(start_time=0.0, rng=rng, params=_FAST_PARAMS)
 
@@ -178,7 +178,7 @@ class TestBatchCycleStateTransitions:
     """Mixer passes through Loading → Mixing → Holding → Discharging → Off."""
 
     def test_mixer_enters_loading_on_activate(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         mixer = _get_mixer(engine)
 
         rng = _make_rng()
@@ -192,7 +192,7 @@ class TestBatchCycleStateTransitions:
 
     def test_mixer_transitions_loading_to_mixing(self) -> None:
         """After loading_duration, mixer should enter Mixing."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         rng = _make_rng()
         sc = BatchCycle(
             start_time=0.0,
@@ -216,7 +216,7 @@ class TestBatchCycleStateTransitions:
 
     def test_mixer_transitions_mixing_to_holding(self) -> None:
         """After mixing_duration, mixer should enter Holding."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         rng = _make_rng()
         sc = BatchCycle(
             start_time=0.0,
@@ -240,7 +240,7 @@ class TestBatchCycleStateTransitions:
 
     def test_mixer_transitions_holding_to_discharging(self) -> None:
         """After holding_duration, mixer should enter Discharging."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         rng = _make_rng()
         sc = BatchCycle(
             start_time=0.0,
@@ -264,7 +264,7 @@ class TestBatchCycleStateTransitions:
 
     def test_mixer_returns_to_off_after_completion(self) -> None:
         """Mixer state returns to Off once the batch completes."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         rng = _make_rng()
         sc = BatchCycle(start_time=0.0, rng=rng, params=_FAST_PARAMS)
         engine.scenario_engine.add_scenario(sc)
@@ -280,7 +280,7 @@ class TestBatchCycleStateTransitions:
 
     def test_full_phase_sequence(self) -> None:
         """Observe all phase transitions in order."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         rng = _make_rng()
         sc = BatchCycle(
             start_time=0.0,

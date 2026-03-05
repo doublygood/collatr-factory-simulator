@@ -110,7 +110,7 @@ class TestDryerDriftLifecycle:
         assert not sc.is_completed
 
     def test_activates_at_start_time(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -123,7 +123,7 @@ class TestDryerDriftLifecycle:
 
     def test_completes_after_drift_duration(self) -> None:
         """Scenario completes once drift_duration has elapsed."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -250,7 +250,7 @@ class TestDryerDriftTemperature:
 
     def test_drift_capped_at_max_drift(self) -> None:
         """Drift should not exceed max_drift."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -286,7 +286,7 @@ class TestDryerDriftTemperature:
 
     def test_no_fault_state_during_drift(self) -> None:
         """PRD 5.4: drift does not trigger a fault state."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -355,7 +355,7 @@ class TestDryerDriftWasteRate:
 
     def test_waste_rate_increased_during_drift(self) -> None:
         """Waste counter rate must increase by the configured multiplier."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -383,7 +383,7 @@ class TestDryerDriftWasteRate:
 
     def test_waste_rate_restored_after_completion(self) -> None:
         """Waste counter rate must return to original after scenario ends."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -424,7 +424,7 @@ class TestDryerDriftRecovery:
 
     def test_temperature_recovers_toward_setpoint(self) -> None:
         """After completion, the lag model should pull temp back toward sp."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -503,7 +503,7 @@ class TestDryerDriftZoneSelection:
 
     def test_zone_2_affects_correct_model(self) -> None:
         """Zone 2 should modify dryer_temp_zone_2, not zone_1 or zone_3."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)

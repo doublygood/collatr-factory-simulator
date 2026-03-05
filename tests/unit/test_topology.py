@@ -69,11 +69,11 @@ class TestScanCycleConfig:
             ScanCycleConfig(cycle_ms=-10.0)
 
     def test_rejects_negative_jitter(self) -> None:
-        with pytest.raises(ValidationError, match="between 0.0 and 1.0"):
+        with pytest.raises(ValidationError, match=r"between 0.0 and 1.0"):
             ScanCycleConfig(jitter_pct=-0.1)
 
     def test_rejects_jitter_over_one(self) -> None:
-        with pytest.raises(ValidationError, match="between 0.0 and 1.0"):
+        with pytest.raises(ValidationError, match=r"between 0.0 and 1.0"):
             ScanCycleConfig(jitter_pct=1.5)
 
 

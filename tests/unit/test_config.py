@@ -249,7 +249,7 @@ class TestSignalConfig:
             SignalConfig(model="steady_state", noise_type="poisson")
 
     def test_student_t_df_too_low(self) -> None:
-        with pytest.raises(ValidationError, match="noise_df.*must be >= 3"):
+        with pytest.raises(ValidationError, match=r"noise_df.*must be >= 3"):
             SignalConfig(model="steady_state", noise_type="student_t", noise_df=2.0)
 
     def test_student_t_df_valid(self) -> None:
@@ -257,7 +257,7 @@ class TestSignalConfig:
         assert sig.noise_df == 5.0
 
     def test_ar1_phi_range(self) -> None:
-        with pytest.raises(ValidationError, match="noise_phi.*must be in"):
+        with pytest.raises(ValidationError, match=r"noise_phi.*must be in"):
             SignalConfig(model="steady_state", noise_type="ar1", noise_phi=1.0)
 
     def test_ar1_phi_valid(self) -> None:
@@ -324,7 +324,7 @@ class TestScenariosConfig:
         assert cfg.bearing_wear.duration_hours == 336.0
 
     def test_inverted_range_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             ScenariosConfig(
                 job_changeover={"enabled": True, "frequency_per_shift": [6, 3]}  # type: ignore[arg-type]
             )
@@ -393,11 +393,11 @@ class TestBatchCycleConfig:
         assert cfg.batch_duration_seconds == [1500, 2400]
 
     def test_inverted_frequency_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             BatchCycleConfig(frequency_per_shift=[16, 8])
 
     def test_inverted_duration_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             BatchCycleConfig(batch_duration_seconds=[2700, 1200])
 
     def test_wrong_length_rejected(self) -> None:
@@ -414,11 +414,11 @@ class TestOvenThermalExcursionConfig:
         assert cfg.max_drift_c == [3.0, 10.0]
 
     def test_inverted_drift_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             OvenThermalExcursionConfig(max_drift_c=[10.0, 3.0])
 
     def test_inverted_duration_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             OvenThermalExcursionConfig(duration_seconds=[5400, 1800])
 
 
@@ -431,7 +431,7 @@ class TestFillWeightDriftConfig:
         assert cfg.drift_rate == [0.05, 0.2]
 
     def test_inverted_drift_rate_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             FillWeightDriftConfig(drift_rate=[0.2, 0.05])
 
     def test_custom_values(self) -> None:
@@ -447,7 +447,7 @@ class TestSealIntegrityFailureConfig:
         assert cfg.duration_seconds == [300, 1800]
 
     def test_inverted_frequency_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             SealIntegrityFailureConfig(frequency_per_week=[2, 1])
 
 
@@ -459,7 +459,7 @@ class TestChillerDoorAlarmConfig:
         assert cfg.duration_seconds == [300, 1200]
 
     def test_inverted_duration_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             ChillerDoorAlarmConfig(duration_seconds=[1200, 300])
 
 
@@ -471,7 +471,7 @@ class TestCipCycleConfig:
         assert cfg.cycle_duration_seconds == [1800, 3600]
 
     def test_inverted_cycle_duration_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             CipCycleConfig(cycle_duration_seconds=[3600, 1800])
 
     def test_custom_values(self) -> None:
@@ -487,7 +487,7 @@ class TestColdChainBreakConfig:
         assert cfg.duration_seconds == [1800, 7200]
 
     def test_inverted_frequency_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             ColdChainBreakConfig(frequency_per_month=[2, 1])
 
     def test_disabled(self) -> None:
@@ -976,7 +976,7 @@ class TestBearingWearConfigUpdated:
         assert cfg.failure_vibration == [40.0, 50.0]
 
     def test_inverted_base_rate_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             BearingWearConfig(base_rate=[0.005, 0.001])
 
     def test_zero_warning_threshold_rejected(self) -> None:
@@ -984,7 +984,7 @@ class TestBearingWearConfigUpdated:
             BearingWearConfig(warning_threshold=0.0)
 
     def test_inverted_failure_vibration_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             BearingWearConfig(failure_vibration=[50.0, 40.0])
 
     def test_yaml_has_new_fields(self) -> None:
@@ -1008,11 +1008,11 @@ class TestMicroStopConfig:
         assert cfg.ramp_up_seconds == [5.0, 15.0]
 
     def test_inverted_duration_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             MicroStopConfig(duration_seconds=[30.0, 5.0])
 
     def test_inverted_speed_drop_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             MicroStopConfig(speed_drop_percent=[80.0, 30.0])
 
     def test_yaml_has_micro_stop(self) -> None:
@@ -1043,7 +1043,7 @@ class TestContextualAnomalyConfig:
         assert cfg.types.vibration_during_off.probability == 0.15
 
     def test_inverted_frequency_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             ContextualAnomalyConfig(frequency_per_week=[5, 2])
 
     def test_invalid_probability_rejected(self) -> None:
@@ -1081,11 +1081,11 @@ class TestIntermittentFaultConfig:
         assert faults.pneumatic_intermittent.affected_signals == ["coder.ink_pressure"]
 
     def test_bearing_inverted_spike_magnitude_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             BearingIntermittentConfig(spike_magnitude=[25.0, 15.0])
 
     def test_electrical_inverted_magnitude_pct_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             ElectricalIntermittentConfig(spike_magnitude_pct=[50.0, 20.0])
 
     def test_pneumatic_phase3_false_by_default(self) -> None:
@@ -1119,11 +1119,11 @@ class TestCommDropConfig:
         assert cfg.duration_seconds == [1.0, 10.0]
 
     def test_inverted_duration_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             CommDropConfig(duration_seconds=[10.0, 1.0])
 
     def test_inverted_frequency_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             CommDropConfig(frequency_per_hour=[2.0, 1.0])
 
 
@@ -1156,7 +1156,7 @@ class TestDataQualityConfig:
             DataQualityConfig(exception_probability=-0.1)
 
     def test_inverted_response_delay_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             DataQualityConfig(response_delay_ms=[50, 0])
 
     def test_partial_modbus_probability_validated(self) -> None:
@@ -1164,11 +1164,11 @@ class TestDataQualityConfig:
             PartialModbusResponseConfig(probability=2.0)
 
     def test_sensor_disconnect_inverted_duration_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             SensorDisconnectConfig(duration_seconds=[300.0, 30.0])
 
     def test_stuck_sensor_inverted_frequency_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="min.*must be <= max"):
+        with pytest.raises(ValidationError, match=r"min.*must be <= max"):
             StuckSensorConfig(frequency_per_week_per_signal=[2.0, 0.0])
 
     def test_noise_zero_multiplier_rejected(self) -> None:

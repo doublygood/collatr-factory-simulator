@@ -179,7 +179,7 @@ class TestBearingWearLifecycle:
         assert sc.phase == ScenarioPhase.PENDING
 
     def test_activates_at_start_time(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         _get_press(engine).state_machine.force_state("Running")
         _run_ticks(engine, 5)
 
@@ -189,7 +189,7 @@ class TestBearingWearLifecycle:
         assert sc.is_active
 
     def test_completes_after_duration(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         _get_press(engine).state_machine.force_state("Running")
         _run_ticks(engine, 5)
 
@@ -220,7 +220,7 @@ class TestBearingWearLifecycle:
 class TestBearingWearVibration:
     def test_vibration_target_increases_over_time(self) -> None:
         """Vibration model _target must increase as the scenario progresses."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -253,7 +253,7 @@ class TestBearingWearVibration:
 
     def test_all_three_axes_affected(self) -> None:
         """All three vibration axes must increase."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -283,7 +283,7 @@ class TestBearingWearVibration:
 
     def test_vibration_exponential_shape(self) -> None:
         """Vibration increase follows base_rate * exp(k * elapsed_hours)."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -314,7 +314,7 @@ class TestBearingWearVibration:
 
     def test_vibration_restored_on_completion(self) -> None:
         """Original vibration targets must be restored after scenario ends."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -351,7 +351,7 @@ class TestBearingWearVibration:
 class TestBearingWearCurrent:
     def test_current_base_increases_over_time(self) -> None:
         """press._main_drive_current._base must increase with bearing wear."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -378,7 +378,7 @@ class TestBearingWearCurrent:
 
     def test_current_follows_same_exponential(self) -> None:
         """Current increase = saved_base * current_factor * exp(k * elapsed_hours)."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -414,7 +414,7 @@ class TestBearingWearCurrent:
 
     def test_current_base_restored_on_completion(self) -> None:
         """Current _base must be restored after scenario completes."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -452,7 +452,7 @@ class TestBearingWearCurrent:
 class TestBearingWearFailure:
     def test_failure_sets_press_fault(self) -> None:
         """When culminate_in_failure=True and threshold reached, press → Fault."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -480,7 +480,7 @@ class TestBearingWearFailure:
 
     def test_no_failure_without_flag(self) -> None:
         """Press stays Running when culminate_in_failure=False."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -517,7 +517,7 @@ class TestBearingWearFailure:
 class TestBearingWearThresholds:
     def test_warning_threshold_not_breached_early(self) -> None:
         """With small base_rate/k, warning is not reached in a short run."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -543,7 +543,7 @@ class TestBearingWearThresholds:
 
     def test_warning_logged_when_crossed(self) -> None:
         """Warning flag is set once vibration increase >= warning_threshold."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -571,7 +571,7 @@ class TestBearingWearThresholds:
 
     def test_alarm_logged_when_crossed(self) -> None:
         """Alarm flag is set once vibration increase >= alarm_threshold."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -596,7 +596,7 @@ class TestBearingWearThresholds:
 
     def test_warning_logged_once_not_multiple_times(self) -> None:
         """Warning flag fires only once, not every tick after crossing."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)

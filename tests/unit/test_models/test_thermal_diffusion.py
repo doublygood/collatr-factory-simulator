@@ -99,19 +99,19 @@ class TestConstruction:
         assert model.T_oven == 100.0
 
     def test_invalid_L_zero(self) -> None:
-        with pytest.raises(ValueError, match="L.*must be > 0"):
+        with pytest.raises(ValueError, match=r"L.*must be > 0"):
             _make_model({"L": 0.0})
 
     def test_invalid_L_negative(self) -> None:
-        with pytest.raises(ValueError, match="L.*must be > 0"):
+        with pytest.raises(ValueError, match=r"L.*must be > 0"):
             _make_model({"L": -0.01})
 
     def test_invalid_alpha_zero(self) -> None:
-        with pytest.raises(ValueError, match="alpha.*must be > 0"):
+        with pytest.raises(ValueError, match=r"alpha.*must be > 0"):
             _make_model({"alpha": 0.0})
 
     def test_invalid_alpha_negative(self) -> None:
-        with pytest.raises(ValueError, match="alpha.*must be > 0"):
+        with pytest.raises(ValueError, match=r"alpha.*must be > 0"):
             _make_model({"alpha": -1e-7})
 
 

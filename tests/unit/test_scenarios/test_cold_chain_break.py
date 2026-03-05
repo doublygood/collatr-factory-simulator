@@ -110,7 +110,7 @@ class TestColdChainBreakLifecycle:
         assert not sc.is_completed
 
     def test_activates_at_start_time(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         _run_ticks(engine, 3)
 
         rng = _make_rng()
@@ -121,7 +121,7 @@ class TestColdChainBreakLifecycle:
 
     def test_completes_after_duration(self) -> None:
         """Scenario completes once the duration has elapsed."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         _run_ticks(engine, 3)
 
         rng = _make_rng()
@@ -156,7 +156,7 @@ class TestCompressorLock:
 
     def test_compressor_forced_off_on_activation(self) -> None:
         """compressor_forced_off must be True while scenario is active."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         chiller = _get_chiller(engine)
         _run_ticks(engine, 3)
 
@@ -205,7 +205,7 @@ class TestCompressorLock:
           rise ~0.2/60 * 0.1 * 60 ~0.02 C
         Small but positive — direction is correct.
         """
-        engine, store = _make_engine(seed=10)
+        engine, _store = _make_engine(seed=10)
         chiller = _get_chiller(engine)
         _run_ticks(engine, 3)
 
@@ -269,7 +269,7 @@ class TestColdChainBreakRecovery:
 
     def test_compressor_forced_off_released_after_completion(self) -> None:
         """compressor_forced_off must be False after scenario completes."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         chiller = _get_chiller(engine)
         _run_ticks(engine, 3)
 
@@ -292,7 +292,7 @@ class TestColdChainBreakRecovery:
         will turn the compressor ON when room_temp > setpoint + 1°C.
         Run extra ticks to allow the generator to fire and observe recovery.
         """
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         chiller = _get_chiller(engine)
         _run_ticks(engine, 3)
 
@@ -316,7 +316,7 @@ class TestColdChainBreakRecovery:
 
     def test_scenario_does_not_permanently_lock_compressor(self) -> None:
         """Compressor lock must not persist beyond scenario completion."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         chiller = _get_chiller(engine)
         _run_ticks(engine, 5)
 

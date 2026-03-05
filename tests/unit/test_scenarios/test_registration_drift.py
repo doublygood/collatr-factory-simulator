@@ -93,7 +93,7 @@ class TestRegistrationDriftLifecycle:
         assert not sc.is_completed
 
     def test_activates_at_start_time(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -106,7 +106,7 @@ class TestRegistrationDriftLifecycle:
 
     def test_completes_after_drift_duration(self) -> None:
         """Scenario completes once drift_duration has elapsed."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -147,7 +147,7 @@ class TestRegistrationDriftBehavior:
 
     def test_drift_overrides_model_value(self) -> None:
         """The scenario must override the RandomWalkModel._value each tick."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -178,7 +178,7 @@ class TestRegistrationDriftBehavior:
 
     def test_drift_positive_direction(self) -> None:
         """Positive direction drift should increase error value."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -206,7 +206,7 @@ class TestRegistrationDriftBehavior:
 
     def test_drift_negative_direction(self) -> None:
         """Negative direction drift should decrease error value."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -234,7 +234,7 @@ class TestRegistrationDriftBehavior:
 
     def test_reversion_suppressed_during_drift(self) -> None:
         """Mean-reversion rate must be 0 during drift to prevent pull-back."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -266,7 +266,7 @@ class TestRegistrationDriftBehavior:
 
     def test_drift_exceeds_0_3mm(self) -> None:
         """Drift should reach beyond 0.3 mm (PRD 5.7 step 1)."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -302,7 +302,7 @@ class TestRegistrationDriftWasteRate:
 
     def test_waste_not_increased_below_threshold(self) -> None:
         """Waste rate should remain normal when drift < 0.2 mm."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -334,7 +334,7 @@ class TestRegistrationDriftWasteRate:
 
     def test_waste_increased_above_threshold(self) -> None:
         """Waste rate must increase when drift exceeds 0.2 mm."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -368,7 +368,7 @@ class TestRegistrationDriftWasteRate:
 
     def test_waste_restored_on_completion(self) -> None:
         """Waste rate must return to original after scenario ends."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -409,7 +409,7 @@ class TestRegistrationDriftRecovery:
 
     def test_reversion_rate_restored_on_completion(self) -> None:
         """Mean-reversion rate must be restored after scenario ends."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -440,7 +440,7 @@ class TestRegistrationDriftRecovery:
 
     def test_unaffected_axis_unchanged(self) -> None:
         """The axis not selected for drift must remain unmodified."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -468,7 +468,7 @@ class TestRegistrationDriftRecovery:
 
     def test_all_params_restored_on_completion(self) -> None:
         """All modified parameters must be restored after completion."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)

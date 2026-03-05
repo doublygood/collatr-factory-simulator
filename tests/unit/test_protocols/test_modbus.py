@@ -775,8 +775,8 @@ class TestUint32CdabEncoding:
     def test_word_order_vs_abcd(self) -> None:
         """CDAB register[0] = low word, ABCD register[0] = high word."""
         value = 0x00010002  # high=0x0001, low=0x0002
-        abcd_hi, abcd_lo = encode_uint32_abcd(value)
-        cdab_lo, cdab_hi = encode_uint32_cdab(value)
+        abcd_hi, _abcd_lo = encode_uint32_abcd(value)
+        cdab_lo, _cdab_hi = encode_uint32_cdab(value)
         assert abcd_hi == 0x0001  # ABCD: high word first
         assert cdab_lo == 0x0002  # CDAB: low word first
 

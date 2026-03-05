@@ -97,7 +97,7 @@ class TestWebBreakLifecycle:
         assert not sc.is_completed
 
     def test_activates_at_start_time(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -111,7 +111,7 @@ class TestWebBreakLifecycle:
 
     def test_transitions_through_all_phases(self) -> None:
         """Run a fast web break and verify all phases are traversed."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -301,7 +301,7 @@ class TestWebBreakFaultAndDecel:
 
     def test_forces_fault_state(self) -> None:
         """Press enters Fault state after the tension spike."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -458,7 +458,7 @@ class TestWebBreakRecovery:
 
     def test_state_transitions_to_setup(self) -> None:
         """After recovery, press should be in Setup state."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -495,7 +495,7 @@ class TestWebBreakRecovery:
 
     def test_tension_model_restored_after_complete(self) -> None:
         """Tension model parameters must be restored to originals."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -534,7 +534,7 @@ class TestWebBreakRecovery:
 
     def test_max_clamp_restored_after_spike(self) -> None:
         """max_clamp should be raised during spike and restored by recovery."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)

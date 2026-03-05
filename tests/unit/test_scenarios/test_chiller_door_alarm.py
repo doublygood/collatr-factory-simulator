@@ -110,7 +110,7 @@ class TestChillerDoorAlarmLifecycle:
         assert not sc.is_completed
 
     def test_activates_at_start_time(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         _run_ticks(engine, 3)
 
         rng = _make_rng()
@@ -121,7 +121,7 @@ class TestChillerDoorAlarmLifecycle:
 
     def test_completes_after_duration(self) -> None:
         """Scenario completes once the duration has elapsed."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         _run_ticks(engine, 3)
 
         rng = _make_rng()
@@ -156,7 +156,7 @@ class TestDoorOpenEffect:
 
     def test_door_open_is_true_on_activation(self) -> None:
         """chiller.door_open must be True while scenario is active."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         chiller = _get_chiller(engine)
         _run_ticks(engine, 3)
 
@@ -249,7 +249,7 @@ class TestDoorAlarmRecovery:
 
     def test_door_closed_after_completion(self) -> None:
         """chiller.door_open must be False after scenario completes."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         chiller = _get_chiller(engine)
         _run_ticks(engine, 3)
 
@@ -293,7 +293,7 @@ class TestDoorAlarmRecovery:
 
     def test_scenario_does_not_permanently_open_door(self) -> None:
         """Door must be closed when scenario completes — generator recovery begins."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         chiller = _get_chiller(engine)
         _run_ticks(engine, 5)
 

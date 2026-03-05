@@ -117,7 +117,7 @@ class TestFillWeightDriftLifecycle:
         assert not sc.is_completed
 
     def test_activates_at_start_time(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         filler = _get_filler(engine)
         filler.state_machine.force_state("Running")
         _run_ticks(engine, 3)
@@ -130,7 +130,7 @@ class TestFillWeightDriftLifecycle:
 
     def test_completes_after_drift_duration(self) -> None:
         """Scenario completes once drift_duration has elapsed."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         filler = _get_filler(engine)
         filler.state_machine.force_state("Running")
         _run_ticks(engine, 3)
@@ -166,7 +166,7 @@ class TestFillWeightDriftEffect:
 
     def test_giveaway_increases_in_over_weight_direction(self) -> None:
         """With direction=+1, _fill_giveaway should increase above original."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         filler = _get_filler(engine)
         filler.state_machine.force_state("Running")
         _run_ticks(engine, 3)
@@ -195,7 +195,7 @@ class TestFillWeightDriftEffect:
 
     def test_giveaway_decreases_in_under_weight_direction(self) -> None:
         """With direction=-1, _fill_giveaway should decrease below original."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         filler = _get_filler(engine)
         filler.state_machine.force_state("Running")
         _run_ticks(engine, 3)
@@ -224,7 +224,7 @@ class TestFillWeightDriftEffect:
 
     def test_drift_proportional_to_rate_and_elapsed(self) -> None:
         """Drift offset should match drift_rate * elapsed / 60 (before capping)."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         filler = _get_filler(engine)
         filler.state_machine.force_state("Running")
         _run_ticks(engine, 3)
@@ -258,7 +258,7 @@ class TestFillWeightDriftEffect:
 
     def test_drift_capped_at_max_drift(self) -> None:
         """Drift should not exceed max_drift regardless of elapsed time."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         filler = _get_filler(engine)
         filler.state_machine.force_state("Running")
         _run_ticks(engine, 3)
@@ -298,7 +298,7 @@ class TestFillWeightDriftRecovery:
 
     def test_giveaway_restored_after_completion(self) -> None:
         """On scenario completion, _fill_giveaway must be restored to original."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         filler = _get_filler(engine)
         filler.state_machine.force_state("Running")
         _run_ticks(engine, 3)
@@ -319,7 +319,7 @@ class TestFillWeightDriftRecovery:
 
     def test_giveaway_elevated_during_drift_then_restored(self) -> None:
         """Giveaway is elevated mid-scenario and restored at completion."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         filler = _get_filler(engine)
         filler.state_machine.force_state("Running")
         _run_ticks(engine, 3)

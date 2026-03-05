@@ -322,7 +322,7 @@ class TestStringNodeIDs:
         opcua_servers: tuple[list[Server], list[int], list[list[ua.NodeId]]],
     ) -> None:
         """String NodeIDs are browsable by path."""
-        _servers, _ports, all_node_ids = opcua_servers
+        _servers, _ports, _all_node_ids = opcua_servers
 
         # Server 1: browse PackagingLine.Press1.LineSpeed
         node = clients[0].get_node(ua.NodeId("PackagingLine.Press1.LineSpeed", 2))

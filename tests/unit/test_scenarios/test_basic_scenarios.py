@@ -146,7 +146,7 @@ class TestScenarioLifecycle:
         assert not sc.is_completed
 
     def test_scenario_activates_at_start_time(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         rng = _make_rng()
         sc = UnplannedStop(
             start_time=0.5, rng=rng,
@@ -161,7 +161,7 @@ class TestScenarioLifecycle:
         assert sc.is_active
 
     def test_scenario_completes_after_duration(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         rng = _make_rng()
         # Very short duration for test
         sc = UnplannedStop(
@@ -177,7 +177,7 @@ class TestScenarioLifecycle:
         assert sc.is_completed
 
     def test_completed_scenario_is_not_evaluated(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         rng = _make_rng()
         sc = UnplannedStop(
             start_time=0.1, rng=rng,
@@ -206,7 +206,7 @@ class TestUnplannedStop:
 
     def test_forces_fault_state(self) -> None:
         """Activating an unplanned stop forces press to Fault state."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
 
         # Put press in Running first
@@ -295,7 +295,7 @@ class TestJobChangeover:
 
     def test_changeover_starts_setup(self) -> None:
         """Job changeover should put press into Setup state."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -316,7 +316,7 @@ class TestJobChangeover:
 
     def test_changeover_completes_to_running(self) -> None:
         """After full changeover, press should return to Running."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -348,7 +348,7 @@ class TestJobChangeover:
 
     def test_speed_change_alters_target(self) -> None:
         """With speed_change_probability=1.0, target speed should change."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         original_speed = press.target_speed
         press.state_machine.force_state("Running")
@@ -380,7 +380,7 @@ class TestJobChangeover:
 
     def test_counter_reset_on_changeover(self) -> None:
         """With counter_reset_probability=1.0, counters with reset_on_job_change reset."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
 
@@ -431,7 +431,7 @@ class TestShiftChange:
 
     def test_shift_change_goes_idle(self) -> None:
         """Shift change should put press into Idle state."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -453,7 +453,7 @@ class TestShiftChange:
 
     def test_shift_change_resumes_running(self) -> None:
         """After changeover, press should return to Running."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -481,7 +481,7 @@ class TestShiftChange:
 
     def test_night_shift_speed_bias(self) -> None:
         """Night shift with speed_bias=0.9 should reduce target speed."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         original_speed = press.target_speed
         press.state_machine.force_state("Running")
@@ -615,7 +615,7 @@ class TestScenarioEngine:
 
     def test_tick_activates_pending_scenarios(self) -> None:
         """Calling tick() should activate scenarios whose start_time has passed."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         rng = _make_rng()
 
         sc = UnplannedStop(
@@ -633,7 +633,7 @@ class TestScenarioEngine:
 
     def test_engine_integration_with_data_engine(self) -> None:
         """Scenarios should affect generator state when run via DataEngine."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
 
         # Put press in Running
@@ -695,13 +695,13 @@ class TestDataEngineScenarioIntegration:
 
     def test_engine_has_scenario_engine(self) -> None:
         """DataEngine should have a scenario_engine property."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         assert engine.scenario_engine is not None
         assert isinstance(engine.scenario_engine, ScenarioEngine)
 
     def test_scenario_engine_evaluates_on_tick(self) -> None:
         """ScenarioEngine.tick() is called during DataEngine.tick()."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
 
         # Add a scenario that fires immediately
         rng = _make_rng()

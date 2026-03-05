@@ -128,7 +128,7 @@ class TestSealIntegrityLifecycle:
         assert not sc.is_completed
 
     def test_activates_at_start_time(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         _run_ticks(engine, 3)
 
         rng = _make_rng()
@@ -139,7 +139,7 @@ class TestSealIntegrityLifecycle:
 
     def test_completes_after_duration(self) -> None:
         """Scenario completes once the duration has elapsed."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         _run_ticks(engine, 3)
 
         rng = _make_rng()
@@ -173,7 +173,7 @@ class TestSealTempDegradation:
 
     def test_seal_temp_drops_below_original_during_scenario(self) -> None:
         """seal_temp_current must be below original value while active."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         sealer = _get_sealer(engine)
         _run_ticks(engine, 50)  # warm up (5s, sealer fires at least once)
 
@@ -202,7 +202,7 @@ class TestSealTempDegradation:
 
     def test_seal_temp_drop_proportional_to_temp_drop_param(self) -> None:
         """Drop amount should match temp_drop_range after full ramp."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         sealer = _get_sealer(engine)
         _run_ticks(engine, 50)
 
@@ -241,7 +241,7 @@ class TestSealPressureDegradation:
 
     def test_pressure_target_drops_during_scenario(self) -> None:
         """seal_pressure model target must be below original during scenario."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         sealer = _get_sealer(engine)
         _run_ticks(engine, 50)
 
@@ -278,7 +278,7 @@ class TestVacuumDegradation:
 
     def test_vacuum_target_moves_toward_zero_during_scenario(self) -> None:
         """vacuum_level target must move toward 0 (less negative) during scenario."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         sealer = _get_sealer(engine)
         _run_ticks(engine, 50)
 
@@ -317,7 +317,7 @@ class TestQcRejectSpike:
 
     def test_reject_total_increases_during_scenario(self) -> None:
         """qc._reject_total must increase while scenario is active."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         qc = _get_qc(engine)
         _run_ticks(engine, 50)
 
@@ -383,7 +383,7 @@ class TestSealIntegrityRecovery:
 
     def test_seal_temp_restored_after_completion(self) -> None:
         """sealer._seal_temp_current must be restored to original on completion."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         sealer = _get_sealer(engine)
         _run_ticks(engine, 50)
 
@@ -403,7 +403,7 @@ class TestSealIntegrityRecovery:
 
     def test_pressure_target_restored_after_completion(self) -> None:
         """seal_pressure model target must be restored on completion."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         sealer = _get_sealer(engine)
         _run_ticks(engine, 50)
 
@@ -425,7 +425,7 @@ class TestSealIntegrityRecovery:
 
     def test_vacuum_target_restored_after_completion(self) -> None:
         """vacuum_level model target must be restored on completion."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         sealer = _get_sealer(engine)
         _run_ticks(engine, 50)
 
@@ -447,7 +447,7 @@ class TestSealIntegrityRecovery:
 
     def test_all_degradation_visible_then_recovered(self) -> None:
         """Degradation is measurable mid-scenario and restored at completion."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         sealer = _get_sealer(engine)
         _run_ticks(engine, 50)
 

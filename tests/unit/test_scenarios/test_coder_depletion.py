@@ -110,7 +110,7 @@ class TestCoderDepletionLifecycle:
 
     def test_activates_into_monitoring(self) -> None:
         """Scenario activates at start_time and enters MONITORING phase."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         _run_ticks(engine, 5)
 
         rng = _make_rng()
@@ -124,7 +124,7 @@ class TestCoderDepletionLifecycle:
 
     def test_transitions_to_depleted_at_empty_threshold(self) -> None:
         """Scenario enters DEPLETED when ink_level <= 2%."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         coder = _get_coder(engine)
 
@@ -152,7 +152,7 @@ class TestCoderDepletionLifecycle:
 
     def test_completes_after_recovery_duration(self) -> None:
         """Scenario completes after recovery_duration in DEPLETED phase."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         coder = _get_coder(engine)
 
         _run_ticks(engine, 5)
@@ -196,7 +196,7 @@ class TestCoderDepletionQualityFlag:
 
     def test_quality_uncertain_at_low_ink(self) -> None:
         """Quality override set to 'uncertain' when ink <= 10%."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         coder = _get_coder(engine)
 
         _run_ticks(engine, 5)
@@ -265,7 +265,7 @@ class TestCoderDepletionQualityFlag:
 
     def test_quality_flagged_even_if_level_skips_to_empty(self) -> None:
         """Quality flag set even when ink drops below both thresholds at once."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         coder = _get_coder(engine)
 
         _run_ticks(engine, 5)
@@ -288,7 +288,7 @@ class TestCoderDepletionQualityFlag:
 
     def test_custom_low_ink_threshold(self) -> None:
         """Custom low_ink_threshold is respected."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         coder = _get_coder(engine)
 
         _run_ticks(engine, 5)
@@ -318,7 +318,7 @@ class TestCoderDepletionFault:
 
     def test_coder_faulted_at_empty(self) -> None:
         """Coder state forced to Fault when ink <= 2%."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         coder = _get_coder(engine)
 
         _run_ticks(engine, 5)
@@ -339,7 +339,7 @@ class TestCoderDepletionFault:
 
     def test_coder_stays_in_fault_during_recovery(self) -> None:
         """Coder remains in Fault for the full recovery duration."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         coder = _get_coder(engine)
 
         _run_ticks(engine, 5)
@@ -363,7 +363,7 @@ class TestCoderDepletionFault:
 
     def test_custom_empty_threshold(self) -> None:
         """Custom empty_threshold is respected."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         coder = _get_coder(engine)
 
         _run_ticks(engine, 5)
@@ -400,7 +400,7 @@ class TestCoderDepletionRecovery:
 
     def test_ink_refilled_after_recovery(self) -> None:
         """Ink level resets to 100% after recovery completes."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         coder = _get_coder(engine)
 
         _run_ticks(engine, 5)
@@ -426,7 +426,7 @@ class TestCoderDepletionRecovery:
 
     def test_coder_returns_to_ready_after_recovery(self) -> None:
         """Coder state forced to Ready after recovery."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         coder = _get_coder(engine)
 
         _run_ticks(engine, 5)
@@ -451,7 +451,7 @@ class TestCoderDepletionRecovery:
 
     def test_quality_cleared_after_recovery(self) -> None:
         """Quality override removed after recovery."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         coder = _get_coder(engine)
 
         _run_ticks(engine, 5)
@@ -476,7 +476,7 @@ class TestCoderDepletionRecovery:
 
     def test_auto_refill_restored_after_recovery(self) -> None:
         """DepletionModel refill_threshold restored to original value."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         coder = _get_coder(engine)
 
         _run_ticks(engine, 5)
@@ -508,7 +508,7 @@ class TestCoderDepletionRecovery:
 
     def test_fault_timer_restored_after_recovery(self) -> None:
         """Fault->Ready transition timer restored to original parameters."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         coder = _get_coder(engine)
 
         _run_ticks(engine, 5)
@@ -549,7 +549,7 @@ class TestCoderDepletionRecovery:
 
     def test_custom_refill_level(self) -> None:
         """Custom refill_level is respected."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         coder = _get_coder(engine)
 
         _run_ticks(engine, 5)
@@ -586,7 +586,7 @@ class TestCoderDepletionAutoRefill:
 
     def test_auto_refill_disabled_during_scenario(self) -> None:
         """DepletionModel does NOT auto-refill while scenario is active."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         coder = _get_coder(engine)
 
         _run_ticks(engine, 5)

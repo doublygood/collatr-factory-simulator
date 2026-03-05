@@ -117,7 +117,7 @@ class TestColdStartLifecycle:
 
     def test_activates_into_monitoring(self) -> None:
         """Scenario activates at start_time and enters MONITORING phase."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         # Press starts in Idle by default
         _run_ticks(engine, 5)
 
@@ -132,7 +132,7 @@ class TestColdStartLifecycle:
 
     def test_transitions_to_spike_on_trigger(self) -> None:
         """Cold start enters SPIKE when idle threshold exceeded and state changes."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
 
         # Start in Idle
@@ -162,7 +162,7 @@ class TestColdStartLifecycle:
 
     def test_completes_after_spike_duration(self) -> None:
         """Scenario completes when spike_elapsed > spike_duration."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
 
         press.state_machine.force_state("Idle")
@@ -213,7 +213,7 @@ class TestColdStartTrigger:
 
     def test_no_trigger_if_idle_too_short(self) -> None:
         """Spike should NOT fire if idle duration < threshold."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
 
         press.state_machine.force_state("Idle")
@@ -242,7 +242,7 @@ class TestColdStartTrigger:
 
     def test_trigger_from_off_state(self) -> None:
         """Trigger should fire from Off state, not just Idle."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
 
         press.state_machine.force_state("Off")
@@ -270,7 +270,7 @@ class TestColdStartTrigger:
 
     def test_trigger_to_setup_state(self) -> None:
         """Trigger should fire when transitioning to Setup, not just Running."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
 
         press.state_machine.force_state("Idle")
@@ -296,7 +296,7 @@ class TestColdStartTrigger:
 
     def test_no_trigger_from_fault_state(self) -> None:
         """Transition from Fault to Running should NOT trigger spike."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
 
         press.state_machine.force_state("Idle")
@@ -328,7 +328,7 @@ class TestColdStartTrigger:
 
     def test_idle_tracking_resets_after_non_trigger(self) -> None:
         """If transition happens but idle was too short, idle tracking resets."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
 
         press.state_machine.force_state("Idle")
@@ -373,7 +373,7 @@ class TestColdStartSpikeMagnitude:
 
     def test_power_base_set_to_spike_level(self) -> None:
         """Energy model _base should be set to spike_power during spike."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         energy = _get_energy(engine)
 
@@ -415,7 +415,7 @@ class TestColdStartSpikeMagnitude:
 
     def test_current_base_set_to_spike_level(self) -> None:
         """Press main_drive_current _base should spike during cold start."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
 
         press.state_machine.force_state("Idle")
@@ -534,7 +534,7 @@ class TestColdStartSpikeMagnitude:
 
     def test_max_clamp_raised_for_spike(self) -> None:
         """Max clamp should be raised to accommodate the spike."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         energy = _get_energy(engine)
 
@@ -579,7 +579,7 @@ class TestColdStartRecovery:
 
     def test_power_base_restored_after_spike(self) -> None:
         """Energy model _base should return to original after spike ends."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         energy = _get_energy(engine)
 
@@ -615,7 +615,7 @@ class TestColdStartRecovery:
 
     def test_current_base_restored_after_spike(self) -> None:
         """Press current _base should return to original after spike ends."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
 
         press.state_machine.force_state("Idle")
@@ -651,7 +651,7 @@ class TestColdStartRecovery:
 
     def test_max_clamp_restored_after_spike(self) -> None:
         """Max clamp should be restored to original after spike ends."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         energy = _get_energy(engine)
 

@@ -93,7 +93,7 @@ class TestInkExcursionLifecycle:
         assert not sc.is_completed
 
     def test_activates_at_start_time(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -106,7 +106,7 @@ class TestInkExcursionLifecycle:
 
     def test_completes_after_excursion_duration(self) -> None:
         """Scenario completes once excursion_duration has elapsed."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 5)
@@ -147,7 +147,7 @@ class TestInkExcursionViscosity:
 
     def test_thin_excursion_lowers_target(self) -> None:
         """Thin excursion should lower the viscosity model target."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -180,7 +180,7 @@ class TestInkExcursionViscosity:
 
     def test_thick_excursion_raises_target(self) -> None:
         """Thick excursion should raise the viscosity model target."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -210,7 +210,7 @@ class TestInkExcursionViscosity:
 
     def test_viscosity_ramps_gradually(self) -> None:
         """Viscosity target should change gradually during ramp phase."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -296,7 +296,7 @@ class TestInkExcursionRegistrationError:
 
     def test_reg_error_drift_rate_increased(self) -> None:
         """Registration error drift rates must be multiplied during excursion."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -328,7 +328,7 @@ class TestInkExcursionRegistrationError:
 
     def test_reg_error_drift_rate_restored(self) -> None:
         """Registration error drift rates must be restored after completion."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -372,7 +372,7 @@ class TestInkExcursionWasteRate:
 
     def test_waste_rate_increased_during_excursion(self) -> None:
         """Waste counter rate must increase by the configured multiplier."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -399,7 +399,7 @@ class TestInkExcursionWasteRate:
 
     def test_waste_rate_restored_after_completion(self) -> None:
         """Waste counter rate must return to original after scenario ends."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -439,7 +439,7 @@ class TestInkExcursionRecovery:
 
     def test_viscosity_target_restored_on_completion(self) -> None:
         """Viscosity model target must return to original after completion."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)
@@ -471,7 +471,7 @@ class TestInkExcursionRecovery:
 
     def test_all_params_restored_on_completion(self) -> None:
         """All modified parameters must be restored after completion."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         press.state_machine.force_state("Running")
         _run_ticks(engine, 10)

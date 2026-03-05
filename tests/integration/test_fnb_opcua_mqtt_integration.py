@@ -354,7 +354,7 @@ class TestFnbOpcuaNodeTree:
         fnb_opcua_static: tuple[OpcuaServer, Client, SignalStore, int],
     ) -> None:
         """FoodBevLine folder is a direct child of the OPC-UA Objects folder."""
-        _, client, _, ns = fnb_opcua_static
+        _, client, _, _ns = fnb_opcua_static
         children = await client.nodes.objects.get_children()
         names = [(await c.read_browse_name()).Name for c in children]
         assert "FoodBevLine" in names, (
@@ -366,7 +366,7 @@ class TestFnbOpcuaNodeTree:
         fnb_opcua_static: tuple[OpcuaServer, Client, SignalStore, int],
     ) -> None:
         """F&B OPC-UA server must NOT expose PackagingLine (wrong profile)."""
-        _, client, _, ns = fnb_opcua_static
+        _, client, _, _ns = fnb_opcua_static
         children = await client.nodes.objects.get_children()
         names = [(await c.read_browse_name()).Name for c in children]
         assert "PackagingLine" not in names, (
@@ -575,7 +575,7 @@ class TestFnbOpcuaWithLiveEngine:
 
     async def test_engine_values_reach_opcua(self) -> None:
         """Engine ticks populate the store; OPC-UA sync delivers those values."""
-        config, store, clock, engine = _base_fnb_config()
+        config, store, _clock, engine = _base_fnb_config()
 
         server = OpcuaServer(config, store, host=_HOST, port=0)  # type: ignore[arg-type]
         await server.start()

@@ -481,7 +481,7 @@ class TestCholeskyConstruction:
 
     def test_non_unit_diagonal_rejected(self) -> None:
         R = np.array([[2.0, 0.5], [0.5, 1.0]])
-        with pytest.raises(ValueError, match="diagonal must be 1.0"):
+        with pytest.raises(ValueError, match=r"diagonal must be 1.0"):
             CholeskyCorrelator(R)
 
     def test_not_positive_definite_rejected(self) -> None:

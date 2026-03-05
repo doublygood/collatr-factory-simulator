@@ -405,7 +405,7 @@ async def test_source_timestamp_has_drift(
     opcua_with_drift: tuple[OpcuaServer, Client, int, SignalStore, ClockDriftModel],
 ) -> None:
     """SourceTimestamp includes clock drift offset."""
-    server, client, ns, store, drift = opcua_with_drift
+    _server, client, ns, store, drift = opcua_with_drift
 
     # Seed a signal value at sim_time = 3600.0 (1 hour)
     sim_time = 3600.0

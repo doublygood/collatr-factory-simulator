@@ -197,7 +197,7 @@ class TestMixerHoldingRegistersCdab:
         ],
     ) -> None:
         """HR 1000-1001: mixer.speed (float32 CDAB)."""
-        client, _, _, store = fnb_modbus_system
+        client, _, _, _store = fnb_modbus_system
         result = await client.read_holding_registers(1000, count=2)
         assert not result.isError(), f"HR 1000-1001 failed: {result}"
         value = _f32_cdab(result.registers)
@@ -269,7 +269,7 @@ class TestMixerHoldingRegistersCdab:
 
         This verifies word-swap is actually applied (not just ABCD encoding).
         """
-        client, _, _, store = fnb_modbus_system
+        client, _, _, _store = fnb_modbus_system
         # mixer.speed=450.0 — raw registers should decode differently for ABCD vs CDAB
         result = await client.read_holding_registers(1000, count=2)
         assert not result.isError()
@@ -503,7 +503,7 @@ class TestFnbInputRegisters:
         ],
     ) -> None:
         """IR 100-102: oven zone temperatures (int16 x10)."""
-        client, _, _, store = fnb_modbus_system
+        client, _, _, _store = fnb_modbus_system
         expected = {100: 160.0, 101: 200.0, 102: 180.0}
         for ir_addr, target in expected.items():
             result = await client.read_input_registers(ir_addr, count=1)
@@ -628,7 +628,7 @@ class TestFnbCoils:
         ],
     ) -> None:
         """Coil 100: mixer.lid_closed = True when signal > 0."""
-        client, _, _, store = fnb_modbus_system
+        client, _, _, _store = fnb_modbus_system
         # store has mixer.lid_closed = 1.0 → coil True
         result = await client.read_coils(100, count=1)
         assert not result.isError()
@@ -889,7 +889,7 @@ class TestFnbOvenSetpointWrite:
         ],
     ) -> None:
         """FC16 write to zone_1_setpoint (HR 1110-1111) and read back."""
-        client, _, server, _ = fnb_modbus_system
+        client, _, _server, _ = fnb_modbus_system
         new_setpoint = 170.0
         hi, lo = encode_float32_abcd(new_setpoint)
         result = await client.write_registers(1110, [hi, lo])

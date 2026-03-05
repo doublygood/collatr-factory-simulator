@@ -191,7 +191,7 @@ async def opcua_live() -> (  # type: ignore[override]
 
     Yields ``(engine, server, client, store, namespace_index)``.
     """
-    config, store, clock, engine = _base_config()
+    config, store, _clock, engine = _base_config()
 
     # Pre-prime store before server starts.
     for _ in range(10):
@@ -247,7 +247,7 @@ class TestHierarchicalBrowse:
         opcua_static: tuple[OpcuaServer, Client, SignalStore, int],
     ) -> None:
         """PackagingLine folder is a direct child of the OPC-UA Objects folder."""
-        _, client, _, ns = opcua_static
+        _, client, _, _ns = opcua_static
         children = await client.nodes.objects.get_children()
         names = [(await c.read_browse_name()).Name for c in children]
         assert "PackagingLine" in names, (
@@ -325,7 +325,7 @@ class TestAllNodesAccessible:
         opcua_static: tuple[OpcuaServer, Client, SignalStore, int],
     ) -> None:
         """Every Appendix B leaf node is readable via its ns=2;s=… NodeID."""
-        server, client, _, ns = opcua_static
+        _server, client, _, ns = opcua_static
         errors: list[str] = []
         for node_path, _type_str, _ in EXPECTED_NODES:
             try:

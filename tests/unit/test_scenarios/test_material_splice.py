@@ -116,7 +116,7 @@ class TestMaterialSpliceLifecycle:
         assert not sc.is_completed
 
     def test_activates_to_monitoring(self) -> None:
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
 
@@ -129,7 +129,7 @@ class TestMaterialSpliceLifecycle:
 
     def test_does_not_trigger_when_unwind_high(self) -> None:
         """No splice when unwind diameter > trigger threshold."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
 
@@ -149,7 +149,7 @@ class TestMaterialSpliceLifecycle:
 
     def test_does_not_trigger_when_not_running(self) -> None:
         """No splice when press is not Running (e.g. Idle)."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _run_ticks(engine, 5)  # Don't set to Running
 
@@ -168,7 +168,7 @@ class TestMaterialSpliceLifecycle:
 
     def test_triggers_splice_when_unwind_low_and_running(self) -> None:
         """Splice triggers when unwind <= 150 mm during Running."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
         _set_low_unwind(press, 100.0)
@@ -185,7 +185,7 @@ class TestMaterialSpliceLifecycle:
 
     def test_completes_after_splice_duration(self) -> None:
         """Scenario completes after splice_duration elapsed."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
         _set_low_unwind(press, 100.0)
@@ -279,7 +279,7 @@ class TestTensionSpike:
 
     def test_tension_base_increased_during_spike(self) -> None:
         """Tension model _base increases by spike amount on splice trigger."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
 
@@ -305,7 +305,7 @@ class TestTensionSpike:
 
     def test_tension_base_restored_after_spike_duration(self) -> None:
         """Tension model _base restored after tension_spike_duration."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
 
@@ -337,7 +337,7 @@ class TestTensionSpike:
 
     def test_max_clamp_raised_if_spike_exceeds(self) -> None:
         """Max clamp raised to allow spike to exceed normal range."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
 
@@ -367,7 +367,7 @@ class TestTensionSpike:
 
     def test_max_clamp_restored_on_completion(self) -> None:
         """Max clamp is restored when scenario completes."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
 
@@ -409,7 +409,7 @@ class TestRegistrationError:
 
     def test_reg_error_offset_applied(self) -> None:
         """Both X and Y registration errors increase during splice."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
 
@@ -442,7 +442,7 @@ class TestRegistrationError:
 
     def test_reversion_rate_suppressed_during_splice(self) -> None:
         """Mean-reversion is suppressed during the registration error window."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
 
@@ -462,7 +462,7 @@ class TestRegistrationError:
 
     def test_reversion_rate_restored_after_reg_duration(self) -> None:
         """Mean-reversion rate is restored after registration error duration."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
 
@@ -498,7 +498,7 @@ class TestRegistrationError:
 
     def test_reg_error_both_axes_affected(self) -> None:
         """Both X and Y axes are affected, not just one."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
 
@@ -535,7 +535,7 @@ class TestWasteRate:
 
     def test_waste_rate_increased(self) -> None:
         """Waste count rate increases during splice."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
 
@@ -559,7 +559,7 @@ class TestWasteRate:
 
     def test_waste_rate_restored_on_complete(self) -> None:
         """Waste count rate returns to normal after scenario completes."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
 
@@ -599,7 +599,7 @@ class TestUnwindReset:
 
     def test_unwind_resets_to_full_reel(self) -> None:
         """Unwind diameter resets to 1500 mm on splice trigger."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
         _set_low_unwind(press, 100.0)
@@ -619,7 +619,7 @@ class TestUnwindReset:
 
     def test_custom_refill_diameter(self) -> None:
         """Unwind refills to custom diameter when configured."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
         _set_low_unwind(press, 100.0)
@@ -648,7 +648,7 @@ class TestSpeedDip:
 
     def test_speed_dip_started_on_splice(self) -> None:
         """Line speed ramp model starts a dip on splice trigger."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
 
@@ -679,7 +679,7 @@ class TestSpeedDip:
 
     def test_speed_recovery_ramp_started(self) -> None:
         """Speed recovery ramp is started after the dip."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
 
@@ -720,7 +720,7 @@ class TestMachineStateDuringSplice:
 
     def test_machine_state_stays_running(self) -> None:
         """Press machine_state remains Running (2) during entire splice."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
         _set_low_unwind(press, 100.0)
@@ -756,7 +756,7 @@ class TestMaterialSpliceIntegration:
 
     def test_scenario_evaluates_in_engine_tick_loop(self) -> None:
         """Scenario evaluates correctly when called from the engine loop."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
         _set_low_unwind(press, 100.0)
@@ -777,7 +777,7 @@ class TestMaterialSpliceIntegration:
 
     def test_all_effects_applied_and_restored(self) -> None:
         """All model modifications are applied during splice and restored after."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
 
@@ -821,7 +821,7 @@ class TestMaterialSpliceIntegration:
 
     def test_unwind_depletes_after_refill(self) -> None:
         """After refill, unwind_diameter continues depleting normally."""
-        engine, store = _make_engine()
+        engine, _store = _make_engine()
         press = _get_press(engine)
         _setup_running_press(engine, press)
         _set_low_unwind(press, 100.0)

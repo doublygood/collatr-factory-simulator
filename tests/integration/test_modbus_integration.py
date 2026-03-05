@@ -151,7 +151,7 @@ class TestHoldingRegisters:
         modbus_system: tuple[AsyncModbusTcpClient, DataEngine, ModbusServer, SignalStore],
     ) -> None:
         """HR 100-101: press.line_speed (float32)."""
-        client, engine, server, store = modbus_system
+        client, _engine, _server, _store = modbus_system
         result = await client.read_holding_registers(100, count=2)
         assert not result.isError(), f"Read HR 100-101 failed: {result}"
         value = _read_float32(result.registers)
@@ -340,7 +340,7 @@ class TestInputRegisters:
         modbus_system: tuple[AsyncModbusTcpClient, DataEngine, ModbusServer, SignalStore],
     ) -> None:
         """IR 0-2: press dryer zone temperatures (int16 x10)."""
-        client, _, _, store = modbus_system
+        client, _, _, _store = modbus_system
         for ir_addr in (0, 1, 2):
             result = await client.read_input_registers(ir_addr, count=1)
             assert not result.isError(), f"Read IR {ir_addr} failed"
@@ -422,7 +422,7 @@ class TestCoils:
         modbus_system: tuple[AsyncModbusTcpClient, DataEngine, ModbusServer, SignalStore],
     ) -> None:
         """Coil 0 should match press.machine_state == Running (2)."""
-        client, _, server, store = modbus_system
+        client, _, _server, _store = modbus_system
 
         # Read current machine state
         state_result = await client.read_holding_registers(210, count=1)
@@ -482,7 +482,7 @@ class TestSetpointWrite:
         modbus_system: tuple[AsyncModbusTcpClient, DataEngine, ModbusServer, SignalStore],
     ) -> None:
         """FC16 write to dryer setpoint HR 140-141 and read back."""
-        client, _, server, store = modbus_system
+        client, _, _server, _store = modbus_system
 
         new_setpoint = 92.5
         hi, lo = encode_float32_abcd(new_setpoint)
