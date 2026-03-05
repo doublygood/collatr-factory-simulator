@@ -1,6 +1,6 @@
 # Phase 6d: Maintenance & CI — Progress
 
-## Status: IN PROGRESS
+## Status: COMPLETE
 
 ## Tasks
 - [x] 6d.1: Shared Reference Epoch Constant (Y18)
@@ -15,7 +15,7 @@
 - [x] 6d.10: Generator Tests: Slitter (Y19)
 - [x] 6d.11: Generator Tests: Vibration (Y19)
 - [x] 6d.12: CI Matrix: Python 3.13 + Integration Tests (Y21)
-- [ ] 6d.13: Validate All Fixes — Full Suite
+- [x] 6d.13: Validate All Fixes — Full Suite
 
 ## Notes
 
@@ -210,3 +210,15 @@ Updated `.github/workflows/ci.yml` with 4 changes:
 No new tests — CI changes verified by the workflow on next push.
 
 Full suite: 3149 passed (no regressions).
+
+## Task 6d.13 — Validate All Fixes — Full Suite
+
+Final validation of all Phase 6d changes:
+
+1. **ruff check**: clean (no lint errors)
+2. **mypy src**: clean (no type errors)
+3. **pytest**: 3149 passed in 3:50 (no failures, no regressions)
+4. **Batch sim — packaging profile**: 7 generators, 48 signals, 60s simulated duration — success
+5. **Batch sim — F&B profile**: 10 generators, 68 signals, 60s simulated duration — success
+
+All 13 tasks complete. Phase 6d is done.

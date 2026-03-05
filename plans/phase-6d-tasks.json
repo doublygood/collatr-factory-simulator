@@ -130,7 +130,7 @@
             "description": "Run ruff + mypy + pytest full suite. Run batch sim with both profiles (packaging + F&B). Verify no regressions. Fix any failures.",
             "review_ref": "All",
             "depends_on": ["6d.1", "6d.2", "6d.3", "6d.4", "6d.5", "6d.6", "6d.7", "6d.8", "6d.9", "6d.10", "6d.11", "6d.12"],
-            "passes": false
+            "passes": true
         }
     ]
 }
