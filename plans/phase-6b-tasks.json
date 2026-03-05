@@ -1,0 +1,66 @@
+{
+    "phase": "6b",
+    "name": "Robustness",
+    "tasks": [
+        {
+            "id": "6b.1",
+            "name": "MQTT Publisher Startup Retry and Disconnect Monitoring",
+            "group": "Resilience",
+            "file": "src/factory_simulator/protocols/mqtt_publisher.py",
+            "description": "Wrap initial connect() in retry loop with exponential backoff (3 attempts, 1s/2s/4s). Register on_connect and on_disconnect callbacks for visibility. Do not add custom reconnection beyond paho's built-in loop_start() reconnect. Test: mock connect to fail once then succeed; verify 3 consecutive failures raise.",
+            "review_ref": "Y4 (review-architecture.md §2.6)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6b.2",
+            "name": "CsvWriter Idempotent Close",
+            "group": "Error Handling",
+            "file": "src/factory_simulator/output/writer.py",
+            "description": "Guard CsvWriter.close() with self._file.closed check before flush/close. Apply same to ParquetWriter if needed. Test: double-close produces no exception. Test: write_tick after close is handled cleanly.",
+            "review_ref": "Y5 (review-architecture.md §3.9)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6b.3",
+            "name": "SIGTERM Handler for Graceful Docker Shutdown",
+            "group": "Resilience",
+            "file": "src/factory_simulator/cli.py",
+            "description": "Register SIGTERM handler via loop.add_signal_handler in _run_realtime(). Handler cancels current task to flow through existing finally cleanup. Apply to batch mode path too. Test: verify signal handler is registered (code-level check).",
+            "review_ref": "Y6 (review-architecture.md §2.4)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6b.4",
+            "name": "Profile-Aware 0x06 Device Busy Exception",
+            "group": "Protocol Correctness",
+            "file": "src/factory_simulator/protocols/modbus_server.py",
+            "description": "Make state signal configurable per ModbusServer instance (state_signal_id parameter). Packaging uses press.machine_state, F&B uses per-equipment state signals. Update _check_machine_state_transition() to use configured signal. Wire through topology manager for realistic mode. Test: F&B Modbus server fires 0x06 on state transition.",
+            "review_ref": "Y7 (review-protocol-fidelity.md §6.4)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6b.5",
+            "name": "Wire EvaluationConfig into FactoryConfig",
+            "group": "Config Completeness",
+            "file": "src/factory_simulator/config.py",
+            "description": "Add evaluation field to FactoryConfig. Add evaluation section to both YAML configs. Wire config.evaluation into evaluator (pre/post margins, severity weights, latency targets, seeds). Maintain backward compat (defaults when section absent). Test: custom evaluation config overrides defaults in evaluator.",
+            "review_ref": "Y8 (review-architecture.md §4.2)",
+            "depends_on": [],
+            "passes": false
+        },
+        {
+            "id": "6b.6",
+            "name": "Validate All Fixes — Full Suite",
+            "group": "Validation",
+            "file": null,
+            "description": "Run ruff + mypy + pytest full suite. Verify no regressions from 6a. Verify both profiles load with evaluation config. Fix any failures.",
+            "review_ref": "All",
+            "depends_on": ["6b.1", "6b.2", "6b.3", "6b.4", "6b.5"],
+            "passes": false
+        }
+    ]
+}
