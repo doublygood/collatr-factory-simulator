@@ -1,6 +1,6 @@
 # Phase 7: Polish — Progress
 
-## Status: IN PROGRESS
+## Status: COMPLETE
 
 ## Tasks
 - [x] 7.1: Fix MQTT Retry Delays Tuple (CQ-Y1)
@@ -15,7 +15,7 @@
 - [x] 7.10: Derive Modbus Update Interval from Config (G-Proto10)
 - [x] 7.11: Improve _compute_block_size Documentation (G-Proto13)
 - [x] 7.12: Explicit line_id + ShiftChange HH:MM Validator (G-Proto14 + G-Arch-ShiftChange)
-- [ ] 7.13: CI fail-fast: false + Validate All Fixes
+- [x] 7.13: CI fail-fast: false + Validate All Fixes
 
 ## Task 7.1 Notes
 
@@ -75,6 +75,10 @@ Two small fixes per G-Proto14 and G-Arch-ShiftChange:
 2. **ShiftChange HH:MM validator**: Added `field_validator("times")` to `ShiftChangeConfig` that validates each time string against `^\d{2}:\d{2}$` regex format and checks `0 <= HH <= 23`, `0 <= MM <= 59`. Added `import re` to config.py. Invalid formats like `"6:00"`, `"abc"` raise "Shift time must be HH:MM format"; out-of-range values like `"25:00"`, `"12:60"` raise "Invalid shift time".
 
 Added 7 tests in `TestShiftChangeConfig`: valid times accepted, boundary times (00:00, 23:59) accepted, invalid format rejected, non-numeric rejected, invalid hour rejected, invalid minute rejected, packaging config has line_id. 3179 tests pass, ruff + mypy clean.
+
+## Task 7.13 Notes
+
+Added `fail-fast: false` to the CI unit test matrix strategy in `.github/workflows/ci.yml`. This ensures that a failure on Python 3.12 does not cancel the 3.13 run (and vice versa), providing better diagnostics when issues are version-specific. Full validation: ruff clean, mypy clean, 3179 tests pass in 235s.
 
 ## Notes
 
