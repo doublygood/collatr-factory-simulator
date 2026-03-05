@@ -834,3 +834,74 @@ class TestEvaluationConfig:
 
         cfg = EvaluationConfig(pre_margin_seconds=0.0)
         assert cfg.pre_margin_seconds == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# Severity weight key normalisation (PascalCase → snake_case)
+# ---------------------------------------------------------------------------
+
+
+class TestSeverityWeightKeyNormalisation:
+    def test_pascal_to_snake_helper(self) -> None:
+        """_pascal_to_snake converts PascalCase to snake_case correctly."""
+        from factory_simulator.evaluation.evaluator import _pascal_to_snake
+
+        assert _pascal_to_snake("WebBreak") == "web_break"
+        assert _pascal_to_snake("BearingWear") == "bearing_wear"
+        assert _pascal_to_snake("MicroStop") == "micro_stop"
+        assert _pascal_to_snake("ColdChainBreak") == "cold_chain_break"
+        assert _pascal_to_snake("CipCycle") == "cip_cycle"
+        # Already snake_case — unchanged
+        assert _pascal_to_snake("web_break") == "web_break"
+        assert _pascal_to_snake("micro_stop") == "micro_stop"
+
+    def test_pascal_case_gt_events_use_snake_case_weights(self) -> None:
+        """PascalCase GT event types (logged via type.__name__) look up snake_case weights.
+
+        weighted_recall should differ from unweighted recall when the high-weight
+        event is detected but the low-weight event is not.
+        """
+        # GT logger writes type(scenario).__name__ → PascalCase
+        events = [
+            _ev("WebBreak", 1000.0, 1060.0),   # weight=10 under "web_break"
+            _ev("MicroStop", 2000.0, 2030.0),   # weight=1  under "micro_stop"
+        ]
+        dets = [_det(1010.0)]  # Only WebBreak detected
+        ev = Evaluator(
+            settings=EvaluatorSettings(
+                pre_margin_seconds=30.0,
+                post_margin_seconds=60.0,
+                severity_weights={"web_break": 10.0, "micro_stop": 1.0},
+            )
+        )
+        result = ev.evaluate_from_data(events, dets)
+        # unweighted recall = 1/2 = 0.5
+        assert result.recall == pytest.approx(0.5)
+        # With correct normalisation: detected_weight=10, total_weight=11
+        assert result.weighted_recall == pytest.approx(10.0 / 11.0, rel=1e-3)
+        # weighted_recall must differ from unweighted_recall
+        assert result.weighted_recall != result.recall
+
+    def test_snake_case_gt_events_still_work(self) -> None:
+        """Existing snake_case event types continue to resolve weights after normalisation."""
+        events = [
+            _ev("web_break", 1000.0, 1060.0),   # weight=10
+            _ev("micro_stop", 2000.0, 2030.0),  # weight=1
+        ]
+        dets = [_det(1010.0)]  # Only web_break detected
+        ev = Evaluator(
+            settings=EvaluatorSettings(
+                pre_margin_seconds=30.0,
+                post_margin_seconds=60.0,
+                severity_weights={"web_break": 10.0, "micro_stop": 1.0},
+            )
+        )
+        result = ev.evaluate_from_data(events, dets)
+        assert result.weighted_recall == pytest.approx(10.0 / 11.0, rel=1e-3)
+
+    def test_unknown_pascal_case_type_gets_default_weight_one(self) -> None:
+        """PascalCase type with no weight entry uses default weight 1.0."""
+        events = [_ev("UnknownScenario", 1000.0, 1060.0)]
+        dets = [_det(1010.0)]
+        result = _evaluator().evaluate_from_data(events, dets)
+        assert result.weighted_recall == pytest.approx(1.0)

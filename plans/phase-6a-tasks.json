@@ -60,7 +60,7 @@
             "description": "Normalise ground truth event types (PascalCase) to snake_case before looking up in severity_weights and latency_targets. Helper: re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower(). Test: evaluator with PascalCase GT events + non-default weights produces weighted_recall != unweighted_recall.",
             "review_ref": "Y1 (review-signal-integrity.md)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6a.7",

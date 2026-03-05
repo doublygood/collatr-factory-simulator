@@ -8,7 +8,7 @@
 - [x] 6a.3: Dockerfile Hardening (R3 + R4)
 - [x] 6a.4: OPC-UA EngineeringUnits Property (R5)
 - [x] 6a.5: Fix Oven Gateway UID Routing in Realistic Mode (R6)
-- [ ] 6a.6: Fix Severity Weight Key Mismatch (Y1)
+- [x] 6a.6: Fix Severity Weight Key Mismatch (Y1)
 - [ ] 6a.7: Fix Double-Logging of Ground Truth Events (Y2)
 - [ ] 6a.8: Handle Open Scenarios in Evaluator (Y3)
 - [ ] 6a.9: Validate All Fixes — Full Suite + Integration Check
@@ -89,3 +89,16 @@ Tasks 6a.1-6a.8 are all independent (no dependencies between them). Task 6a.9 de
 - Collapsed mode preserves existing behaviour: secondary slaves remain at UIDs 11/12/13 (tested by `test_modbus_fnb_integration.py`). No behaviour change for existing tests.
 - In realistic mode, when no `secondary_uid_remap` is set (empty dict), all endpoint UIDs map to primary context as before — backward compatible.
 - 2998 tests passed after the change.
+
+## Task 6a.6 — Fix Severity Weight Key Mismatch
+
+**What was fixed:**
+- Added `import re` to `evaluator.py`
+- Added `_pascal_to_snake(name)` helper: `re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()` — converts PascalCase to snake_case, leaves already-snake_case strings unchanged
+- Applied normalisation in `_compute()` for both `severity_weights.get(...)` lookups (total_weight and detected_weight)
+- Added `TestSeverityWeightKeyNormalisation` class to `test_evaluator.py` with 4 tests: helper conversion, PascalCase GT → snake_case weight lookup (weighted_recall ≠ recall), backward compat with snake_case event types, unknown PascalCase → default weight 1.0
+
+**Decisions:**
+- Only the weight lookups in `_compute()` were normalised — no latency target lookups exist in the evaluator currently, so no other changes were needed
+- The `_pascal_to_snake` function is a module-level helper (not a method) since it's a pure string transform with no state
+- 2996 tests passed after the change

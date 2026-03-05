@@ -16,6 +16,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -104,6 +105,17 @@ def _percentile(values: list[float], pct: float) -> float:
     hi = min(lo + 1, len(sorted_vals) - 1)
     frac = idx - lo
     return sorted_vals[lo] + frac * (sorted_vals[hi] - sorted_vals[lo])
+
+
+def _pascal_to_snake(name: str) -> str:
+    """Convert PascalCase to snake_case for severity weight / latency target lookup.
+
+    Ground truth events are logged with ``type(scenario).__name__`` which
+    produces PascalCase (e.g. ``"WebBreak"``, ``"BearingWear"``).  The weight
+    and latency-target dicts use snake_case keys (e.g. ``"web_break"``).
+    Already-snake_case strings are returned unchanged.
+    """
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
 # ---------------------------------------------------------------------------
@@ -334,9 +346,14 @@ class Evaluator:
         )
 
         # Severity-weighted recall (PRD 12.4)
-        total_weight = sum(s.severity_weights.get(m.event_type, 1.0) for m in matches)
+        # Normalise PascalCase event types (from type(scenario).__name__) to
+        # snake_case before looking up weights so that e.g. "WebBreak" matches
+        # the "web_break" key in the severity_weights dict.
+        total_weight = sum(
+            s.severity_weights.get(_pascal_to_snake(m.event_type), 1.0) for m in matches
+        )
         detected_weight = sum(
-            s.severity_weights.get(m.event_type, 1.0)
+            s.severity_weights.get(_pascal_to_snake(m.event_type), 1.0)
             for m in matches
             if m.detected
         )
