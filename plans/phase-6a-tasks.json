@@ -80,7 +80,7 @@
             "description": "For scenario_start with no matching scenario_end, use simulation end time (last event timestamp) as end time. Add optional 'open' field to GroundTruthEvent. Test: GT file with open BearingWear is included in evaluation, detection within window counts as TP.",
             "review_ref": "Y3 (review-signal-integrity.md)",
             "depends_on": [],
-            "passes": false
+            "passes": true
         },
         {
             "id": "6a.9",

@@ -556,22 +556,140 @@ class TestGroundTruthLoading:
         assert events[0].scenario_type == "web_break"
         assert abs((events[0].end_time - events[0].start_time) - 30.0) < 1.0
 
-    def test_open_scenario_silently_dropped(self, tmp_path: Path) -> None:
-        """scenario_start without matching end → silently dropped."""
+    def test_open_scenario_included_with_sim_end_time(self, tmp_path: Path) -> None:
+        """scenario_start without matching end → included with open=True, end_time=last_t."""
         gt = self._write_gt(
             tmp_path,
             [
                 {
                     "sim_time": "2026-01-01T00:16:40.000Z",
                     "event": "scenario_start",
-                    "scenario": "web_break",
+                    "scenario": "BearingWear",
                     "affected_signals": [],
                 },
-                # No scenario_end
+                # A later non-scenario event establishes the simulation end time.
+                {
+                    "sim_time": "2026-01-01T01:00:00.000Z",
+                    "event": "state_change",
+                    "signal": "press.state",
+                    "from": 0,
+                    "to": 2,
+                },
+                # No scenario_end for BearingWear
             ],
         )
         events = Evaluator().load_ground_truth(gt)
-        assert len(events) == 0
+        assert len(events) == 1
+        ev = events[0]
+        assert ev.scenario_type == "BearingWear"
+        assert ev.open is True
+        # end_time should be the last sim_time seen (01:00:00), not start_time
+        duration = ev.end_time - ev.start_time
+        # 00:16:40 → 01:00:00 is 43 min 20 s = 2600 s
+        assert duration == pytest.approx(2600.0, abs=2.0)
+
+    def test_open_scenario_detected_as_tp(self, tmp_path: Path) -> None:
+        """Detection within the window of an open scenario counts as TP."""
+        gt = self._write_gt(
+            tmp_path,
+            [
+                {
+                    "sim_time": "2026-01-01T00:16:40.000Z",
+                    "event": "scenario_start",
+                    "scenario": "BearingWear",
+                    "affected_signals": [],
+                },
+                # sim end: 1 hour later
+                {
+                    "sim_time": "2026-01-01T01:16:40.000Z",
+                    "event": "state_change",
+                    "signal": "press.state",
+                    "from": 2,
+                    "to": 0,
+                },
+            ],
+        )
+        events = Evaluator().load_ground_truth(gt)
+        assert len(events) == 1
+        assert events[0].open is True
+
+        # Detection at start_time + 5 minutes (well within the event window)
+        start_t = events[0].start_time
+        dets = [Detection(timestamp=start_t + 300.0, alert_type="BearingWear")]
+        ev = Evaluator(
+            settings=EvaluatorSettings(pre_margin_seconds=30.0, post_margin_seconds=60.0)
+        )
+        result = ev.evaluate_from_data(events, dets)
+        assert result.true_positives == 1
+        assert result.false_negatives == 0
+        assert result.recall == pytest.approx(1.0)
+
+    def test_open_scenario_mixed_with_closed(self, tmp_path: Path) -> None:
+        """Mix of closed and open scenarios: closed pairs correctly, open uses last_t."""
+        gt = self._write_gt(
+            tmp_path,
+            [
+                # Closed scenario
+                {
+                    "sim_time": "2026-01-01T00:10:00.000Z",
+                    "event": "scenario_start",
+                    "scenario": "web_break",
+                    "affected_signals": [],
+                },
+                {
+                    "sim_time": "2026-01-01T00:10:30.000Z",
+                    "event": "scenario_end",
+                    "scenario": "web_break",
+                },
+                # Open scenario that runs to end of sim
+                {
+                    "sim_time": "2026-01-01T00:30:00.000Z",
+                    "event": "scenario_start",
+                    "scenario": "BearingWear",
+                    "affected_signals": [],
+                },
+                # Last event establishes sim end time
+                {
+                    "sim_time": "2026-01-01T01:00:00.000Z",
+                    "event": "state_change",
+                    "signal": "press.state",
+                    "from": 2,
+                    "to": 0,
+                },
+            ],
+        )
+        events = Evaluator().load_ground_truth(gt)
+        assert len(events) == 2
+
+        closed = next(e for e in events if e.scenario_type == "web_break")
+        open_ev = next(e for e in events if e.scenario_type == "BearingWear")
+
+        assert closed.open is False
+        assert abs((closed.end_time - closed.start_time) - 30.0) < 1.0
+
+        assert open_ev.open is True
+        # BearingWear start=00:30, sim end=01:00 → 30 min duration
+        assert abs((open_ev.end_time - open_ev.start_time) - 1800.0) < 2.0
+
+    def test_open_scenario_no_later_events_end_equals_start(self, tmp_path: Path) -> None:
+        """If the scenario_start is the last event, end_time falls back to start_time."""
+        gt = self._write_gt(
+            tmp_path,
+            [
+                {
+                    "sim_time": "2026-01-01T00:16:40.000Z",
+                    "event": "scenario_start",
+                    "scenario": "BearingWear",
+                    "affected_signals": [],
+                },
+                # Nothing after — last_t == start_t
+            ],
+        )
+        events = Evaluator().load_ground_truth(gt)
+        assert len(events) == 1
+        ev = events[0]
+        assert ev.open is True
+        assert ev.end_time == pytest.approx(ev.start_time)
 
     def test_multiple_scenario_types(self, tmp_path: Path) -> None:
         """Multiple scenario types loaded correctly."""

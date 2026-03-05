@@ -13,6 +13,7 @@ PRD Reference: Section 12 (Evaluation Protocol)
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import json
 import logging
@@ -52,6 +53,7 @@ class GroundTruthEvent:
     start_time: float  # UNIX seconds
     end_time: float  # UNIX seconds
     parameters: dict[str, Any] = field(default_factory=dict)
+    open: bool = False  # True if no scenario_end was found; end_time = sim end time
 
 
 @dataclass
@@ -224,7 +226,10 @@ class Evaluator:
         """Parse a JSONL ground truth file and return ground truth events.
 
         Only ``scenario_start`` / ``scenario_end`` pairs are extracted.
-        Open scenarios (start without matching end) are silently dropped.
+        Open scenarios (start without matching end) are included with
+        ``end_time`` set to the last event timestamp in the file (the
+        simulation end time).  The ``open`` field is set to ``True`` on
+        such events so callers can distinguish them.
         Non-scenario events (state_change, data_quality, etc.) are ignored.
 
         FIFO pairing: when multiple starts of the same scenario type occur
@@ -233,7 +238,8 @@ class Evaluator:
         p = Path(path)
         events: list[GroundTruthEvent] = []
         # scenario_name -> FIFO list of (start_time, parameters)
-        open_scenarios: dict[str, list[tuple[float, dict[str, Any]]]] = {}
+        pending: dict[str, list[tuple[float, dict[str, Any]]]] = {}
+        last_t: float | None = None  # last sim_time seen in the file
 
         with p.open("r", encoding="utf-8") as fh:
             for line in fh:
@@ -242,17 +248,23 @@ class Evaluator:
                     continue
                 record: dict[str, Any] = json.loads(line)
 
+                # Track the last sim_time seen (any event) for open-scenario fallback.
+                raw_t = record.get("sim_time")
+                if raw_t:
+                    with contextlib.suppress(ValueError, TypeError):
+                        last_t = _parse_iso(raw_t)
+
                 # Header record uses "event_type": "config" — skip it.
                 ev_type = record.get("event") or record.get("event_type")
                 if ev_type == "scenario_start":
                     scenario = record["scenario"]
                     t = _parse_iso(record["sim_time"])
                     params: dict[str, Any] = record.get("parameters") or {}
-                    open_scenarios.setdefault(scenario, []).append((t, params))
+                    pending.setdefault(scenario, []).append((t, params))
                 elif ev_type == "scenario_end":
                     scenario = record["scenario"]
                     t = _parse_iso(record["sim_time"])
-                    stack = open_scenarios.get(scenario)
+                    stack = pending.get(scenario)
                     if stack:
                         start_t, params = stack.pop(0)  # FIFO
                         events.append(
@@ -263,6 +275,28 @@ class Evaluator:
                                 parameters=params,
                             )
                         )
+
+        # Handle open scenarios: scenario_start with no matching scenario_end.
+        # Use the last event timestamp as a proxy for the simulation end time.
+        for scenario, starts in pending.items():
+            for start_t, params in starts:
+                end_t = last_t if (last_t is not None and last_t >= start_t) else start_t
+                logger.warning(
+                    "Open scenario (no end event): %s started at %.3f — "
+                    "using sim end %.3f as end time",
+                    scenario,
+                    start_t,
+                    end_t,
+                )
+                events.append(
+                    GroundTruthEvent(
+                        scenario_type=scenario,
+                        start_time=start_t,
+                        end_time=end_t,
+                        parameters=params,
+                        open=True,
+                    )
+                )
 
         logger.info("Loaded %d events from %s", len(events), p)
         return events

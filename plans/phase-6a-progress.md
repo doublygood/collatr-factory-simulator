@@ -10,7 +10,7 @@
 - [x] 6a.5: Fix Oven Gateway UID Routing in Realistic Mode (R6)
 - [x] 6a.6: Fix Severity Weight Key Mismatch (Y1)
 - [x] 6a.7: Fix Double-Logging of Ground Truth Events (Y2)
-- [ ] 6a.8: Handle Open Scenarios in Evaluator (Y3)
+- [x] 6a.8: Handle Open Scenarios in Evaluator (Y3)
 - [ ] 6a.9: Validate All Fixes — Full Suite + Integration Check
 
 ## Notes
@@ -103,6 +103,23 @@ Tasks 6a.1-6a.8 are all independent (no dependencies between them). Task 6a.9 de
 - ScenarioEngine logs `type(scenario).__name__` (PascalCase) — this is canonical; scenarios that previously used snake_case strings (batch_cycle, cip_cycle, cold_chain_break) now produce PascalCase events
 - All `log_state_change()` and `log_signal_anomaly()` calls preserved (detail logging, not start/end duplicates)
 - 2999 tests passed after the change
+
+## Task 6a.8 — Handle Open Scenarios in Evaluator
+
+**What was fixed:**
+- Added `open: bool = False` field to `GroundTruthEvent` dataclass — `True` when no `scenario_end` was found for the corresponding `scenario_start`.
+- Modified `load_ground_truth()` in `evaluator.py` to track the last `sim_time` seen across all JSONL records (any event type).
+- After processing all lines, remaining entries in `pending` (open scenarios) are emitted as `GroundTruthEvent` objects with `end_time = last_t` (the simulation end time) and `open=True`.
+- If `last_t` is somehow before `start_t` (degenerate case), `end_time` falls back to `start_t` (zero-duration event).
+- Logs a `WARNING` for each open scenario so the caller knows truncation occurred.
+- Added `import contextlib` and used `contextlib.suppress` for the `_parse_iso` fallback (ruff SIM105 fix).
+- Updated `TestGroundTruthLoading`: replaced `test_open_scenario_silently_dropped` with `test_open_scenario_included_with_sim_end_time`.
+- Added 3 new tests: `test_open_scenario_detected_as_tp`, `test_open_scenario_mixed_with_closed`, `test_open_scenario_no_later_events_end_equals_start`.
+
+**Decisions:**
+- "Last event timestamp" means the last record with a `sim_time` field in the file — any event type, not just scenario events. This captures the true simulation end time even if the last event is a state_change or data_quality record.
+- The `open` field is purely informational — the evaluator treats open events identically to closed ones (same matching logic, same metrics contribution). Callers can filter on `open=True` if they want to separate them.
+- 3002 tests passed after the change.
 
 ## Task 6a.6 — Fix Severity Weight Key Mismatch
 
