@@ -38,8 +38,8 @@ services:
       - "502:502"
       # OPC-UA server
       - "4840:4840"
-      # Health / status endpoint
-      - "8080:8080"
+      # Health / status endpoint (8081 on host to avoid conflict with CollatrEdge WebUI on 8080)
+      - "8081:8080"
     volumes:
       # Mount the host config directory read-only so configs can be tweaked
       # without rebuilding the image
