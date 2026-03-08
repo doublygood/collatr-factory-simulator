@@ -44,6 +44,10 @@ services:
       # Mount the host config directory read-only so configs can be tweaked
       # without rebuilding the image
       - ./config:/app/config:ro
+      # Mount output directory so ground truth + batch output are accessible
+      # from the host for verification scripts
+      - ./output:/app/output
+    command: ["--ground-truth-path", "/app/output/ground_truth.jsonl"]
     environment:
       # --- Config file path ---
       - SIM_CONFIG_PATH=/app/config/factory.yaml
