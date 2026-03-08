@@ -34,5 +34,10 @@ Thumbs.db
 mosquitto-data/
 mosquitto-log/
 
+# Simulator output (ground truth, batch CSV/Parquet)
+output/*.jsonl
+output/*.csv
+output/*.parquet
+
 # Benchmark output
 performance-results.json
